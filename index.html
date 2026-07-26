@@ -575,7 +575,14 @@
             cursor: not-allowed;
         }
 
-        /* Brak kursów */
+        /* Ładowanie / brak kursów */
+        .courses-loading {
+            grid-column: 1 / -1;
+            text-align: center;
+            color: var(--gray);
+            padding: 3rem 0;
+            font-size: 1rem;
+        }
         .no-courses {
             grid-column: 1 / -1;
             text-align: center;
@@ -1576,66 +1583,8 @@
             </p>
         </div>
 
-        <!--
-            TODO: Sekcja kursów będzie dynamicznie ładowana z API Django.
-            Poniżej przykładowe karty – zostaną zastąpione przez fetch('/api/kursy/').
-        -->
         <div class="courses-grid" id="courses-container">
-
-            <!-- Karta 1 -->
-            <div class="course-card">
-                <div class="course-head">
-                    <h3>Kurs KPP – edycja sierpniowa</h3>
-                    <span class="course-type-badge">Kwalifikowana Pierwsza Pomoc</span>
-                </div>
-                <div class="course-body">
-                    <div class="course-row"><span>📅</span><span>15–17 sierpnia 2026</span></div>
-                    <div class="course-row"><span>📍</span><span>Rzeszów</span></div>
-                    <div class="course-row"><span>⏱️</span><span>66 godzin dydaktycznych</span></div>
-                </div>
-                <div class="course-footer">
-                    <span class="spots-badge spots-ok">8 wolnych miejsc</span>
-                    <span class="course-price">800 zł</span>
-                </div>
-                <a href="http://localhost:3000/zapisz-sie" class="btn-course">Zapisz się</a>
-            </div>
-
-            <!-- Karta 2 -->
-            <div class="course-card">
-                <div class="course-head">
-                    <h3>Recertyfikacja KPP – wrzesień</h3>
-                    <span class="course-type-badge">Recertyfikacja</span>
-                </div>
-                <div class="course-body">
-                    <div class="course-row"><span>📅</span><span>6 września 2026</span></div>
-                    <div class="course-row"><span>📍</span><span>Rzeszów</span></div>
-                    <div class="course-row"><span>⏱️</span><span>1 dzień szkoleniowy</span></div>
-                </div>
-                <div class="course-footer">
-                    <span class="spots-badge spots-few">3 wolne miejsca</span>
-                    <span class="course-price">350 zł</span>
-                </div>
-                <a href="http://localhost:3000/zapisz-sie" class="btn-course">Zapisz się</a>
-            </div>
-
-            <!-- Karta 3 – brak miejsc -->
-            <div class="course-card">
-                <div class="course-head">
-                    <h3>Kurs KPP – edycja wrześniowa</h3>
-                    <span class="course-type-badge">Kwalifikowana Pierwsza Pomoc</span>
-                </div>
-                <div class="course-body">
-                    <div class="course-row"><span>📅</span><span>19–21 września 2026</span></div>
-                    <div class="course-row"><span>📍</span><span>Kraków</span></div>
-                    <div class="course-row"><span>⏱️</span><span>66 godzin dydaktycznych</span></div>
-                </div>
-                <div class="course-footer">
-                    <span class="spots-badge spots-full">Brak miejsc</span>
-                    <span class="course-price">800 zł</span>
-                </div>
-                <a href="#" class="btn-course disabled">Brak wolnych miejsc</a>
-            </div>
-
+            <div class="courses-loading">Ładowanie kursów…</div>
         </div>
     </div>
 </section>
@@ -1796,6 +1745,70 @@ window.addEventListener('resize', () => {
         navEl.classList.remove('menu-open');
     }
 });
+
+/* ── Kursy z API ── */
+const SITE_URL = window.location.hostname === 'p01--mc-med--gwjg2s9pdfr6.code.run'
+    ? ''
+    : 'https://p01--mc-med--gwjg2s9pdfr6.code.run';
+
+function formatCourseDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function formatCoursePrice(price) {
+    return Number(price).toLocaleString('pl-PL') + ' zł';
+}
+
+function buildCourseCard(c) {
+    const start = formatCourseDate(c.start_date);
+    const end   = formatCourseDate(c.end_date);
+    const dates = start === end ? start : `${start} – ${end}`;
+
+    const spotsClass = c.is_full ? 'spots-full' : c.spots_left <= 3 ? 'spots-few' : 'spots-ok';
+    const spotsText  = c.is_full ? 'Brak miejsc' : `${c.spots_left} wolnych miejsc`;
+
+    const btn = c.is_full
+        ? `<a href="#" class="btn-course disabled">Brak wolnych miejsc</a>`
+        : `<a href="${SITE_URL}/zapisz-sie?course=${c.id}" class="btn-course">Zapisz się</a>`;
+
+    return `
+    <div class="course-card">
+        <div class="course-head">
+            <h3>${c.name}</h3>
+            <span class="course-type-badge">${c.course_type_display}</span>
+        </div>
+        <div class="course-body">
+            <div class="course-row"><span>📅</span><span>${dates}</span></div>
+            <div class="course-row"><span>📍</span><span>${c.city}</span></div>
+        </div>
+        <div class="course-footer">
+            <span class="spots-badge ${spotsClass}">${spotsText}</span>
+            <span class="course-price">${formatCoursePrice(c.price)}</span>
+        </div>
+        ${btn}
+    </div>`;
+}
+
+(async function loadCourses() {
+    const container = document.getElementById('courses-container');
+    try {
+        const res = await fetch(`${SITE_URL}/api/courses/`);
+        if (!res.ok) throw new Error();
+        const courses = await res.json();
+
+        if (!courses.length) {
+            container.innerHTML = `<div class="no-courses"><h3>Brak aktualnych kursów</h3><p>Skontaktuj się z nami, aby dowiedzieć się o planowanych terminach.</p></div>`;
+            return;
+        }
+
+        container.innerHTML = courses.map(buildCourseCard).join('');
+        container.querySelectorAll('.course-card').forEach(el => revealObserver.observe(el));
+    } catch {
+        container.innerHTML = `<div class="no-courses"><h3>Nie można załadować kursów</h3><p>Spróbuj odświeżyć stronę lub zadzwoń do nas bezpośrednio.</p></div>`;
+    }
+})();
 </script>
 </body>
 </html>
