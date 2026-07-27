@@ -12,18 +12,24 @@ from courses.models import Course
 
 TEMPLATES_DIR = Path(__file__).parent / 'templates'
 
-ALLOWED_TEMPLATES = {
-    'file1': 'file1.docx',
-    'file2': 'file2.docx',
-    'file3': 'file3.docx',
-    'file4': 'file4.docx',
-    'file5': 'file5.docx',
-    'file6': 'file6.docx',
-}
+ALLOWED_TEMPLATES = {'file1', 'file2', 'file3', 'file4', 'file5', 'file6'}
 
 ALLOWED_XLSX_TEMPLATES = {
     'program': 'Program zajęć.xlsx',
 }
+
+
+def _instructor_dict(inst):
+    name_only = f'{inst.first_name} {inst.last_name}'.strip()
+    return {
+        'full_name':  str(inst),
+        'name_only':  name_only,
+        'title':      inst.title or '',
+        'profession': inst.profession or '',
+    }
+
+
+_EMPTY_INST = {'full_name': '', 'name_only': '', 'title': '', 'profession': ''}
 
 
 def _build_context(course):
@@ -40,6 +46,17 @@ def _build_context(course):
             return f'{d}.{m}.{y}'
         except Exception:
             return iso
+
+    instructors_list = [_instructor_dict(i) for i in course.instructors.all()]
+
+    # Płaskie zmienne instructor_N / instructor_N_name / _title / _profession dla slotów 1–6
+    flat_instructors = {}
+    for n in range(1, 7):
+        d = instructors_list[n - 1] if n <= len(instructors_list) else _EMPTY_INST
+        flat_instructors[f'instructor_{n}']            = d['full_name']
+        flat_instructors[f'instructor_{n}_name']       = d['name_only']
+        flat_instructors[f'instructor_{n}_title']      = d['title']
+        flat_instructors[f'instructor_{n}_profession'] = d['profession']
 
     return {
         'created_at':        course.created_at.strftime('%d.%m.%Y'),
@@ -59,16 +76,18 @@ def _build_context(course):
         'course_days':       [fmt_str(d) for d in (course.course_days or [])],
         'entity_director':   course.entity_director or '',
         'academic_director': course.academic_director or '',
-        'instructors':       [str(i) for i in course.instructors.all()],
+        # Lista słowników – w docx: {{instructors.0.full_name}}, pętla {% for i in instructors %}
+        'instructors':       instructors_list,
         'psychologist':      course.psychologist or '',
         'committee_chair':   course.committee_chair or '',
         'committee_member1': course.committee_member1 or '',
         'committee_member2': course.committee_member2 or '',
+        **flat_instructors,
     }
 
 
 def _xlsx_replace(ws, context):
-    """Podmienia {{klucz}} i {{course_days.N}} w każdej komórce arkusza."""
+    """Podmienia {{klucz}} i {{course_days.N}} / {{instructors.N.pole}} w każdej komórce."""
     for row in ws.iter_rows():
         for cell in row:
             if not isinstance(cell.value, str) or '{{' not in cell.value:
@@ -79,9 +98,12 @@ def _xlsx_replace(ws, context):
                     for i, day in enumerate(replacement):
                         val = val.replace(f'{{{{{key}.{i}}}}}', str(day))
                 elif key == 'instructors':
+                    # {{instructors.N}} → full_name; {{instructors.N.pole}} → pole
                     for i, inst in enumerate(replacement):
-                        val = val.replace(f'{{{{{key}.{i}}}}}', str(inst))
-                else:
+                        val = val.replace(f'{{{{{key}.{i}}}}}', inst.get('full_name', ''))
+                        for field in ('full_name', 'name_only', 'title', 'profession'):
+                            val = val.replace(f'{{{{{key}.{i}.{field}}}}}', inst.get(field, ''))
+                elif isinstance(replacement, (str, int, float)):
                     val = val.replace(f'{{{{{key}}}}}', str(replacement))
             cell.value = val
 
@@ -114,6 +136,17 @@ def download_xlsx(request, course_id, doc_name):
     return response
 
 
+def _resolve_template(doc_name, instructor_count):
+    """Zwraca ścieżkę do pliku: szuka {name}_{n}.docx, fallback do {name}.docx."""
+    variant = TEMPLATES_DIR / f'{doc_name}_{instructor_count}.docx'
+    if variant.exists():
+        return variant
+    base = TEMPLATES_DIR / f'{doc_name}.docx'
+    if base.exists():
+        return base
+    return None
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def download_document(request, course_id, doc_name):
@@ -125,7 +158,12 @@ def download_document(request, course_id, doc_name):
     except Course.DoesNotExist:
         return Response({'detail': 'Kurs nie istnieje.'}, status=404)
 
-    tpl = DocxTemplate(TEMPLATES_DIR / ALLOWED_TEMPLATES[doc_name])
+    instructor_count = course.instructors.count()
+    tpl_path = _resolve_template(doc_name, instructor_count)
+    if tpl_path is None:
+        return Response({'detail': 'Brak pliku szablonu.'}, status=404)
+
+    tpl = DocxTemplate(tpl_path)
     tpl.render(_build_context(course))
 
     buf = BytesIO()
