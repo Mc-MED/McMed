@@ -15,7 +15,6 @@ const EMPTY = {
   street: '',
   house_number: '',
   apartment_number: '',
-  login: '',
   password: '',
   confirm_password: '',
   photo_consent: false,
@@ -62,7 +61,6 @@ export default function EnrollForm() {
     if (!form.street.trim())     e.street     = 'Podaj ulicę.'
     if (!form.house_number.trim()) e.house_number = 'Podaj numer domu.'
     if (!form.data_consent)        e.data_consent = 'Zgoda na przetwarzanie danych jest wymagana.'
-    if (!form.login.trim())        e.login    = 'Podaj login.'
     if (form.password.length < 8)  e.password = 'Hasło musi mieć min. 8 znaków.'
     if (form.password !== form.confirm_password) e.confirm_password = 'Hasła nie są zgodne.'
     return e
@@ -266,8 +264,7 @@ export default function EnrollForm() {
             </p>
           </div>
 
-          <Field label="Login" name="login" value={form.login} onChange={handleChange} error={errors.login} placeholder="np. jan.kowalski" />
-          <div className="grid grid-cols-2 gap-4 mt-4">
+          <div className="grid grid-cols-2 gap-4">
             <Field label="Hasło" name="password" value={form.password} onChange={handleChange} error={errors.password} type="password" placeholder="min. 8 znaków" />
             <Field label="Powtórz hasło" name="confirm_password" value={form.confirm_password} onChange={handleChange} error={errors.confirm_password} type="password" placeholder="••••••••" />
           </div>

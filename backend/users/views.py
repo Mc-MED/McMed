@@ -47,14 +47,11 @@ class ResendActivationView(APIView):
         if not email:
             return Response({'error': 'Podaj adres email.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            user = User.objects.get(email__iexact=email)
-        except User.DoesNotExist:
+        user = User.objects.filter(email__iexact=email, is_active=False).order_by('-date_joined').first()
+        if not user:
             # Nie ujawniamy czy email istnieje
             return Response({'message': 'Jeśli konto istnieje, link został wysłany.'})
 
-        if user.is_active:
-            return Response({'message': 'Konto jest już aktywne. Możesz się zalogować.'})
 
         ActivationToken.objects.filter(user=user, is_used=False).update(is_used=True)
         token = ActivationToken.objects.create(user=user)

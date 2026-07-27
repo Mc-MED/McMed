@@ -23,19 +23,10 @@ class PublicEnrollView(generics.CreateAPIView):
     serializer_class   = EnrollmentSerializer
 
     def create(self, request, *args, **kwargs):
-        login    = request.data.get('login', '').strip()
         password = request.data.get('password', '')
 
-        # Walidacja pól konta przed walidacją reszty formularza
-        account_errors = {}
-        if not login:
-            account_errors['login'] = 'Podaj login.'
-        elif User.objects.filter(username=login).exists():
-            account_errors['login'] = 'Ten login jest już zajęty.'
         if len(password) < 8:
-            account_errors['password'] = 'Hasło musi mieć min. 8 znaków.'
-        if account_errors:
-            return Response(account_errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'password': 'Hasło musi mieć min. 8 znaków.'}, status=status.HTTP_400_BAD_REQUEST)
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -45,9 +36,17 @@ class PublicEnrollView(generics.CreateAPIView):
         first_name = vd.get('first_name', '')
         last_name  = vd.get('last_name', '')
 
+        existing = User.objects.filter(email__iexact=email).first()
+        if existing:
+            if existing.is_active:
+                msg = 'Konto z tym adresem e-mail już istnieje. Możesz się zalogować.'
+            else:
+                msg = 'Konto z tym adresem e-mail już istnieje, ale nie zostało jeszcze aktywowane. Sprawdź skrzynkę mailową lub użyj opcji ponownego wysłania linku aktywacyjnego.'
+            return Response({'email': msg}, status=status.HTTP_400_BAD_REQUEST)
+
         with transaction.atomic():
             user = User.objects.create_user(
-                username=login,
+                username=email.lower(),
                 email=email,
                 password=password,
                 first_name=first_name,
