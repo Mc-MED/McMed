@@ -1,5 +1,4 @@
 from django.contrib.auth import get_user_model
-from django.core.mail import send_mail
 from django.conf import settings
 from django.db import transaction
 from rest_framework import generics, status
@@ -8,6 +7,7 @@ from rest_framework.response import Response
 
 from .models import Course, Enrollment
 from .serializers import CourseSerializer, AdminCourseSerializer, EnrollmentSerializer
+from users.emails import send_activation_email
 
 User = get_user_model()
 
@@ -68,39 +68,25 @@ class PublicEnrollView(generics.CreateAPIView):
         if not enrollment.email:
             return
 
-        course      = enrollment.course
+        course = enrollment.course
         frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
         activation_link = f'{frontend_url}/aktywuj/{token}'
 
         def fmt(d):
             return d.strftime('%d.%m.%Y') if d else '–'
 
-        body = (
-            f'Dzień dobry {enrollment.first_name},\n\n'
-            f'Twoje zgłoszenie na kurs zostało przyjęte!\n\n'
-            f'Kurs:    {course.name}\n'
-            f'Termin:  {fmt(course.start_date)} – {fmt(course.end_date)}\n'
-            f'Miejsce: {course.city}\n'
-            f'Cena:    {course.price} zł\n\n'
-            f'─────────────────────────────────────\n'
-            f'Aktywuj swoje konto\n'
-            f'─────────────────────────────────────\n'
-            f'Kliknij w poniższy link, aby aktywować konto i uzyskać dostęp\n'
-            f'do materiałów szkoleniowych, harmonogramu i wyników egzaminu:\n\n'
-            f'{activation_link}\n\n'
-            f'Link jest ważny przez 72 godziny.\n\n'
-            f'─────────────────────────────────────\n'
-            f'Skontaktujemy się z Tobą telefonicznie w celu potwierdzenia zapisu.\n\n'
-            f'Pozdrawiamy,\n'
-            f'Zespół Mc Med'
-        )
+        course_info = {
+            'Kurs':    course.name,
+            'Termin':  f'{fmt(course.start_date)} – {fmt(course.end_date)}',
+            'Miejsce': course.city,
+            'Cena':    f'{course.price} zł',
+        }
 
-        send_mail(
-            subject='Potwierdzenie zapisu i aktywacja konta – Mc Med',
-            message=body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[enrollment.email],
-            fail_silently=True,
+        send_activation_email(
+            to_email=enrollment.email,
+            first_name=enrollment.first_name,
+            activation_link=activation_link,
+            course_info=course_info,
         )
 
 

@@ -1,5 +1,4 @@
 from django.contrib.auth import get_user_model
-from django.core.mail import send_mail
 from django.conf import settings
 
 from rest_framework.views import APIView
@@ -7,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from .models import ActivationToken
+from .emails import send_activation_email
 
 User = get_user_model()
 
@@ -67,36 +67,22 @@ class ResendActivationView(APIView):
             course = enrollment.course
             def fmt(d):
                 return d.strftime('%d.%m.%Y') if d else '–'
-            course_info = (
-                f'Kurs:    {course.name}\n'
-                f'Termin:  {fmt(course.start_date)} – {fmt(course.end_date)}\n'
-                f'Miejsce: {course.city}\n\n'
-            )
+            course_info = {
+                'Kurs':    course.name,
+                'Termin':  f'{fmt(course.start_date)} – {fmt(course.end_date)}',
+                'Miejsce': course.city,
+            }
             first_name = enrollment.first_name
         else:
-            course_info = ''
+            course_info = None
             first_name = user.first_name or email
 
-        body = (
-            f'Dzień dobry {first_name},\n\n'
-            f'Wysyłamy ponownie link aktywacyjny dla Twojego konta w systemie Mc Med.\n\n'
-            f'{course_info}'
-            f'─────────────────────────────────────\n'
-            f'Aktywuj swoje konto\n'
-            f'─────────────────────────────────────\n'
-            f'Kliknij w poniższy link, aby aktywować konto:\n\n'
-            f'{activation_link}\n\n'
-            f'Link jest ważny przez 72 godziny.\n\n'
-            f'Pozdrawiamy,\n'
-            f'Zespół Mc Med'
-        )
-
-        send_mail(
-            subject='Ponowna aktywacja konta – Mc Med',
-            message=body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[email],
-            fail_silently=False,
+        send_activation_email(
+            to_email=email,
+            first_name=first_name,
+            activation_link=activation_link,
+            course_info=course_info,
+            resend=True,
         )
 
         return Response({'message': 'Link aktywacyjny został wysłany ponownie.'})
