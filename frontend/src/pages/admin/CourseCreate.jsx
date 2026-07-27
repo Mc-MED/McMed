@@ -224,10 +224,10 @@ export default function CourseCreate() {
 
         {/* ── Organizacja ── */}
         <Section title="Organizacja kursu">
-          <Field label="Kierownik podmiotu" name="entity_director" value={form.entity_director}
-            onChange={handleChange} error={errors.entity_director} />
-          <Field label="Kierownik merytoryczny kursu" name="academic_director" value={form.academic_director}
-            onChange={handleChange} error={errors.academic_director} />
+          <InstSelect label="Kierownik podmiotu" name="entity_director" value={form.entity_director}
+            onChange={handleChange} error={errors.entity_director} instructors={allInstructors} />
+          <InstSelect label="Kierownik merytoryczny kursu" name="academic_director" value={form.academic_director}
+            onChange={handleChange} error={errors.academic_director} instructors={allInstructors} />
         </Section>
 
         {/* ── Prowadzący ── */}
@@ -266,18 +266,18 @@ export default function CourseCreate() {
 
         {/* ── Pozostała kadra i komisja ── */}
         <Section title="Komisja egzaminacyjna i psycholog">
-          <Field label="Psycholog" name="psychologist" value={form.psychologist}
-            onChange={handleChange} required={false} />
+          <InstSelect label="Psycholog" name="psychologist" value={form.psychologist}
+            onChange={handleChange} required={false} instructors={allInstructors} />
           <div className="border-t border-gray-100 pt-4 mt-2">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
               Skład komisji egzaminacyjnej
             </p>
-            <Field label="Przewodniczący komisji" name="committee_chair" value={form.committee_chair}
-              onChange={handleChange} error={errors.committee_chair} placeholder="Imię i nazwisko" />
-            <Field label="Członek komisji 1" name="committee_member1" value={form.committee_member1}
-              onChange={handleChange} error={errors.committee_member1} placeholder="Imię i nazwisko" />
-            <Field label="Członek komisji 2" name="committee_member2" value={form.committee_member2}
-              onChange={handleChange} error={errors.committee_member2} placeholder="Imię i nazwisko" />
+            <InstSelect label="Przewodniczący komisji" name="committee_chair" value={form.committee_chair}
+              onChange={handleChange} error={errors.committee_chair} instructors={allInstructors} />
+            <InstSelect label="Członek komisji 1" name="committee_member1" value={form.committee_member1}
+              onChange={handleChange} error={errors.committee_member1} instructors={allInstructors} />
+            <InstSelect label="Członek komisji 2" name="committee_member2" value={form.committee_member2}
+              onChange={handleChange} error={errors.committee_member2} instructors={allInstructors} />
           </div>
         </Section>
 
@@ -316,6 +316,30 @@ function Section({ title, subtitle, children }) {
         {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
       </div>
       {children}
+    </div>
+  )
+}
+
+function InstSelect({ label, name, value, onChange, error, required = true, instructors = [] }) {
+  return (
+    <div>
+      <label className="field-label">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <select
+        name={name}
+        value={value}
+        onChange={onChange}
+        className={`field-input ${error ? 'border-red-400 bg-red-50' : ''}`}
+      >
+        <option value="">— wybierz —</option>
+        {instructors.map(inst => (
+          <option key={inst.id} value={inst.full_name}>
+            {inst.full_name}{inst.specializations.length > 0 ? ` (${inst.specializations.join(', ')})` : ''}
+          </option>
+        ))}
+      </select>
+      {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
     </div>
   )
 }
