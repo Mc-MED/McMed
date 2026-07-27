@@ -74,11 +74,10 @@ export default function CourseCreate() {
     setErrors(er => ({ ...er, course_days: '' }))
   }
 
-  function toggleInstructor(id) {
+  function handleInstructorSlot(index, value) {
     setForm(f => {
-      const ids = f.instructor_ids.includes(id)
-        ? f.instructor_ids.filter(x => x !== id)
-        : [...f.instructor_ids, id]
+      const ids = [...f.instructor_ids]
+      ids[index] = value ? parseInt(value) : null
       return { ...f, instructor_ids: ids }
     })
     setErrors(er => ({ ...er, instructor_ids: '' }))
@@ -115,7 +114,7 @@ export default function CourseCreate() {
       max_participants: parseInt(form.max_participants),
       price: parseFloat(form.price) || 0,
       course_days: form.course_days.filter(d => d),
-      instructor_ids: form.instructor_ids,
+      instructor_ids: form.instructor_ids.filter(Boolean),
     }
 
     try {
@@ -234,7 +233,7 @@ export default function CourseCreate() {
         {/* ── Prowadzący ── */}
         <Section
           title="Prowadzący"
-          subtitle={`Wymagana liczba: ${instructorsCount} (1 na każdych 6 kursantów) · Wybrano: ${form.instructor_ids.length}`}
+          subtitle={`${instructorsCount} prowadzący${instructorsCount > 1 ? 'ch' : ''} (1 na każdych 6 kursantów)`}
         >
           {allInstructors.length === 0 ? (
             <p className="text-sm text-gray-400">
@@ -242,27 +241,23 @@ export default function CourseCreate() {
               <a href="/admin/instructors" target="_blank" className="text-red-600 underline">Dodaj ratowników →</a>
             </p>
           ) : (
-            <div className="space-y-2">
-              {allInstructors.map(inst => (
-                <label key={inst.id} className="flex items-start gap-3 cursor-pointer p-2 rounded-lg hover:bg-gray-50">
-                  <input
-                    type="checkbox"
-                    checked={form.instructor_ids.includes(inst.id)}
-                    onChange={() => toggleInstructor(inst.id)}
-                    className="mt-0.5 h-4 w-4 accent-red-600"
-                  />
-                  <div>
-                    <span className="text-sm font-medium text-gray-900">{inst.full_name}</span>
-                    {inst.profession && <span className="text-xs text-gray-400 ml-2">{inst.profession}</span>}
-                    {inst.specializations.length > 0 && (
-                      <div className="flex gap-1 mt-0.5">
-                        {inst.specializations.map(s => (
-                          <span key={s} className="bg-red-50 text-red-700 text-xs font-semibold px-1.5 py-0.5 rounded">{s}</span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </label>
+            <div className="space-y-3">
+              {Array.from({ length: instructorsCount }, (_, i) => (
+                <div key={i}>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Prowadzący {i + 1}</label>
+                  <select
+                    value={form.instructor_ids[i] ?? ''}
+                    onChange={e => handleInstructorSlot(i, e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  >
+                    <option value="">— wybierz ratownika —</option>
+                    {allInstructors.map(inst => (
+                      <option key={inst.id} value={inst.id}>
+                        {inst.full_name}{inst.specializations.length > 0 ? ` (${inst.specializations.join(', ')})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               ))}
             </div>
           )}

@@ -45,11 +45,10 @@ function CourseForm({ initial, onSaved }) {
     setForm(f => { const d = [...f.course_days]; d[i] = value; return { ...f, course_days: d } })
   }
 
-  function toggleInstructor(id) {
+  function handleInstructorSlot(index, value) {
     setForm(f => {
-      const ids = f.instructor_ids.includes(id)
-        ? f.instructor_ids.filter(x => x !== id)
-        : [...f.instructor_ids, id]
+      const ids = [...f.instructor_ids]
+      ids[index] = value ? parseInt(value) : null
       return { ...f, instructor_ids: ids }
     })
   }
@@ -63,7 +62,7 @@ function CourseForm({ initial, onSaved }) {
       max_participants: parseInt(form.max_participants),
       price: parseFloat(form.price) || 0,
       course_days: form.course_days.filter(d => d),
-      instructor_ids: form.instructor_ids,
+      instructor_ids: form.instructor_ids.filter(Boolean),
     }
     try {
       const res = await adminUpdateCourse(initial.id, payload)
@@ -144,32 +143,28 @@ function CourseForm({ initial, onSaved }) {
 
       <Section
         title="Prowadzący"
-        subtitle={`Wymagana liczba: ${instructorsCount} (1 na każdych 6 kursantów) · Wybrano: ${form.instructor_ids.length}`}
+        subtitle={`${instructorsCount} prowadzący${instructorsCount > 1 ? 'ch' : ''} (1 na każdych 6 kursantów)`}
       >
         {allInstructors.length === 0 ? (
           <p className="text-sm text-gray-400">Brak ratowników w bazie.</p>
         ) : (
-          <div className="space-y-2">
-            {allInstructors.map(inst => (
-              <label key={inst.id} className="flex items-start gap-3 cursor-pointer p-2 rounded-lg hover:bg-gray-50">
-                <input
-                  type="checkbox"
-                  checked={form.instructor_ids.includes(inst.id)}
-                  onChange={() => toggleInstructor(inst.id)}
-                  className="mt-0.5 h-4 w-4 accent-red-600"
-                />
-                <div>
-                  <span className="text-sm font-medium text-gray-900">{inst.full_name}</span>
-                  {inst.profession && <span className="text-xs text-gray-400 ml-2">{inst.profession}</span>}
-                  {inst.specializations.length > 0 && (
-                    <div className="flex gap-1 mt-0.5">
-                      {inst.specializations.map(s => (
-                        <span key={s} className="bg-red-50 text-red-700 text-xs font-semibold px-1.5 py-0.5 rounded">{s}</span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </label>
+          <div className="space-y-3">
+            {Array.from({ length: instructorsCount }, (_, i) => (
+              <div key={i}>
+                <label className="field-label">Prowadzący {i + 1}</label>
+                <select
+                  value={form.instructor_ids[i] ?? ''}
+                  onChange={e => handleInstructorSlot(i, e.target.value)}
+                  className="field-input"
+                >
+                  <option value="">— wybierz ratownika —</option>
+                  {allInstructors.map(inst => (
+                    <option key={inst.id} value={inst.id}>
+                      {inst.full_name}{inst.specializations.length > 0 ? ` (${inst.specializations.join(', ')})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
             ))}
           </div>
         )}
