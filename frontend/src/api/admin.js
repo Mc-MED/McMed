@@ -25,6 +25,18 @@ export const adminFetchEnrollments = (courseId) => {
 export const adminDeleteEnrollment = (id) =>
   axios.delete(`/api/courses/enrollments/${id}/`, { headers: authHeader() })
 
+export const adminFetchInstructors = () =>
+  axios.get('/api/courses/instructors/', { headers: authHeader() }).then(r => r.data)
+
+export const adminCreateInstructor = (data) =>
+  axios.post('/api/courses/instructors/', data, { headers: authHeader() })
+
+export const adminUpdateInstructor = (id, data) =>
+  axios.patch(`/api/courses/instructors/${id}/`, data, { headers: authHeader() })
+
+export const adminDeleteInstructor = (id) =>
+  axios.delete(`/api/courses/instructors/${id}/`, { headers: authHeader() })
+
 export const adminDownloadDocument = async (courseId, filename, docName) => {
   const response = await axios.get(`/api/documents/courses/${courseId}/${filename}/`, {
     headers: authHeader(),

@@ -59,7 +59,7 @@ def _build_context(course):
         'course_days':       [fmt_str(d) for d in (course.course_days or [])],
         'entity_director':   course.entity_director or '',
         'academic_director': course.academic_director or '',
-        'instructors':       course.instructors or [],
+        'instructors':       [str(i) for i in course.instructors.all()],
         'psychologist':      course.psychologist or '',
         'committee_chair':   course.committee_chair or '',
         'committee_member1': course.committee_member1 or '',

@@ -1,5 +1,19 @@
 from rest_framework import serializers
-from .models import Course, Enrollment
+from .models import Course, Enrollment, Instructor
+
+
+class InstructorSerializer(serializers.ModelSerializer):
+    full_name       = serializers.CharField(read_only=True)
+    specializations = serializers.ListField(child=serializers.CharField(), read_only=True)
+
+    class Meta:
+        model  = Instructor
+        fields = [
+            'id', 'first_name', 'last_name', 'title', 'profession',
+            'full_name', 'specializations',
+            'spec_L', 'spec_P', 'spec_Ps', 'spec_R', 'spec_Rt',
+            'spec_Rch', 'spec_Re', 'spec_Rwo', 'spec_Rwy',
+        ]
 
 
 class CourseSerializer(serializers.ModelSerializer):
@@ -21,6 +35,14 @@ class AdminCourseSerializer(serializers.ModelSerializer):
     spots_left          = serializers.IntegerField(read_only=True)
     instructors_count   = serializers.IntegerField(read_only=True)
     course_type_display = serializers.CharField(source='get_course_type_display', read_only=True)
+    instructors         = InstructorSerializer(many=True, read_only=True)
+    instructor_ids      = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Instructor.objects.all(),
+        source='instructors',
+        write_only=True,
+        required=False,
+    )
 
     class Meta:
         model  = Course
@@ -30,7 +52,7 @@ class AdminCourseSerializer(serializers.ModelSerializer):
             'course_days', 'start_date', 'end_date',
             'exam_date', 'exam_time', 'exam_location',
             'entity_director', 'academic_director',
-            'instructors', 'instructors_count',
+            'instructors', 'instructor_ids', 'instructors_count',
             'psychologist',
             'committee_chair', 'committee_member1', 'committee_member2',
             'spots_left',
@@ -43,11 +65,6 @@ class AdminCourseSerializer(serializers.ModelSerializer):
         filled = [d for d in value if d]
         if len(filled) != 6:
             raise serializers.ValidationError('Kurs musi mieć dokładnie 6 dni szkoleniowych.')
-        return value
-
-    def validate_instructors(self, value):
-        if not isinstance(value, list):
-            raise serializers.ValidationError('Podaj listę prowadzących.')
         return value
 
 

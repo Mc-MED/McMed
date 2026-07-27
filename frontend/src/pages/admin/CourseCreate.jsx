@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { adminCreateCourse } from '../../api/admin'
+import { adminCreateCourse, adminFetchInstructors } from '../../api/admin'
 
 const today = new Date().toISOString().slice(0, 10)
 
@@ -16,7 +16,7 @@ const DUMMY = {
   exam_location: 'ul. Medyczna 5, Kraków',
   entity_director: 'dr Jan Wiśniewski',
   academic_director: 'mgr Anna Kowalska',
-  instructors: ['Tomasz Nowak', 'Katarzyna Zielińska'],
+  instructor_ids: [],
   psychologist: 'mgr Piotr Malinowski',
   committee_chair: 'dr hab. Maria Wójcik',
   committee_member1: 'dr Krzysztof Dąbrowski',
@@ -35,7 +35,7 @@ const EMPTY = {
   exam_location: '',
   entity_director: '',
   academic_director: '',
-  instructors: [''],
+  instructor_ids: [],
   psychologist: '',
   committee_chair: '',
   committee_member1: '',
@@ -44,38 +44,25 @@ const EMPTY = {
 
 export default function CourseCreate() {
   const navigate = useNavigate()
-  const [form, setForm]     = useState(EMPTY)
-  const [errors, setErrors] = useState({})
-  const [status, setStatus] = useState('idle')
+  const [form, setForm]           = useState(EMPTY)
+  const [errors, setErrors]       = useState({})
+  const [status, setStatus]       = useState('idle')
   const [serverMsg, setServerMsg] = useState('')
+  const [allInstructors, setAllInstructors] = useState([])
+
+  useEffect(() => {
+    adminFetchInstructors().then(setAllInstructors).catch(() => {})
+  }, [])
 
   const instructorsCount = useMemo(() => {
     const n = parseInt(form.max_participants, 10)
     return n > 0 ? Math.ceil(n / 6) : 1
   }, [form.max_participants])
 
-  // Sync instructors array length with instructorsCount
-  function syncInstructors(count, current) {
-    if (current.length === count) return current
-    if (current.length < count) return [...current, ...Array(count - current.length).fill('')]
-    return current.slice(0, count)
-  }
-
   function handleChange(e) {
     const { name, value } = e.target
     setErrors(er => ({ ...er, [name]: '' }))
-
-    if (name === 'max_participants') {
-      const n = parseInt(value, 10)
-      const count = n > 0 ? Math.ceil(n / 6) : 1
-      setForm(f => ({
-        ...f,
-        max_participants: value,
-        instructors: syncInstructors(count, f.instructors),
-      }))
-    } else {
-      setForm(f => ({ ...f, [name]: value }))
-    }
+    setForm(f => ({ ...f, [name]: value }))
   }
 
   function handleDay(index, value) {
@@ -87,12 +74,14 @@ export default function CourseCreate() {
     setErrors(er => ({ ...er, course_days: '' }))
   }
 
-  function handleInstructor(index, value) {
+  function toggleInstructor(id) {
     setForm(f => {
-      const inst = [...f.instructors]
-      inst[index] = value
-      return { ...f, instructors: inst }
+      const ids = f.instructor_ids.includes(id)
+        ? f.instructor_ids.filter(x => x !== id)
+        : [...f.instructor_ids, id]
+      return { ...f, instructor_ids: ids }
     })
+    setErrors(er => ({ ...er, instructor_ids: '' }))
   }
 
   function validate() {
@@ -107,9 +96,6 @@ export default function CourseCreate() {
     if (!form.exam_location.trim())  e.exam_location  = 'Podaj miejsce egzaminu.'
     if (!form.entity_director.trim()) e.entity_director = 'Podaj kierownika podmiotu.'
     if (!form.academic_director.trim()) e.academic_director = 'Podaj kierownika merytorycznego.'
-    form.instructors.forEach((v, i) => {
-      if (!v.trim()) e[`instructor_${i}`] = 'Podaj imię i nazwisko.'
-    })
     if (!form.committee_chair.trim())   e.committee_chair   = 'Podaj przewodniczącego komisji.'
     if (!form.committee_member1.trim()) e.committee_member1 = 'Podaj pierwszego członka komisji.'
     if (!form.committee_member2.trim()) e.committee_member2 = 'Podaj drugiego członka komisji.'
@@ -129,6 +115,7 @@ export default function CourseCreate() {
       max_participants: parseInt(form.max_participants),
       price: parseFloat(form.price) || 0,
       course_days: form.course_days.filter(d => d),
+      instructor_ids: form.instructor_ids,
     }
 
     try {
@@ -247,19 +234,39 @@ export default function CourseCreate() {
         {/* ── Prowadzący ── */}
         <Section
           title="Prowadzący"
-          subtitle={`${instructorsCount} prowadzący${instructorsCount > 1 ? 'ch' : ''} (1 na każdych 6 kursantów)`}
+          subtitle={`Wymagana liczba: ${instructorsCount} (1 na każdych 6 kursantów) · Wybrano: ${form.instructor_ids.length}`}
         >
-          {form.instructors.map((name, i) => (
-            <Field
-              key={i}
-              label={`Prowadzący ${i + 1}`}
-              name={`instructor_${i}`}
-              value={name}
-              onChange={e => handleInstructor(i, e.target.value)}
-              error={errors[`instructor_${i}`]}
-              placeholder="Imię i nazwisko"
-            />
-          ))}
+          {allInstructors.length === 0 ? (
+            <p className="text-sm text-gray-400">
+              Brak ratowników w bazie.{' '}
+              <a href="/admin/instructors" target="_blank" className="text-red-600 underline">Dodaj ratowników →</a>
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {allInstructors.map(inst => (
+                <label key={inst.id} className="flex items-start gap-3 cursor-pointer p-2 rounded-lg hover:bg-gray-50">
+                  <input
+                    type="checkbox"
+                    checked={form.instructor_ids.includes(inst.id)}
+                    onChange={() => toggleInstructor(inst.id)}
+                    className="mt-0.5 h-4 w-4 accent-red-600"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-gray-900">{inst.full_name}</span>
+                    {inst.profession && <span className="text-xs text-gray-400 ml-2">{inst.profession}</span>}
+                    {inst.specializations.length > 0 && (
+                      <div className="flex gap-1 mt-0.5">
+                        {inst.specializations.map(s => (
+                          <span key={s} className="bg-red-50 text-red-700 text-xs font-semibold px-1.5 py-0.5 rounded">{s}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </label>
+              ))}
+            </div>
+          )}
+          {errors.instructor_ids && <p className="text-red-500 text-xs mt-1">{errors.instructor_ids}</p>}
         </Section>
 
         {/* ── Pozostała kadra i komisja ── */}

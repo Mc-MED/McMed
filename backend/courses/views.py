@@ -5,8 +5,8 @@ from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from .models import Course, Enrollment
-from .serializers import CourseSerializer, AdminCourseSerializer, EnrollmentSerializer
+from .models import Course, Enrollment, Instructor
+from .serializers import CourseSerializer, AdminCourseSerializer, EnrollmentSerializer, InstructorSerializer
 from users.emails import send_activation_email
 
 User = get_user_model()
@@ -122,3 +122,15 @@ class AdminEnrollmentListView(generics.ListAPIView):
 class AdminEnrollmentDeleteView(generics.DestroyAPIView):
     permission_classes = [IsAuthenticated]
     queryset           = Enrollment.objects.all()
+
+
+class InstructorListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class   = InstructorSerializer
+    queryset           = Instructor.objects.all()
+
+
+class InstructorDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class   = InstructorSerializer
+    queryset           = Instructor.objects.all()

@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { adminFetchCourse, adminUpdateCourse, adminFetchEnrollments, adminDeleteEnrollment, adminDownloadDocument, adminDownloadXlsx } from '../../api/admin'
+import { adminFetchCourse, adminUpdateCourse, adminFetchEnrollments, adminDeleteEnrollment, adminDownloadDocument, adminDownloadXlsx, adminFetchInstructors } from '../../api/admin'
 import * as XLSX from 'xlsx'
 
 function formatDate(iso) {
@@ -18,39 +18,40 @@ function formatDateTime(iso) {
 // ─── Zakładka: Dane kursu ─────────────────────────────────────────────
 
 function CourseForm({ initial, onSaved }) {
-  const [form, setForm]     = useState(initial)
-  const [errors, setErrors] = useState({})
-  const [status, setStatus] = useState('idle')
+  const [form, setForm]           = useState({
+    ...initial,
+    instructor_ids: (initial.instructors || []).map(i => i.id),
+  })
+  const [errors, setErrors]       = useState({})
+  const [status, setStatus]       = useState('idle')
+  const [allInstructors, setAllInstructors] = useState([])
+
+  useEffect(() => {
+    adminFetchInstructors().then(setAllInstructors).catch(() => {})
+  }, [])
 
   const instructorsCount = useMemo(() => {
     const n = parseInt(form.max_participants, 10)
     return n > 0 ? Math.ceil(n / 6) : 1
   }, [form.max_participants])
 
-  function syncInstructors(count, current) {
-    if (current.length === count) return current
-    if (current.length < count) return [...current, ...Array(count - current.length).fill('')]
-    return current.slice(0, count)
-  }
-
   function handleChange(e) {
     const { name, value, type, checked } = e.target
     setErrors(er => ({ ...er, [name]: '' }))
-    if (name === 'max_participants') {
-      const n = parseInt(value, 10)
-      const count = n > 0 ? Math.ceil(n / 6) : 1
-      setForm(f => ({ ...f, max_participants: value, instructors: syncInstructors(count, f.instructors) }))
-    } else {
-      setForm(f => ({ ...f, [name]: type === 'checkbox' ? checked : value }))
-    }
+    setForm(f => ({ ...f, [name]: type === 'checkbox' ? checked : value }))
   }
 
   function handleDay(i, value) {
     setForm(f => { const d = [...f.course_days]; d[i] = value; return { ...f, course_days: d } })
   }
 
-  function handleInstructor(i, value) {
-    setForm(f => { const ins = [...f.instructors]; ins[i] = value; return { ...f, instructors: ins } })
+  function toggleInstructor(id) {
+    setForm(f => {
+      const ids = f.instructor_ids.includes(id)
+        ? f.instructor_ids.filter(x => x !== id)
+        : [...f.instructor_ids, id]
+      return { ...f, instructor_ids: ids }
+    })
   }
 
   async function handleSubmit(e) {
@@ -62,10 +63,11 @@ function CourseForm({ initial, onSaved }) {
       max_participants: parseInt(form.max_participants),
       price: parseFloat(form.price) || 0,
       course_days: form.course_days.filter(d => d),
+      instructor_ids: form.instructor_ids,
     }
     try {
       const res = await adminUpdateCourse(initial.id, payload)
-      setForm(res.data)
+      setForm({ ...res.data, instructor_ids: (res.data.instructors || []).map(i => i.id) })
       setStatus('saved')
       onSaved && onSaved(res.data)
       setTimeout(() => setStatus('idle'), 2500)
@@ -142,16 +144,35 @@ function CourseForm({ initial, onSaved }) {
 
       <Section
         title="Prowadzący"
-        subtitle={`${instructorsCount} prowadzący${instructorsCount > 1 ? 'ch' : ''} (1 na każdych 6 kursantów)`}
+        subtitle={`Wymagana liczba: ${instructorsCount} (1 na każdych 6 kursantów) · Wybrano: ${form.instructor_ids.length}`}
       >
-        {(form.instructors.length < instructorsCount
-          ? [...form.instructors, ...Array(instructorsCount - form.instructors.length).fill('')]
-          : form.instructors.slice(0, instructorsCount)
-        ).map((name, i) => (
-          <Field key={i} label={`Prowadzący ${i + 1}`} value={name}
-            onChange={e => handleInstructor(i, e.target.value)}
-            error={errors[`instructor_${i}`]} placeholder="Imię i nazwisko" required={false} />
-        ))}
+        {allInstructors.length === 0 ? (
+          <p className="text-sm text-gray-400">Brak ratowników w bazie.</p>
+        ) : (
+          <div className="space-y-2">
+            {allInstructors.map(inst => (
+              <label key={inst.id} className="flex items-start gap-3 cursor-pointer p-2 rounded-lg hover:bg-gray-50">
+                <input
+                  type="checkbox"
+                  checked={form.instructor_ids.includes(inst.id)}
+                  onChange={() => toggleInstructor(inst.id)}
+                  className="mt-0.5 h-4 w-4 accent-red-600"
+                />
+                <div>
+                  <span className="text-sm font-medium text-gray-900">{inst.full_name}</span>
+                  {inst.profession && <span className="text-xs text-gray-400 ml-2">{inst.profession}</span>}
+                  {inst.specializations.length > 0 && (
+                    <div className="flex gap-1 mt-0.5">
+                      {inst.specializations.map(s => (
+                        <span key={s} className="bg-red-50 text-red-700 text-xs font-semibold px-1.5 py-0.5 rounded">{s}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </label>
+            ))}
+          </div>
+        )}
       </Section>
 
       <Section title="Komisja egzaminacyjna i psycholog">

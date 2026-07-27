@@ -2,6 +2,53 @@ import math
 from django.db import models
 from django.contrib.auth import get_user_model
 
+SPECIALIZATION_CODES = ['L', 'P', 'Ps', 'R', 'Rt', 'Rch', 'Re', 'Rwo', 'Rwy']
+
+SPECIALIZATION_LABELS = {
+    'L':   'L – lekarz systemu',
+    'P':   'P – pielęgniarka systemu',
+    'Ps':  'Ps – psycholog',
+    'R':   'R – ratownik',
+    'Rt':  'Rt – specjalista z zakresu ratownictwa technicznego',
+    'Rch': 'Rch – specjalista z zakresu ratownictwa chemicznego',
+    'Re':  'Re – specjalista z zakresu ratownictwa ekologicznego',
+    'Rwo': 'Rwo – specjalista z zakresu ratownictwa wodnego',
+    'Rwy': 'Rwy – specjalista z zakresu ratownictwa wysokościowego',
+}
+
+
+class Instructor(models.Model):
+    first_name = models.CharField(max_length=100)
+    last_name  = models.CharField(max_length=100)
+    title      = models.CharField(max_length=100, blank=True)
+    profession = models.CharField(max_length=200, blank=True)
+
+    # Specjalizacje
+    spec_L   = models.BooleanField(default=False, verbose_name='L – lekarz systemu')
+    spec_P   = models.BooleanField(default=False, verbose_name='P – pielęgniarka systemu')
+    spec_Ps  = models.BooleanField(default=False, verbose_name='Ps – psycholog')
+    spec_R   = models.BooleanField(default=False, verbose_name='R – ratownik')
+    spec_Rt  = models.BooleanField(default=False, verbose_name='Rt – ratownictwo techniczne')
+    spec_Rch = models.BooleanField(default=False, verbose_name='Rch – ratownictwo chemiczne')
+    spec_Re  = models.BooleanField(default=False, verbose_name='Re – ratownictwo ekologiczne')
+    spec_Rwo = models.BooleanField(default=False, verbose_name='Rwo – ratownictwo wodne')
+    spec_Rwy = models.BooleanField(default=False, verbose_name='Rwy – ratownictwo wysokościowe')
+
+    class Meta:
+        ordering = ['last_name', 'first_name']
+
+    def __str__(self):
+        parts = [p for p in [self.title, self.first_name, self.last_name] if p]
+        return ' '.join(parts)
+
+    @property
+    def full_name(self):
+        return str(self)
+
+    @property
+    def specializations(self):
+        return [code for code in SPECIALIZATION_CODES if getattr(self, f'spec_{code}')]
+
 
 class Course(models.Model):
     TYPE_KPP    = 'kpp'
@@ -21,9 +68,9 @@ class Course(models.Model):
     created_at       = models.DateTimeField(auto_now_add=True)
 
     # Terminy – 6 wybranych dat
-    course_days  = models.JSONField(default=list)   # ["2026-07-01", ...]
-    start_date   = models.DateField(null=True, blank=True)
-    end_date     = models.DateField(null=True, blank=True)
+    course_days = models.JSONField(default=list)
+    start_date  = models.DateField(null=True, blank=True)
+    end_date    = models.DateField(null=True, blank=True)
 
     # Egzamin
     exam_date     = models.DateField(null=True, blank=True)
@@ -34,8 +81,8 @@ class Course(models.Model):
     entity_director   = models.CharField(max_length=200, blank=True)
     academic_director = models.CharField(max_length=200, blank=True)
 
-    # Kadra – lista prowadzących (rozmiar = ceil(max_participants / 6))
-    instructors = models.JSONField(default=list)   # ["Jan Kowalski", ...]
+    # Kadra
+    instructors = models.ManyToManyField(Instructor, blank=True, related_name='courses')
 
     # Inne osoby
     psychologist      = models.CharField(max_length=200, blank=True)

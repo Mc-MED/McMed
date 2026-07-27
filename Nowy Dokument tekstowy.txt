@@ -1,0 +1,16 @@
+Strona Internetowa kursy KPP - Landing PAGE:
+- O nas
+- Co to KPP
+- Co to Recertyfikacja
+
+- Zapisz się na kurs  -> 
+Odnośnik do Aplikacji react ?
+Imie , nazwisko, pesel, adres zamieszkania , nr telefonu
+Zgody różnego rodzaju
+Płatność ?
+
+Panel Admina :
+Utwórz kurs - dane kursu formularz
+6 plików do pobrania  z danymi z formularza
+Zakładka z danymi z kursu - wyślij sms do wszystkich
+Materiały 

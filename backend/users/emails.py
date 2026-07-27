@@ -1,10 +1,26 @@
+from io import BytesIO
 from pathlib import Path
 from email.mime.image import MIMEImage
 
 from django.core.mail import EmailMultiAlternatives
 from django.conf import settings
+from PIL import Image
 
 LOGO_PATH = Path(__file__).parent / 'logo.png'
+
+
+def _logo_transparent_bytes():
+    """Zwraca logo jako białe logo na przezroczystym tle."""
+    img = Image.open(LOGO_PATH).convert('RGBA')
+    pixels = img.getdata()
+    new_pixels = [
+        (255, 255, 255, 0) if (r > 220 and g > 220 and b > 220) else (255, 255, 255, a)
+        for r, g, b, a in pixels
+    ]
+    img.putdata(new_pixels)
+    buf = BytesIO()
+    img.save(buf, format='PNG')
+    return buf.getvalue()
 
 
 def _html(first_name, activation_link, course_info, resend):
@@ -61,7 +77,8 @@ def _html(first_name, activation_link, course_info, resend):
 
     # Logo: jeśli plik istnieje – CID, w przeciwnym razie fallback tekstowy
     logo_img = (
-        '<img src="cid:mcmed_logo" alt="Mc Med" height="56" style="display:block;margin:0 auto;">'
+        '<img src="cid:mcmed_logo" alt="Mc Med" width="99" height="110"'
+        ' style="display:block;width:99px;height:110px;">'
         if LOGO_PATH.exists() else
         '<span style="font-size:30px;font-weight:900;color:#ffffff;font-family:Georgia,Times,serif;">Mc Med</span>'
     )
@@ -81,10 +98,20 @@ def _html(first_name, activation_link, course_info, resend):
 
         <!-- ── HEADER ── -->
         <tr>
-          <td style="background:#c41230;padding:28px 40px;text-align:center;">
-            {logo_img}
-            <div style="font-size:10px;color:#fca5a5;margin-top:8px;
-                        letter-spacing:2px;text-transform:uppercase;">Kwalifikowana Pierwsza Pomoc</div>
+          <td style="background:#c41230;padding:20px 32px;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td width="25%" valign="middle">
+                  {logo_img}
+                </td>
+                <td width="75%" valign="middle" style="text-align:center;">
+                  <div style="font-size:22px;font-weight:900;color:#ffffff;font-family:Georgia,Times,serif;
+                              letter-spacing:0.5px;">Mc Med</div>
+                  <div style="font-size:18px;font-weight:700;color:#fca5a5;margin-top:2px;
+                              letter-spacing:0.5px;">Kwalifikowana Pierwsza Pomoc</div>
+                </td>
+              </tr>
+            </table>
           </td>
         </tr>
 
@@ -141,7 +168,7 @@ def _html(first_name, activation_link, course_info, resend):
         <tr>
           <td style="background:#111827;padding:24px 40px;text-align:center;
                      border-radius:0 0 20px 20px;">
-            <div style="font-size:11px;color:#4b5563;line-height:1.7;">
+            <div style="font-size:11px;color:#9ca3af;line-height:1.7;">
               Ten e-mail został wysłany automatycznie &#8211; prosimy na niego nie odpowiadać.
             </div>
           </td>
@@ -208,8 +235,7 @@ def send_activation_email(*, to_email, first_name, activation_link, course_info=
     )
 
     if LOGO_PATH.exists():
-        with open(LOGO_PATH, 'rb') as f:
-            logo = MIMEImage(f.read())
+        logo = MIMEImage(_logo_transparent_bytes(), _subtype='png')
         logo.add_header('Content-ID', '<mcmed_logo>')
         logo.add_header('Content-Disposition', 'inline', filename='logo.png')
         msg.attach(logo)
