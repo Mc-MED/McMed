@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { fetchCourses, submitEnrollment } from '../../api/courses'
+import { fetchCourses, submitEnrollment, resendActivation } from '../../api/courses'
 
 const EMPTY = {
   course: '',
@@ -29,6 +29,8 @@ export default function EnrollForm() {
   const [errors, setErrors]     = useState({})
   const [status, setStatus]     = useState('idle') // idle | loading | success | error
   const [serverError, setServerError] = useState('')
+  const [enrolledEmail, setEnrolledEmail] = useState('')
+  const [resendState, setResendState] = useState('idle') // idle | loading | sent | error
 
   useEffect(() => {
     fetchCourses().then(setCourses).catch(() => {})
@@ -76,6 +78,7 @@ export default function EnrollForm() {
 
     try {
       await submitEnrollment(form)
+      setEnrolledEmail(form.email)
       setStatus('success')
     } catch (err) {
       setStatus('error')
@@ -93,6 +96,16 @@ export default function EnrollForm() {
     }
   }
 
+  async function handleResend() {
+    setResendState('loading')
+    try {
+      await resendActivation(enrolledEmail)
+      setResendState('sent')
+    } catch {
+      setResendState('error')
+    }
+  }
+
   if (status === 'success') {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
@@ -101,11 +114,45 @@ export default function EnrollForm() {
             <span className="text-3xl">✓</span>
           </div>
           <h2 className="text-2xl font-extrabold text-gray-900 mb-3">Zapisano!</h2>
+          <p className="text-gray-500 text-sm leading-relaxed mb-2">
+            Twoje zgłoszenie zostało przyjęte. Wysłaliśmy Ci link aktywacyjny
+            do konta oraz potwierdzenie zapisu na adres{' '}
+            <span className="font-medium text-gray-700">{enrolledEmail}</span>.
+          </p>
           <p className="text-gray-500 text-sm leading-relaxed mb-6">
-            Twoje zgłoszenie zostało przyjęte. Sprawdź skrzynkę mailową –
-            wysłaliśmy Ci link aktywacyjny do konta oraz potwierdzenie zapisu.
             Skontaktujemy się z Tobą telefonicznie w celu potwierdzenia.
           </p>
+
+          {/* Spam hint */}
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-left mb-6">
+            <p className="text-sm text-amber-800 leading-relaxed">
+              <span className="font-semibold">Nie widzisz maila?</span> Sprawdź folder{' '}
+              <span className="font-medium">SPAM</span> lub{' '}
+              <span className="font-medium">Oferty</span> – wiadomości aktywacyjne
+              czasem tam trafiają.
+            </p>
+          </div>
+
+          {/* Resend */}
+          <div className="mb-6">
+            {resendState === 'sent' ? (
+              <p className="text-green-600 text-sm font-medium">Link został wysłany ponownie.</p>
+            ) : resendState === 'error' ? (
+              <p className="text-red-500 text-sm">Wystąpił błąd. Spróbuj ponownie za chwilę.</p>
+            ) : (
+              <div className="text-sm text-gray-400">
+                Nadal nic?{' '}
+                <button
+                  onClick={handleResend}
+                  disabled={resendState === 'loading'}
+                  className="text-red-600 hover:text-red-700 font-medium underline underline-offset-2 disabled:opacity-50"
+                >
+                  {resendState === 'loading' ? 'Wysyłanie…' : 'Wyślij link jeszcze raz'}
+                </button>
+              </div>
+            )}
+          </div>
+
           <a
             href="/"
             className="inline-block bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-2.5 rounded-lg transition-colors text-sm"

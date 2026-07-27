@@ -12,7 +12,7 @@ class CourseSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'course_type', 'course_type_display',
             'city', 'course_days', 'start_date', 'end_date',
-            'exam_date', 'exam_location',
+            'exam_date', 'exam_time', 'exam_location',
             'max_participants', 'spots_left', 'is_full', 'price',
         ]
 
@@ -28,7 +28,7 @@ class AdminCourseSerializer(serializers.ModelSerializer):
             'id', 'name', 'course_type', 'course_type_display',
             'city', 'max_participants', 'price', 'is_active', 'created_at',
             'course_days', 'start_date', 'end_date',
-            'exam_date', 'exam_location',
+            'exam_date', 'exam_time', 'exam_location',
             'entity_director', 'academic_director',
             'instructors', 'instructors_count',
             'psychologist',

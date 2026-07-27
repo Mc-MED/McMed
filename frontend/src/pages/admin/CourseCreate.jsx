@@ -12,6 +12,7 @@ const DUMMY = {
   price: '800',
   course_days: ['2026-07-07', '2026-07-08', '2026-07-09', '2026-07-14', '2026-07-15', '2026-07-16'],
   exam_date: '2026-07-16',
+  exam_time: '10:00',
   exam_location: 'ul. Medyczna 5, Kraków',
   entity_director: 'dr Jan Wiśniewski',
   academic_director: 'mgr Anna Kowalska',
@@ -30,6 +31,7 @@ const EMPTY = {
   price: '',
   course_days: ['', '', '', '', '', ''],
   exam_date: '',
+  exam_time: '',
   exam_location: '',
   entity_director: '',
   academic_director: '',
@@ -223,9 +225,11 @@ export default function CourseCreate() {
             </div>
             {errors.course_days && <p className="text-red-500 text-xs mt-1">{errors.course_days}</p>}
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <Field label="Data egzaminu" name="exam_date" value={form.exam_date}
               onChange={handleChange} error={errors.exam_date} type="date" />
+            <Field label="Godzina egzaminu" name="exam_time" value={form.exam_time}
+              onChange={handleChange} error={errors.exam_time} type="time" />
             <Field label="Miejsce egzaminu" name="exam_location" value={form.exam_location}
               onChange={handleChange} error={errors.exam_location}
               placeholder="np. 30-001 Kraków, ul. Medyczna 5" />

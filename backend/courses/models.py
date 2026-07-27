@@ -27,6 +27,7 @@ class Course(models.Model):
 
     # Egzamin
     exam_date     = models.DateField(null=True, blank=True)
+    exam_time     = models.TimeField(null=True, blank=True)
     exam_location = models.CharField(max_length=300, blank=True)
 
     # Organizacja

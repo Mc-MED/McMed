@@ -54,6 +54,7 @@ def _build_context(course):
         'start_date':        fmt(course.start_date),
         'end_date':          fmt(course.end_date),
         'exam_date':         fmt(course.exam_date),
+        'exam_time':         course.exam_time.strftime('%H:%M') if course.exam_time else '',
         'exam_location':     course.exam_location or '',
         'course_days':       [fmt_str(d) for d in (course.course_days or [])],
         'entity_director':   course.entity_director or '',
