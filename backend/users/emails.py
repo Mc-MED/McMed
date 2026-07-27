@@ -1,9 +1,13 @@
+from pathlib import Path
+from email.mime.image import MIMEImage
+
 from django.core.mail import EmailMultiAlternatives
 from django.conf import settings
 
+LOGO_PATH = Path(__file__).parent / 'logo.png'
+
 
 def _html(first_name, activation_link, course_info, resend):
-    heading = 'Witamy w Mc Med!' if not resend else 'Nowy link aktywacyjny'
     subtext = (
         'Twoje zgłoszenie zostało przyjęte. Aktywuj konto, aby uzyskać dostęp do platformy.'
         if not resend else
@@ -21,7 +25,6 @@ def _html(first_name, activation_link, course_info, resend):
             for k, v in course_info.items()
         )
         course_block = f'''
-        <!-- course box -->
         <tr>
           <td style="background:#ffffff;padding:0 40px 28px;">
             <table width="100%" cellpadding="0" cellspacing="0"
@@ -37,9 +40,9 @@ def _html(first_name, activation_link, course_info, resend):
 
     # --- kroki ---
     steps = [
-        ('Aktywuj konto',        'Kliknij przycisk poniżej i zaloguj się na swoim nowym koncie.'),
-        ('Potwierdź zapis',      'Zadzwonimy do Ciebie telefonicznie, aby potwierdzić udział w kursie.'),
-        ('Materiały i wyniki',   'Na koncie znajdziesz harmonogram, podręczniki i wyniki egzaminu.'),
+        ('Aktywuj konto',      'Kliknij przycisk poniżej i zaloguj się na swoim nowym koncie.'),
+        ('Potwierdź zapis',    'Zadzwonimy do Ciebie telefonicznie, aby potwierdzić udział w kursie.'),
+        ('Materiały i wyniki', 'Na koncie znajdziesz harmonogram, podręczniki i wyniki egzaminu.'),
     ]
     steps_rows = ''
     for i, (title, desc) in enumerate(steps, 1):
@@ -55,6 +58,13 @@ def _html(first_name, activation_link, course_info, resend):
               <div style="font-size:13px;color:#6b7280;line-height:1.6;">{desc}</div>
             </td>
           </tr>'''
+
+    # Logo: jeśli plik istnieje – CID, w przeciwnym razie fallback tekstowy
+    logo_img = (
+        '<img src="cid:mcmed_logo" alt="Mc Med" height="56" style="display:block;margin:0 auto;">'
+        if LOGO_PATH.exists() else
+        '<span style="font-size:30px;font-weight:900;color:#ffffff;font-family:Georgia,Times,serif;">Mc Med</span>'
+    )
 
     return f'''<!DOCTYPE html>
 <html lang="pl">
@@ -72,9 +82,8 @@ def _html(first_name, activation_link, course_info, resend):
         <!-- ── HEADER ── -->
         <tr>
           <td style="background:#c41230;padding:28px 40px;text-align:center;">
-            <div style="font-size:30px;font-weight:900;color:#ffffff;
-                        font-family:Georgia,Times,serif;letter-spacing:-0.5px;">Mc Med</div>
-            <div style="font-size:10px;color:#fca5a5;margin-top:5px;
+            {logo_img}
+            <div style="font-size:10px;color:#fca5a5;margin-top:8px;
                         letter-spacing:2px;text-transform:uppercase;">Kwalifikowana Pierwsza Pomoc</div>
           </td>
         </tr>
@@ -86,8 +95,7 @@ def _html(first_name, activation_link, course_info, resend):
                         margin:0 auto 22px;font-size:34px;line-height:68px;text-align:center;">✓</div>
             <h1 style="margin:0 0 10px;font-size:28px;font-weight:900;color:#111827;
                        font-family:Georgia,Times,serif;">Gratulacje, {first_name}!</h1>
-            <p style="margin:0;font-size:14px;color:#6b7280;line-height:1.7;max-width:400px;
-                      display:block;margin-left:auto;margin-right:auto;">{subtext}</p>
+            <p style="margin:0;font-size:14px;color:#6b7280;line-height:1.7;">{subtext}</p>
           </td>
         </tr>
 
@@ -100,7 +108,7 @@ def _html(first_name, activation_link, course_info, resend):
                style="display:inline-block;background:#dc2626;color:#ffffff;
                       font-size:16px;font-weight:700;padding:15px 44px;
                       border-radius:12px;text-decoration:none;letter-spacing:0.2px;">
-              Aktywuj konto →
+              Aktywuj konto &#8594;
             </a>
             <p style="margin:14px 0 0;font-size:11px;color:#9ca3af;">
               Link wygasa po 72&nbsp;godzinach.<br>
@@ -133,13 +141,8 @@ def _html(first_name, activation_link, course_info, resend):
         <tr>
           <td style="background:#111827;padding:24px 40px;text-align:center;
                      border-radius:0 0 20px 20px;">
-            <div style="font-size:18px;font-weight:900;color:#ffffff;margin-bottom:4px;
-                        font-family:Georgia,Times,serif;">Mc Med</div>
-            <div style="font-size:11px;color:#6b7280;margin-bottom:10px;">
-              Kwalifikowana Pierwsza Pomoc
-            </div>
             <div style="font-size:11px;color:#4b5563;line-height:1.7;">
-              Ten e-mail został wysłany automatycznie – prosimy na niego nie odpowiadać.
+              Ten e-mail został wysłany automatycznie &#8211; prosimy na niego nie odpowiadać.
             </div>
           </td>
         </tr>
@@ -196,8 +199,19 @@ def send_activation_email(*, to_email, first_name, activation_link, course_info=
         from_email=settings.DEFAULT_FROM_EMAIL,
         to=[to_email],
     )
+
+    # Osadź HTML i logo jako powiązane części (multipart/related)
+    msg.mixed_subtype = 'related'
     msg.attach_alternative(
         _html(first_name, activation_link, course_info, resend),
         'text/html',
     )
+
+    if LOGO_PATH.exists():
+        with open(LOGO_PATH, 'rb') as f:
+            logo = MIMEImage(f.read())
+        logo.add_header('Content-ID', '<mcmed_logo>')
+        logo.add_header('Content-Disposition', 'inline', filename='logo.png')
+        msg.attach(logo)
+
     msg.send(fail_silently=True)
