@@ -1,13 +1,13 @@
 from django.contrib.auth import get_user_model
-from django.conf import settings
 from django.db import transaction
 from rest_framework import generics, status
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from .models import Course, Enrollment, Instructor
 from .serializers import CourseSerializer, AdminCourseSerializer, EnrollmentSerializer, InstructorSerializer
-from users.emails import send_activation_email
+from users.emails import send_activation_email, send_course_email
 
 User = get_user_model()
 
@@ -134,3 +134,47 @@ class InstructorDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class   = InstructorSerializer
     queryset           = Instructor.objects.all()
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def send_email_to_enrollments(request):
+    enrollment_ids = request.data.get('enrollment_ids', [])
+    subject = request.data.get('subject', '').strip()
+    body    = request.data.get('body', '').strip()
+
+    if not subject:
+        return Response({'detail': 'Podaj temat wiadomości.'}, status=status.HTTP_400_BAD_REQUEST)
+    if not body:
+        return Response({'detail': 'Podaj treść wiadomości.'}, status=status.HTTP_400_BAD_REQUEST)
+    if not enrollment_ids:
+        return Response({'detail': 'Nie wybrano żadnych uczestników.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    enrollments = Enrollment.objects.select_related('course').filter(
+        id__in=enrollment_ids,
+    ).exclude(email='')
+
+    sent = 0
+    failed = []
+    for e in enrollments:
+        course = e.course
+        course_info = {
+            'Kurs':     course.name,
+            'Miasto':   course.city,
+            'Termin':   f'{course.start_date.strftime("%d.%m.%Y") if course.start_date else "–"}'
+                        f' – {course.end_date.strftime("%d.%m.%Y") if course.end_date else "–"}',
+            'Egzamin':  course.exam_date.strftime('%d.%m.%Y') if course.exam_date else '–',
+        }
+        try:
+            send_course_email(
+                to_email=e.email,
+                first_name=e.first_name,
+                subject=subject,
+                body=body,
+                course_info=course_info,
+            )
+            sent += 1
+        except Exception:
+            failed.append(e.id)
+
+    return Response({'sent': sent, 'failed': failed})

@@ -1,10 +1,9 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 
 const NAV = [
-  { to: '/admin',              label: 'Dashboard',    icon: '📊', end: true },
   { to: '/admin/courses',      label: 'Kursy',        icon: '📋' },
   { to: '/admin/participants', label: 'Uczestnicy',   icon: '👥' },
-  { to: '/admin/instructors', label: 'Ratownicy',     icon: '🚑' },
+  { to: '/admin/instructors',  label: 'Instruktorzy', icon: '🚑' },
 ]
 
 export default function AdminLayout() {

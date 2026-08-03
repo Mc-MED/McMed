@@ -37,6 +37,9 @@ export const adminUpdateInstructor = (id, data) =>
 export const adminDeleteInstructor = (id) =>
   axios.delete(`/api/courses/instructors/${id}/`, { headers: authHeader() })
 
+export const adminSendEmail = (enrollmentIds, subject, body) =>
+  axios.post('/api/courses/enrollments/send-email/', { enrollment_ids: enrollmentIds, subject, body }, { headers: authHeader() })
+
 export const adminDownloadDocument = async (courseId, filename, docName) => {
   const response = await axios.get(`/api/documents/courses/${courseId}/${filename}/`, {
     headers: authHeader(),

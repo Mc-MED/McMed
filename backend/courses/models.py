@@ -32,7 +32,8 @@ class Instructor(models.Model):
     spec_Rch = models.BooleanField(default=False, verbose_name='Rch – ratownictwo chemiczne')
     spec_Re  = models.BooleanField(default=False, verbose_name='Re – ratownictwo ekologiczne')
     spec_Rwo = models.BooleanField(default=False, verbose_name='Rwo – ratownictwo wodne')
-    spec_Rwy = models.BooleanField(default=False, verbose_name='Rwy – ratownictwo wysokościowe')
+    spec_Rwy         = models.BooleanField(default=False, verbose_name='Rwy – ratownictwo wysokościowe')
+    years_experience = models.CharField(max_length=100, blank=True, default='', verbose_name='Staż pracy')
 
     class Meta:
         ordering = ['last_name', 'first_name']
@@ -48,6 +49,10 @@ class Instructor(models.Model):
     @property
     def specializations(self):
         return [code for code in SPECIALIZATION_CODES if getattr(self, f'spec_{code}')]
+
+    @property
+    def specializations_str(self):
+        return ', '.join(self.specializations)
 
 
 class Course(models.Model):

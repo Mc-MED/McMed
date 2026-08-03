@@ -1,6 +1,5 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import AdminLayout from './layouts/AdminLayout'
-import Dashboard from './pages/admin/Dashboard'
 import CourseList from './pages/admin/CourseList'
 import CourseCreate from './pages/admin/CourseCreate'
 import CourseDetail from './pages/admin/CourseDetail'
@@ -27,7 +26,7 @@ export default function App() {
 
         {/* Panel właściciela */}
         <Route path="/admin" element={<AdminLayout />}>
-          <Route index element={<Dashboard />} />
+          <Route index element={<Navigate to="/admin/courses" replace />} />
           <Route path="courses" element={<CourseList />} />
           <Route path="courses/create" element={<CourseCreate />} />
           <Route path="courses/:id" element={<CourseDetail />} />

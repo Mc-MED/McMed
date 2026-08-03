@@ -3,14 +3,16 @@ from .models import Course, Enrollment, Instructor
 
 
 class InstructorSerializer(serializers.ModelSerializer):
-    full_name       = serializers.CharField(read_only=True)
-    specializations = serializers.ListField(child=serializers.CharField(), read_only=True)
+    full_name            = serializers.CharField(read_only=True)
+    specializations      = serializers.ListField(child=serializers.CharField(), read_only=True)
+    specializations_str  = serializers.CharField(read_only=True)
 
     class Meta:
         model  = Instructor
         fields = [
             'id', 'first_name', 'last_name', 'title', 'profession',
-            'full_name', 'specializations',
+            'years_experience',
+            'full_name', 'specializations', 'specializations_str',
             'spec_L', 'spec_P', 'spec_Ps', 'spec_R', 'spec_Rt',
             'spec_Rch', 'spec_Re', 'spec_Rwo', 'spec_Rwy',
         ]

@@ -1,3 +1,4 @@
+import re
 from io import BytesIO
 from pathlib import Path
 
@@ -15,21 +16,23 @@ TEMPLATES_DIR = Path(__file__).parent / 'templates'
 ALLOWED_TEMPLATES = {'file1', 'file2', 'file3', 'file4', 'file5', 'file6'}
 
 ALLOWED_XLSX_TEMPLATES = {
-    'program': 'Program zajęć.xlsx',
+    'program': 'program.xlsx',
 }
 
 
 def _instructor_dict(inst):
     name_only = f'{inst.first_name} {inst.last_name}'.strip()
     return {
-        'full_name':  str(inst),
-        'name_only':  name_only,
-        'title':      inst.title or '',
-        'profession': inst.profession or '',
+        'full_name':   str(inst),
+        'name_only':   name_only,
+        'title':       inst.title or '',
+        'profession':  inst.profession or '',
+        'specs':       inst.specializations_str,
+        'years':       inst.years_experience or '',
     }
 
 
-_EMPTY_INST = {'full_name': '', 'name_only': '', 'title': '', 'profession': ''}
+_EMPTY_INST = {'full_name': '', 'name_only': '', 'title': '', 'profession': '', 'specs': '', 'years': ''}
 
 
 def _build_context(course):
@@ -57,6 +60,8 @@ def _build_context(course):
         flat_instructors[f'instructor_{n}_name']       = d['name_only']
         flat_instructors[f'instructor_{n}_title']      = d['title']
         flat_instructors[f'instructor_{n}_profession'] = d['profession']
+        flat_instructors[f'instructor_{n}_specs']      = d['specs']
+        flat_instructors[f'instructor_{n}_years']      = d['years']
 
     return {
         'created_at':        course.created_at.strftime('%d.%m.%Y'),
@@ -103,8 +108,8 @@ def _xlsx_replace(ws, context):
                         val = val.replace(f'{{{{{key}.{i}}}}}', inst.get('full_name', ''))
                         for field in ('full_name', 'name_only', 'title', 'profession'):
                             val = val.replace(f'{{{{{key}.{i}.{field}}}}}', inst.get(field, ''))
-                elif isinstance(replacement, (str, int, float)):
-                    val = val.replace(f'{{{{{key}}}}}', str(replacement))
+                elif not isinstance(replacement, (list, dict)):
+                    val = re.sub(r'\{\{\s*' + re.escape(key) + r'\s*\}\}', str(replacement), val)
             cell.value = val
 
 

@@ -14,22 +14,24 @@ const SPECS = [
 ]
 
 const EMPTY_FORM = {
-  first_name: '', last_name: '', title: '', profession: '',
+  first_name: '', last_name: '', title: '', profession: '', years_experience: '',
   spec_L: false, spec_P: false, spec_Ps: false, spec_R: false,
   spec_Rt: false, spec_Rch: false, spec_Re: false, spec_Rwo: false, spec_Rwy: false,
 }
 
 export default function InstructorList() {
   const [instructors, setInstructors] = useState([])
-  const [panel, setPanel]     = useState(null)   // null | 'create' | {instructor}
-  const [form, setForm]       = useState(EMPTY_FORM)
-  const [saving, setSaving]   = useState(false)
+  const [loading, setLoading]   = useState(true)
+  const [panel, setPanel]       = useState(null)   // null | 'create' | {instructor}
+  const [form, setForm]         = useState(EMPTY_FORM)
+  const [saving, setSaving]     = useState(false)
   const [deleteId, setDeleteId] = useState(null)
 
   useEffect(() => { load() }, [])
 
   async function load() {
     try { setInstructors(await adminFetchInstructors()) } catch {}
+    setLoading(false)
   }
 
   function openCreate() {
@@ -89,7 +91,9 @@ export default function InstructorList() {
 
       {/* Tabela */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-        {instructors.length === 0 ? (
+        {loading ? (
+          <p className="text-center text-gray-400 py-16 text-sm">Ładowanie instruktorów…</p>
+        ) : instructors.length === 0 ? (
           <p className="text-center text-gray-400 py-16 text-sm">Brak ratowników w bazie.</p>
         ) : (
           <table className="w-full text-sm">
@@ -99,6 +103,7 @@ export default function InstructorList() {
                 <th className="text-left px-5 py-3 font-semibold text-gray-600">Tytuł</th>
                 <th className="text-left px-5 py-3 font-semibold text-gray-600">Zawód</th>
                 <th className="text-left px-5 py-3 font-semibold text-gray-600">Specjalizacje</th>
+                <th className="text-left px-5 py-3 font-semibold text-gray-600">Staż (lata)</th>
                 <th className="px-5 py-3"></th>
               </tr>
             </thead>
@@ -117,6 +122,9 @@ export default function InstructorList() {
                         </span>
                       ))}
                     </div>
+                  </td>
+                  <td className="px-5 py-3 text-gray-500">
+                    {inst.years_experience != null ? inst.years_experience : '—'}
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex gap-2 justify-end">
@@ -169,6 +177,7 @@ export default function InstructorList() {
               </div>
               <Field label="Tytuł (np. dr, mgr)" name="title" value={form.title} onChange={handleChange} required={false} />
               <Field label="Zawód" name="profession" value={form.profession} onChange={handleChange} required={false} />
+              <Field label="Staż pracy (np. Pow. 8 lat)" name="years_experience" value={form.years_experience ?? ''} onChange={handleChange} required={false} />
 
               <div>
                 <p className="text-sm font-semibold text-gray-700 mb-3">Specjalizacje</p>
@@ -212,16 +221,17 @@ export default function InstructorList() {
   )
 }
 
-function Field({ label, name, value, onChange, required = true }) {
+function Field({ label, name, value, onChange, required = true, type = 'text' }) {
   return (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
       <input
-        type="text"
+        type={type}
         name={name}
         value={value}
         onChange={onChange}
         required={required}
+        min={type === 'number' ? 0 : undefined}
         className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
       />
     </div>

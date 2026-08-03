@@ -209,6 +209,132 @@ def _plain(first_name, activation_link, course_info, resend):
     return '\n'.join(lines)
 
 
+def _html_course_email(first_name, subject, body, course_info):
+    rows = ''
+    if course_info:
+        rows = ''.join(
+            f'''<tr>
+                  <td style="padding:5px 0;font-size:13px;color:#6b7280;white-space:nowrap;padding-right:16px;">{k}</td>
+                  <td style="padding:5px 0;font-size:13px;color:#111827;font-weight:600;">{v}</td>
+                </tr>'''
+            for k, v in course_info.items()
+        )
+        course_block = f'''
+        <tr>
+          <td style="background:#ffffff;padding:0 40px 28px;">
+            <table width="100%" cellpadding="0" cellspacing="0"
+                   style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;">
+              <tr><td style="padding:18px 22px;">
+                <div style="font-size:10px;font-weight:700;color:#dc2626;text-transform:uppercase;
+                            letter-spacing:1.5px;margin-bottom:12px;">Szczegóły kursu</div>
+                <table cellpadding="0" cellspacing="0">{rows}</table>
+              </td></tr>
+            </table>
+          </td>
+        </tr>'''
+    else:
+        course_block = ''
+
+    body_html = body.replace('\n', '<br>')
+
+    logo_img = (
+        '<img src="cid:mcmed_logo" alt="Mc Med" width="99" height="110"'
+        ' style="display:block;width:99px;height:110px;">'
+        if LOGO_PATH.exists() else
+        '<span style="font-size:30px;font-weight:900;color:#ffffff;font-family:Georgia,Times,serif;">Mc Med</span>'
+    )
+
+    return f'''<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:40px 16px;">
+  <tr>
+    <td align="center">
+      <table width="560" cellpadding="0" cellspacing="0"
+             style="max-width:560px;width:100%;border-radius:20px;overflow:hidden;">
+
+        <!-- ── HEADER ── -->
+        <tr>
+          <td style="background:#c41230;padding:20px 32px;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td width="25%" valign="middle">
+                  {logo_img}
+                </td>
+                <td width="75%" valign="middle" style="text-align:center;">
+                  <div style="font-size:22px;font-weight:900;color:#ffffff;font-family:Georgia,Times,serif;
+                              letter-spacing:0.5px;">Mc Med</div>
+                  <div style="font-size:18px;font-weight:700;color:#fca5a5;margin-top:2px;
+                              letter-spacing:0.5px;">Kwalifikowana Pierwsza Pomoc</div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- ── HERO ── -->
+        <tr>
+          <td style="background:#ffffff;padding:40px 40px 24px;text-align:center;">
+            <div style="width:68px;height:68px;background:#fef2f2;border-radius:50%;
+                        margin:0 auto 22px;font-size:34px;line-height:68px;text-align:center;">✉</div>
+            <h1 style="margin:0 0 10px;font-size:24px;font-weight:900;color:#111827;
+                       font-family:Georgia,Times,serif;">{subject}</h1>
+            <p style="margin:0;font-size:13px;color:#6b7280;">Wiadomość dla: {first_name}</p>
+          </td>
+        </tr>
+
+        <!-- ── TREŚĆ ── -->
+        <tr>
+          <td style="background:#ffffff;padding:8px 40px 28px;">
+            <div style="font-size:15px;color:#374151;line-height:1.8;white-space:pre-wrap;">{body_html}</div>
+          </td>
+        </tr>
+
+        {course_block}
+
+        <!-- ── FOOTER ── -->
+        <tr>
+          <td style="background:#111827;padding:24px 40px;text-align:center;
+                     border-radius:0 0 20px 20px;">
+            <div style="font-size:11px;color:#9ca3af;line-height:1.7;">
+              Ten e-mail został wysłany automatycznie &#8211; prosimy na niego nie odpowiadać.
+            </div>
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>'''
+
+
+def send_course_email(*, to_email, first_name, subject, body, course_info=None):
+    """Wysyła HTML-owy mail od admina do uczestnika kursu."""
+    msg = EmailMultiAlternatives(
+        subject=subject,
+        body=f'Dzień dobry {first_name},\n\n{body}\n\nPozdrawiamy,\nZespół Mc Med',
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[to_email],
+    )
+    msg.mixed_subtype = 'related'
+    msg.attach_alternative(
+        _html_course_email(first_name, subject, body, course_info),
+        'text/html',
+    )
+    if LOGO_PATH.exists():
+        logo = MIMEImage(_logo_transparent_bytes(), _subtype='png')
+        logo.add_header('Content-ID', '<mcmed_logo>')
+        logo.add_header('Content-Disposition', 'inline', filename='logo.png')
+        msg.attach(logo)
+    msg.send(fail_silently=True)
+
+
 def send_activation_email(*, to_email, first_name, activation_link, course_info=None, resend=False):
     """Wysyła HTML-owy mail z linkiem aktywacyjnym.
 

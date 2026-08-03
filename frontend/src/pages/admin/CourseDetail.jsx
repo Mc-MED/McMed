@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { adminFetchCourse, adminUpdateCourse, adminFetchEnrollments, adminDeleteEnrollment, adminDownloadDocument, adminDownloadXlsx, adminFetchInstructors } from '../../api/admin'
+import { adminFetchCourse, adminUpdateCourse, adminFetchEnrollments, adminDeleteEnrollment, adminDownloadDocument, adminDownloadXlsx, adminFetchInstructors, adminSendEmail } from '../../api/admin'
 import * as XLSX from 'xlsx'
 
 function formatDate(iso) {
@@ -171,7 +171,7 @@ function CourseForm({ initial, onSaved }) {
       </Section>
 
       <Section title="Komisja egzaminacyjna i psycholog">
-        <InstSelect label="Psycholog" name="psychologist" value={form.psychologist} onChange={handleChange} instructors={allInstructors} required={false} />
+        <InstSelect label="Psycholog" name="psychologist" value={form.psychologist} onChange={handleChange} instructors={allInstructors} required={false} nameOnly />
         <div className="border-t border-gray-100 pt-4 mt-2">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Skład komisji egzaminacyjnej</p>
           <InstSelect label="Przewodniczący komisji" name="committee_chair" value={form.committee_chair} onChange={handleChange} instructors={allInstructors} required={false} />
@@ -241,6 +241,14 @@ function EnrollmentTable({ courseId, courseName }) {
   const [deletingId, setDeletingId]   = useState(null)
   const [confirmId, setConfirmId]     = useState(null)
 
+  // tryb email
+  const [emailMode, setEmailMode]     = useState(false)
+  const [selected, setSelected]       = useState(new Set())
+  const [subject, setSubject]         = useState('')
+  const [body, setBody]               = useState('')
+  const [sending, setSending]         = useState(false)
+  const [sendResult, setSendResult]   = useState(null) // { sent, failed } | null
+
   useEffect(() => {
     adminFetchEnrollments(courseId)
       .then(setEnrollments)
@@ -252,9 +260,41 @@ function EnrollmentTable({ courseId, courseName }) {
     try {
       await adminDeleteEnrollment(id)
       setEnrollments(prev => prev.filter(e => e.id !== id))
+      setSelected(prev => { const s = new Set(prev); s.delete(id); return s })
     } finally {
       setDeletingId(null)
       setConfirmId(null)
+    }
+  }
+
+  function toggleEmailMode() {
+    setEmailMode(m => !m)
+    setSelected(new Set())
+    setSendResult(null)
+  }
+
+  function toggleSelect(id) {
+    setSelected(prev => {
+      const s = new Set(prev)
+      s.has(id) ? s.delete(id) : s.add(id)
+      return s
+    })
+  }
+
+  function selectAll()   { setSelected(new Set(enrollments.map(e => e.id))) }
+  function deselectAll() { setSelected(new Set()) }
+
+  async function handleSend() {
+    if (!subject.trim() || !body.trim() || selected.size === 0) return
+    setSending(true)
+    setSendResult(null)
+    try {
+      const res = await adminSendEmail([...selected], subject, body)
+      setSendResult(res.data)
+    } catch {
+      setSendResult({ error: true })
+    } finally {
+      setSending(false)
     }
   }
 
@@ -268,19 +308,82 @@ function EnrollmentTable({ courseId, courseName }) {
 
   return (
     <div className="mt-6">
+      {/* Toolbar */}
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-gray-500">{count} uczestnik{suffix}</p>
-        <button
-          onClick={() => exportToExcel(enrollments, courseName)}
-          className="flex items-center gap-1.5 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 active:bg-green-800 px-4 py-2 rounded-lg transition-colors"
-        >
-          <span>↓</span> Pobierz listę (.xlsx)
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => exportToExcel(enrollments, courseName)}
+            className="flex items-center gap-1.5 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 active:bg-green-800 px-4 py-2 rounded-lg transition-colors"
+          >
+            <span>↓</span> Pobierz listę (.xlsx)
+          </button>
+          <button
+            onClick={toggleEmailMode}
+            className={`flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-lg transition-colors ${
+              emailMode
+                ? 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                : 'bg-blue-600 hover:bg-blue-700 text-white'
+            }`}
+          >
+            {emailMode ? 'Anuluj' : '✉ Wyślij maila'}
+          </button>
+        </div>
       </div>
+
+      {/* Panel email */}
+      {emailMode && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-blue-900">
+              Wybrano: <span className="text-blue-700">{selected.size}</span> z {count}
+            </p>
+            <div className="flex gap-3 text-xs text-blue-700">
+              <button onClick={selectAll} className="hover:underline font-medium">Zaznacz wszystkich</button>
+              <button onClick={deselectAll} className="hover:underline">Odznacz wszystkich</button>
+            </div>
+          </div>
+          <input
+            type="text"
+            placeholder="Temat wiadomości *"
+            value={subject}
+            onChange={e => setSubject(e.target.value)}
+            className="w-full border border-blue-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+          />
+          <textarea
+            placeholder="Treść wiadomości *"
+            value={body}
+            onChange={e => setBody(e.target.value)}
+            rows={5}
+            className="w-full border border-blue-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white resize-y"
+          />
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleSend}
+              disabled={sending || selected.size === 0 || !subject.trim() || !body.trim()}
+              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors"
+            >
+              {sending ? 'Wysyłanie…' : `Wyślij do wybranych (${selected.size})`}
+            </button>
+            {sendResult && !sendResult.error && (
+              <span className="text-sm text-green-700 font-medium">
+                Wysłano: {sendResult.sent}
+                {sendResult.failed?.length > 0 && `, błędy: ${sendResult.failed.length}`}
+              </span>
+            )}
+            {sendResult?.error && (
+              <span className="text-sm text-red-600">Błąd wysyłki. Sprawdź konfigurację e-mail.</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Tabela */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100 bg-gray-50 text-left">
+              {emailMode && <th className="px-4 py-3.5 w-10"></th>}
               <th className="px-5 py-3.5 font-semibold text-gray-600">Uczestnik</th>
               <th className="px-5 py-3.5 font-semibold text-gray-600">PESEL</th>
               <th className="px-5 py-3.5 font-semibold text-gray-600">Data ur.</th>
@@ -293,7 +396,22 @@ function EnrollmentTable({ courseId, courseName }) {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {enrollments.map(e => (
-              <tr key={e.id} className="hover:bg-gray-50 transition-colors">
+              <tr
+                key={e.id}
+                className={`hover:bg-gray-50 transition-colors ${emailMode && selected.has(e.id) ? 'bg-blue-50 hover:bg-blue-50' : ''}`}
+                onClick={emailMode ? () => toggleSelect(e.id) : undefined}
+                style={emailMode ? { cursor: 'pointer' } : undefined}
+              >
+                {emailMode && (
+                  <td className="px-4 py-4" onClick={ev => ev.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(e.id)}
+                      onChange={() => toggleSelect(e.id)}
+                      className="h-4 w-4 accent-blue-600 rounded"
+                    />
+                  </td>
+                )}
                 <td className="px-5 py-4 font-medium text-gray-900">{e.last_name} {e.first_name}</td>
                 <td className="px-5 py-4 text-gray-600 font-mono tracking-wide">{e.pesel}</td>
                 <td className="px-5 py-4 text-gray-600 whitespace-nowrap">{formatDate(e.birth_date)}</td>
@@ -312,7 +430,7 @@ function EnrollmentTable({ courseId, courseName }) {
                 </td>
                 <td className="px-5 py-4 text-gray-400 text-xs whitespace-nowrap">{formatDateTime(e.created_at)}</td>
                 <td className="px-5 py-4 text-right">
-                  {confirmId === e.id ? (
+                  {!emailMode && (confirmId === e.id ? (
                     <div className="flex items-center gap-2 justify-end">
                       <span className="text-xs text-gray-500">Usunąć?</span>
                       <button onClick={() => handleDelete(e.id)} disabled={deletingId === e.id}
@@ -326,7 +444,7 @@ function EnrollmentTable({ courseId, courseName }) {
                       className="text-xs text-gray-400 hover:text-red-600 transition-colors font-medium">
                       Usuń
                     </button>
-                  )}
+                  ))}
                 </td>
               </tr>
             ))}
@@ -518,7 +636,7 @@ function Field({ label, name, value, onChange, error, required = true, type = 't
   )
 }
 
-function InstSelect({ label, name, value, onChange, error, required = true, instructors = [] }) {
+function InstSelect({ label, name, value, onChange, error, required = true, instructors = [], nameOnly = false }) {
   return (
     <div>
       <label className="field-label">
@@ -531,11 +649,14 @@ function InstSelect({ label, name, value, onChange, error, required = true, inst
         className={`field-input ${error ? 'border-red-400 bg-red-50' : ''}`}
       >
         <option value="">— wybierz —</option>
-        {instructors.map(inst => (
-          <option key={inst.id} value={inst.full_name}>
-            {inst.full_name}{inst.specializations.length > 0 ? ` (${inst.specializations.join(', ')})` : ''}
-          </option>
-        ))}
+        {instructors.map(inst => {
+          const val = nameOnly ? `${inst.first_name} ${inst.last_name}` : inst.full_name
+          return (
+            <option key={inst.id} value={val}>
+              {inst.full_name}{inst.specializations.length > 0 ? ` (${inst.specializations.join(', ')})` : ''}
+            </option>
+          )
+        })}
       </select>
       {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
     </div>

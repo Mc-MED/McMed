@@ -267,7 +267,7 @@ export default function CourseCreate() {
         {/* ── Pozostała kadra i komisja ── */}
         <Section title="Komisja egzaminacyjna i psycholog">
           <InstSelect label="Psycholog" name="psychologist" value={form.psychologist}
-            onChange={handleChange} required={false} instructors={allInstructors} />
+            onChange={handleChange} required={false} instructors={allInstructors} nameOnly />
           <div className="border-t border-gray-100 pt-4 mt-2">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
               Skład komisji egzaminacyjnej
@@ -320,7 +320,7 @@ function Section({ title, subtitle, children }) {
   )
 }
 
-function InstSelect({ label, name, value, onChange, error, required = true, instructors = [] }) {
+function InstSelect({ label, name, value, onChange, error, required = true, instructors = [], nameOnly = false }) {
   return (
     <div>
       <label className="field-label">
@@ -333,11 +333,14 @@ function InstSelect({ label, name, value, onChange, error, required = true, inst
         className={`field-input ${error ? 'border-red-400 bg-red-50' : ''}`}
       >
         <option value="">— wybierz —</option>
-        {instructors.map(inst => (
-          <option key={inst.id} value={inst.full_name}>
-            {inst.full_name}{inst.specializations.length > 0 ? ` (${inst.specializations.join(', ')})` : ''}
-          </option>
-        ))}
+        {instructors.map(inst => {
+          const val = nameOnly ? `${inst.first_name} ${inst.last_name}` : inst.full_name
+          return (
+            <option key={inst.id} value={val}>
+              {inst.full_name}{inst.specializations.length > 0 ? ` (${inst.specializations.join(', ')})` : ''}
+            </option>
+          )
+        })}
       </select>
       {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
     </div>
