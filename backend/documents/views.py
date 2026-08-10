@@ -15,9 +15,7 @@ TEMPLATES_DIR = Path(__file__).parent / 'templates'
 
 ALLOWED_TEMPLATES = {'file1', 'file2', 'file3', 'file4', 'file5', 'file6'}
 
-ALLOWED_XLSX_TEMPLATES = {
-    'program': 'program.xlsx',
-}
+ALLOWED_XLSX_TEMPLATES = {'program'}
 
 
 def _instructor_dict(inst):
@@ -113,6 +111,17 @@ def _xlsx_replace(ws, context):
             cell.value = val
 
 
+def _resolve_xlsx(doc_name, instructor_count):
+    """Zwraca ścieżkę do pliku: szuka {name}.{n}.xlsx, fallback do {name}.xlsx."""
+    variant = TEMPLATES_DIR / f'{doc_name}.{instructor_count}.xlsx'
+    if variant.exists():
+        return variant
+    base = TEMPLATES_DIR / f'{doc_name}.xlsx'
+    if base.exists():
+        return base
+    return None
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def download_xlsx(request, course_id, doc_name):
@@ -124,7 +133,12 @@ def download_xlsx(request, course_id, doc_name):
     except Course.DoesNotExist:
         return Response({'detail': 'Kurs nie istnieje.'}, status=404)
 
-    wb = openpyxl.load_workbook(TEMPLATES_DIR / ALLOWED_XLSX_TEMPLATES[doc_name])
+    instructor_count = course.instructors.count()
+    tpl_path = _resolve_xlsx(doc_name, instructor_count)
+    if tpl_path is None:
+        return Response({'detail': 'Brak pliku szablonu.'}, status=404)
+
+    wb = openpyxl.load_workbook(tpl_path)
     ctx = _build_context(course)
     for ws in wb.worksheets:
         _xlsx_replace(ws, ctx)
@@ -142,8 +156,8 @@ def download_xlsx(request, course_id, doc_name):
 
 
 def _resolve_template(doc_name, instructor_count):
-    """Zwraca ścieżkę do pliku: szuka {name}_{n}.docx, fallback do {name}.docx."""
-    variant = TEMPLATES_DIR / f'{doc_name}_{instructor_count}.docx'
+    """Zwraca ścieżkę do pliku: szuka {name}.{n}.docx, fallback do {name}.docx."""
+    variant = TEMPLATES_DIR / f'{doc_name}.{instructor_count}.docx'
     if variant.exists():
         return variant
     base = TEMPLATES_DIR / f'{doc_name}.docx'
