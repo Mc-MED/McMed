@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 
 export default function ParticipantLogin() {
-  const [login, setLogin]       = useState('')
+  const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [error, setError]       = useState('')
   const [loading, setLoading]   = useState(false)
@@ -14,7 +14,7 @@ export default function ParticipantLogin() {
     setError('')
     setLoading(true)
     try {
-      const { data } = await axios.post('/api/auth/token/', { username: login, password })
+      const { data } = await axios.post('/api/auth/token/', { username: email, password })
       localStorage.setItem('participant_access_token', data.access)
       localStorage.setItem('participant_refresh_token', data.refresh)
       navigate('/konto')
@@ -38,12 +38,12 @@ export default function ParticipantLogin() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Login</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Adres e-mail</label>
             <input
-              type="text"
-              value={login}
-              onChange={e => setLogin(e.target.value)}
-              placeholder="twój login"
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="adres@email.pl"
               autoFocus
               className="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition"
             />

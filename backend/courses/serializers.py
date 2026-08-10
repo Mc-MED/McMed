@@ -71,7 +71,14 @@ class AdminCourseSerializer(serializers.ModelSerializer):
 
 
 class EnrollmentSerializer(serializers.ModelSerializer):
-    course_name = serializers.CharField(source='course.name', read_only=True)
+    course_name            = serializers.SerializerMethodField()
+    deletion_reason_display = serializers.SerializerMethodField()
+
+    def get_course_name(self, obj):
+        return obj.course.name if obj.course_id else None
+
+    def get_deletion_reason_display(self, obj):
+        return obj.get_deletion_reason_display() if obj.deletion_reason else ''
 
     class Meta:
         model  = Enrollment
@@ -80,9 +87,10 @@ class EnrollmentSerializer(serializers.ModelSerializer):
             'first_name', 'last_name', 'pesel', 'birth_date',
             'email', 'phone',
             'zip_code', 'city', 'street', 'house_number', 'apartment_number',
-            'photo_consent', 'created_at',
+            'photo_consent', 'deposit_paid', 'created_at',
+            'is_deleted', 'deleted_at', 'deletion_reason', 'deletion_reason_display',
         ]
-        read_only_fields = ['id', 'course_name', 'created_at']
+        read_only_fields = ['id', 'course_name', 'created_at', 'is_deleted', 'deleted_at', 'deletion_reason', 'deletion_reason_display']
 
     def validate_pesel(self, value):
         if not value.isdigit() or len(value) != 11:
@@ -96,3 +104,55 @@ class EnrollmentSerializer(serializers.ModelSerializer):
                 {'course': 'Brak wolnych miejsc na wybranym kursie.'}
             )
         return data
+
+
+class MyEnrollmentSerializer(serializers.ModelSerializer):
+    course_name         = serializers.SerializerMethodField()
+    course_type         = serializers.SerializerMethodField()
+    course_type_display = serializers.SerializerMethodField()
+    start_date          = serializers.SerializerMethodField()
+    end_date            = serializers.SerializerMethodField()
+    exam_date           = serializers.SerializerMethodField()
+    exam_location       = serializers.SerializerMethodField()
+    course_city         = serializers.SerializerMethodField()
+    price               = serializers.SerializerMethodField()
+    course_days         = serializers.SerializerMethodField()
+
+    def get_course_name(self, obj):
+        return obj.course.name if obj.course else None
+
+    def get_course_type(self, obj):
+        return obj.course.course_type if obj.course else None
+
+    def get_course_type_display(self, obj):
+        return obj.course.get_course_type_display() if obj.course else None
+
+    def get_start_date(self, obj):
+        return str(obj.course.start_date) if obj.course and obj.course.start_date else None
+
+    def get_end_date(self, obj):
+        return str(obj.course.end_date) if obj.course and obj.course.end_date else None
+
+    def get_exam_date(self, obj):
+        return str(obj.course.exam_date) if obj.course and obj.course.exam_date else None
+
+    def get_exam_location(self, obj):
+        return obj.course.exam_location if obj.course else None
+
+    def get_course_city(self, obj):
+        return obj.course.city if obj.course else None
+
+    def get_price(self, obj):
+        return str(obj.course.price) if obj.course else None
+
+    def get_course_days(self, obj):
+        return obj.course.course_days if obj.course else []
+
+    class Meta:
+        model  = Enrollment
+        fields = [
+            'id', 'course', 'course_name', 'course_type', 'course_type_display',
+            'course_city', 'start_date', 'end_date', 'exam_date', 'exam_location',
+            'price', 'course_days',
+            'first_name', 'last_name', 'deposit_paid', 'photo_consent', 'created_at',
+        ]

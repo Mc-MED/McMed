@@ -22,8 +22,26 @@ export const adminFetchEnrollments = (courseId) => {
   return axios.get(`/api/courses/enrollments/list/${params}`, { headers: authHeader() }).then(r => r.data)
 }
 
+export const adminFetchUnassignedEnrollments = () =>
+  axios.get('/api/courses/enrollments/list/?unassigned=1', { headers: authHeader() }).then(r => r.data)
+
 export const adminDeleteEnrollment = (id) =>
   axios.delete(`/api/courses/enrollments/${id}/`, { headers: authHeader() })
+
+export const adminUpdateEnrollment = (id, data) =>
+  axios.patch(`/api/courses/enrollments/${id}/`, data, { headers: authHeader() })
+
+export const adminAnonymizeEnrollment = (id) =>
+  axios.post(`/api/courses/enrollments/${id}/anonymize/`, {}, { headers: authHeader() })
+
+export const adminSoftDeleteEnrollment = (id, reason = '') =>
+  axios.post(`/api/courses/enrollments/${id}/remove/`, { reason }, { headers: authHeader() })
+
+export const adminFetchDeletedEnrollments = () =>
+  axios.get('/api/courses/enrollments/list/?deleted=1', { headers: authHeader() }).then(r => r.data)
+
+export const adminRestoreEnrollment = (id) =>
+  axios.post(`/api/courses/enrollments/${id}/restore/`, {}, { headers: authHeader() })
 
 export const adminFetchInstructors = () =>
   axios.get('/api/courses/instructors/', { headers: authHeader() }).then(r => r.data)

@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { adminFetchCourse, adminUpdateCourse, adminFetchEnrollments, adminDeleteEnrollment, adminDownloadDocument, adminDownloadXlsx, adminFetchInstructors, adminSendEmail } from '../../api/admin'
+import { adminFetchCourse, adminUpdateCourse, adminFetchEnrollments, adminDeleteEnrollment, adminUpdateEnrollment, adminAnonymizeEnrollment, adminSoftDeleteEnrollment, adminFetchCourses, adminDownloadDocument, adminDownloadXlsx, adminFetchInstructors, adminSendEmail } from '../../api/admin'
+import DeletionReasonModal from '../../components/DeletionReasonModal'
 import * as XLSX from 'xlsx'
 
 function formatDate(iso) {
@@ -199,7 +200,7 @@ function exportToExcel(enrollments, courseName) {
     'Lp.', 'Nazwisko', 'Imię', 'PESEL', 'Data urodzenia',
     'Email', 'Telefon',
     'Ulica', 'Nr domu', 'Nr mieszkania', 'Kod pocztowy', 'Miejscowość',
-    'Zgoda na zdjęcia', 'Data zapisu',
+    'Zaliczka', 'Zgoda na zdjęcia', 'Data zapisu',
   ]
   const rows = enrollments.map((e, i) => [
     i + 1,
@@ -214,6 +215,7 @@ function exportToExcel(enrollments, courseName) {
     e.apartment_number || '',
     e.zip_code,
     e.city,
+    e.deposit_paid ? 'Tak' : 'Nie',
     e.photo_consent ? 'Tak' : 'Nie',
     formatDateTime(e.created_at),
   ])
@@ -223,7 +225,7 @@ function exportToExcel(enrollments, courseName) {
     { wch: 4 }, { wch: 18 }, { wch: 15 }, { wch: 13 }, { wch: 14 },
     { wch: 26 }, { wch: 13 },
     { wch: 22 }, { wch: 9 }, { wch: 11 }, { wch: 11 }, { wch: 16 },
-    { wch: 16 }, { wch: 18 },
+    { wch: 10 }, { wch: 16 }, { wch: 18 },
   ]
 
   const wb = XLSX.utils.book_new()
@@ -235,19 +237,212 @@ function exportToExcel(enrollments, courseName) {
 
 // ─── Zakładka: Uczestnicy ─────────────────────────────────────────────
 
+function EditEnrollmentModal({ enrollment, onSave, onClose }) {
+  const [form, setForm] = useState({
+    first_name: enrollment.first_name,
+    last_name: enrollment.last_name,
+    pesel: enrollment.pesel,
+    birth_date: enrollment.birth_date,
+    email: enrollment.email,
+    phone: enrollment.phone,
+    zip_code: enrollment.zip_code,
+    city: enrollment.city,
+    street: enrollment.street,
+    house_number: enrollment.house_number,
+    apartment_number: enrollment.apartment_number || '',
+    photo_consent: enrollment.photo_consent,
+    deposit_paid: enrollment.deposit_paid,
+  })
+  const [saving, setSaving] = useState(false)
+  const [error, setError]   = useState('')
+
+  function set(e) {
+    const { name, value, type, checked } = e.target
+    setForm(f => ({ ...f, [name]: type === 'checkbox' ? checked : value }))
+  }
+
+  async function submit(e) {
+    e.preventDefault()
+    setSaving(true)
+    setError('')
+    try {
+      const res = await adminUpdateEnrollment(enrollment.id, form)
+      onSave(res.data)
+    } catch {
+      setError('Błąd zapisu. Sprawdź dane.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h2 className="text-base font-bold text-gray-900">Edytuj dane uczestnika</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
+        </div>
+        <form onSubmit={submit} className="p-6 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="field-label">Imię <span className="text-red-500">*</span></label>
+              <input name="first_name" value={form.first_name} onChange={set} className="field-input" required />
+            </div>
+            <div>
+              <label className="field-label">Nazwisko <span className="text-red-500">*</span></label>
+              <input name="last_name" value={form.last_name} onChange={set} className="field-input" required />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="field-label">PESEL <span className="text-red-500">*</span></label>
+              <input name="pesel" value={form.pesel} onChange={set} className="field-input font-mono" maxLength={11} required />
+            </div>
+            <div>
+              <label className="field-label">Data urodzenia <span className="text-red-500">*</span></label>
+              <input type="date" name="birth_date" value={form.birth_date} onChange={set} className="field-input" required />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="field-label">E-mail</label>
+              <input type="email" name="email" value={form.email} onChange={set} className="field-input" />
+            </div>
+            <div>
+              <label className="field-label">Telefon</label>
+              <input name="phone" value={form.phone} onChange={set} className="field-input" />
+            </div>
+          </div>
+          <div className="border-t border-gray-100 pt-4">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Adres</p>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="field-label">Kod pocztowy <span className="text-red-500">*</span></label>
+                <input name="zip_code" value={form.zip_code} onChange={set} className="field-input" required />
+              </div>
+              <div className="col-span-2">
+                <label className="field-label">Miejscowość <span className="text-red-500">*</span></label>
+                <input name="city" value={form.city} onChange={set} className="field-input" required />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3 mt-3">
+              <div>
+                <label className="field-label">Ulica <span className="text-red-500">*</span></label>
+                <input name="street" value={form.street} onChange={set} className="field-input" required />
+              </div>
+              <div>
+                <label className="field-label">Nr domu <span className="text-red-500">*</span></label>
+                <input name="house_number" value={form.house_number} onChange={set} className="field-input" required />
+              </div>
+              <div>
+                <label className="field-label">Nr mieszk.</label>
+                <input name="apartment_number" value={form.apartment_number} onChange={set} className="field-input" />
+              </div>
+            </div>
+          </div>
+          <div className="border-t border-gray-100 pt-4 flex items-center gap-8">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" name="photo_consent" checked={form.photo_consent} onChange={set} className="h-4 w-4 accent-red-600 rounded" />
+              <span className="text-sm text-gray-700">Zgoda na zdjęcia</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" name="deposit_paid" checked={form.deposit_paid} onChange={set} className="h-4 w-4 accent-emerald-600 rounded" />
+              <span className="text-sm text-gray-700">Wpłacono zaliczkę</span>
+            </label>
+          </div>
+          {error && <p className="text-red-600 text-sm">{error}</p>}
+          <div className="flex items-center gap-3 pt-2">
+            <button type="submit" disabled={saving}
+              className="bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-bold px-7 py-2.5 rounded-xl text-sm transition-colors">
+              {saving ? 'Zapisywanie…' : 'Zapisz zmiany'}
+            </button>
+            <button type="button" onClick={onClose} className="text-gray-500 hover:text-gray-800 px-4 py-2.5 text-sm font-medium">Anuluj</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function TransferModal({ enrollment, courses, currentCourseId, onTransfer, onClose }) {
+  const [targetId, setTargetId] = useState('')
+  const [busy, setBusy]         = useState(false)
+  const [error, setError]       = useState('')
+
+  const available = (courses || []).filter(c => String(c.id) !== String(currentCourseId))
+
+  async function handleTransfer() {
+    if (!targetId) return
+    setBusy(true)
+    setError('')
+    try {
+      await adminUpdateEnrollment(enrollment.id, { course: parseInt(targetId) })
+      onTransfer(enrollment.id)
+    } catch {
+      setError('Nie udało się przenieść. Kurs może być pełny.')
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-bold text-gray-900">Przenieś uczestnika</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
+        </div>
+        <p className="text-sm text-gray-600 mb-4">
+          Przenosisz: <span className="font-semibold text-gray-900">{enrollment.last_name} {enrollment.first_name}</span>
+        </p>
+        <label className="field-label">Kurs docelowy <span className="text-red-500">*</span></label>
+        {courses === null ? (
+          <p className="text-sm text-gray-400 my-3">Ładowanie kursów…</p>
+        ) : (
+          <select value={targetId} onChange={e => setTargetId(e.target.value)} className="field-input mb-4">
+            <option value="">— wybierz kurs —</option>
+            {available.map(c => (
+              <option key={c.id} value={c.id}>
+                {c.name} · {c.city} ({formatDate(c.start_date)})
+                {c.spots_left <= 0 ? ' — PEŁNY' : ` · ${c.spots_left} miejsc`}
+              </option>
+            ))}
+          </select>
+        )}
+        {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
+        <div className="flex gap-3">
+          <button onClick={handleTransfer} disabled={!targetId || busy || courses === null}
+            className="bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-bold px-6 py-2.5 rounded-xl text-sm transition-colors">
+            {busy ? 'Przenoszenie…' : 'Przenieś'}
+          </button>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-800 px-4 py-2.5 text-sm font-medium">Anuluj</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function EnrollmentTable({ courseId, courseName }) {
   const [enrollments, setEnrollments] = useState([])
   const [loading, setLoading]         = useState(true)
-  const [deletingId, setDeletingId]   = useState(null)
-  const [confirmId, setConfirmId]     = useState(null)
 
-  // tryb email
-  const [emailMode, setEmailMode]     = useState(false)
-  const [selected, setSelected]       = useState(new Set())
-  const [subject, setSubject]         = useState('')
-  const [body, setBody]               = useState('')
-  const [sending, setSending]         = useState(false)
-  const [sendResult, setSendResult]   = useState(null) // { sent, failed } | null
+  // email mode
+  const [emailMode, setEmailMode]   = useState(false)
+  const [selected, setSelected]     = useState(new Set())
+  const [subject, setSubject]       = useState('')
+  const [body, setBody]             = useState('')
+  const [sending, setSending]       = useState(false)
+  const [sendResult, setSendResult] = useState(null)
+
+  // inline actions
+  const [confirm, setConfirm]             = useState(null) // { type: 'remove'|'delete', id }
+  const [processingId, setProcessingId]   = useState(null)
+  const [togglingDeposit, setTogglingDeposit] = useState(null)
+
+  // modals
+  const [editingEnrollment, setEditingEnrollment]   = useState(null)
+  const [transferEnrollment, setTransferEnrollment] = useState(null)
+  const [allCourses, setAllCourses]                 = useState(null)
+  const [deletionModal, setDeletionModal]           = useState(null) // enrollment object
 
   useEffect(() => {
     adminFetchEnrollments(courseId)
@@ -255,15 +450,77 @@ function EnrollmentTable({ courseId, courseName }) {
       .finally(() => setLoading(false))
   }, [courseId])
 
+  async function handleToggleDeposit(enrollment) {
+    if (togglingDeposit) return
+    const newVal = !enrollment.deposit_paid
+    setTogglingDeposit(enrollment.id)
+    setEnrollments(prev => prev.map(e => e.id === enrollment.id ? { ...e, deposit_paid: newVal } : e))
+    try {
+      await adminUpdateEnrollment(enrollment.id, { deposit_paid: newVal })
+    } catch {
+      setEnrollments(prev => prev.map(e => e.id === enrollment.id ? { ...e, deposit_paid: !newVal } : e))
+    } finally {
+      setTogglingDeposit(null)
+    }
+  }
+
   async function handleDelete(id) {
-    setDeletingId(id)
+    setProcessingId(id)
     try {
       await adminDeleteEnrollment(id)
       setEnrollments(prev => prev.filter(e => e.id !== id))
       setSelected(prev => { const s = new Set(prev); s.delete(id); return s })
     } finally {
-      setDeletingId(null)
-      setConfirmId(null)
+      setProcessingId(null)
+      setConfirm(null)
+    }
+  }
+
+  async function handleRemoveFromCourse(id) {
+    setProcessingId(id)
+    try {
+      await adminUpdateEnrollment(id, { course: null })
+      setEnrollments(prev => prev.filter(e => e.id !== id))
+      setSelected(prev => { const s = new Set(prev); s.delete(id); return s })
+    } finally {
+      setProcessingId(null)
+      setConfirm(null)
+    }
+  }
+
+  async function handleSoftDelete(id, reason) {
+    setProcessingId(id)
+    try {
+      await adminSoftDeleteEnrollment(id, reason)
+      setEnrollments(prev => prev.filter(e => e.id !== id))
+      setSelected(prev => { const s = new Set(prev); s.delete(id); return s })
+      setDeletionModal(null)
+      setConfirm(null)
+    } finally {
+      setProcessingId(null)
+    }
+  }
+
+  async function handleAnonymize(id) {
+    setProcessingId(id)
+    try {
+      const res = await adminAnonymizeEnrollment(id)
+      setEnrollments(prev => prev.map(e => e.id === id ? res.data : e))
+    } finally {
+      setProcessingId(null)
+      setConfirm(null)
+    }
+  }
+
+  async function openTransfer(enrollment) {
+    setTransferEnrollment(enrollment)
+    if (allCourses === null) {
+      try {
+        const courses = await adminFetchCourses()
+        setAllCourses(courses)
+      } catch {
+        setAllCourses([])
+      }
     }
   }
 
@@ -308,6 +565,36 @@ function EnrollmentTable({ courseId, courseName }) {
 
   return (
     <div className="mt-6">
+      {editingEnrollment && (
+        <EditEnrollmentModal
+          enrollment={editingEnrollment}
+          onSave={updated => {
+            setEnrollments(prev => prev.map(e => e.id === updated.id ? updated : e))
+            setEditingEnrollment(null)
+          }}
+          onClose={() => setEditingEnrollment(null)}
+        />
+      )}
+      {transferEnrollment && (
+        <TransferModal
+          enrollment={transferEnrollment}
+          courses={allCourses}
+          currentCourseId={courseId}
+          onTransfer={id => {
+            setEnrollments(prev => prev.filter(e => e.id !== id))
+            setTransferEnrollment(null)
+          }}
+          onClose={() => setTransferEnrollment(null)}
+        />
+      )}
+      {deletionModal && (
+        <DeletionReasonModal
+          participantName={`${deletionModal.last_name} ${deletionModal.first_name}`}
+          onConfirm={reason => handleSoftDelete(deletionModal.id, reason)}
+          onClose={() => setDeletionModal(null)}
+        />
+      )}
+
       {/* Toolbar */}
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-gray-500">{count} uczestnik{suffix}</p>
@@ -379,7 +666,7 @@ function EnrollmentTable({ courseId, courseName }) {
       )}
 
       {/* Tabela */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100 bg-gray-50 text-left">
@@ -389,9 +676,10 @@ function EnrollmentTable({ courseId, courseName }) {
               <th className="px-5 py-3.5 font-semibold text-gray-600">Data ur.</th>
               <th className="px-5 py-3.5 font-semibold text-gray-600">Kontakt</th>
               <th className="px-5 py-3.5 font-semibold text-gray-600">Adres</th>
+              <th className="px-5 py-3.5 font-semibold text-gray-600">Zaliczka</th>
               <th className="px-5 py-3.5 font-semibold text-gray-600">Zgoda foto</th>
               <th className="px-5 py-3.5 font-semibold text-gray-600">Zapisano</th>
-              <th className="px-5 py-3.5"></th>
+              <th className="px-5 py-3.5 font-semibold text-gray-600 text-right">Akcje</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -424,27 +712,76 @@ function EnrollmentTable({ courseId, courseName }) {
                   <div>{e.zip_code} {e.city}</div>
                 </td>
                 <td className="px-5 py-4">
+                  <button
+                    onClick={ev => { ev.stopPropagation(); if (!emailMode) handleToggleDeposit(e) }}
+                    disabled={togglingDeposit === e.id || emailMode}
+                    title={emailMode ? '' : 'Kliknij, aby zmienić'}
+                    className={`text-xs font-semibold px-2.5 py-1 rounded-full transition-opacity ${
+                      togglingDeposit === e.id ? 'opacity-40 cursor-wait' : emailMode ? '' : 'hover:opacity-70 cursor-pointer'
+                    } ${e.deposit_paid ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-600'}`}
+                  >
+                    {e.deposit_paid ? 'Wpłacono' : 'Brak'}
+                  </button>
+                </td>
+                <td className="px-5 py-4">
                   <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${e.photo_consent ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                     {e.photo_consent ? 'Tak' : 'Nie'}
                   </span>
                 </td>
                 <td className="px-5 py-4 text-gray-400 text-xs whitespace-nowrap">{formatDateTime(e.created_at)}</td>
-                <td className="px-5 py-4 text-right">
-                  {!emailMode && (confirmId === e.id ? (
-                    <div className="flex items-center gap-2 justify-end">
-                      <span className="text-xs text-gray-500">Usunąć?</span>
-                      <button onClick={() => handleDelete(e.id)} disabled={deletingId === e.id}
-                        className="text-xs font-semibold text-red-600 hover:text-red-800 disabled:opacity-50">
-                        {deletingId === e.id ? '…' : 'Tak'}
-                      </button>
-                      <button onClick={() => setConfirmId(null)} className="text-xs text-gray-400 hover:text-gray-600">Nie</button>
-                    </div>
-                  ) : (
-                    <button onClick={() => setConfirmId(e.id)}
-                      className="text-xs text-gray-400 hover:text-red-600 transition-colors font-medium">
-                      Usuń
-                    </button>
-                  ))}
+                <td className="px-4 py-4 text-right">
+                  {!emailMode && (
+                    confirm?.id === e.id ? (
+                      confirm.type === 'anonymize' ? (
+                        <div className="text-right">
+                          <p className="text-xs text-gray-600 mb-2 max-w-[260px] ml-auto leading-relaxed">
+                            Czy usunąć wszystkie dane wrażliwe użytkownika? Dane zostaną usunięte trwale.
+                          </p>
+                          <div className="flex gap-2 justify-end">
+                            <button
+                              onClick={() => handleAnonymize(e.id)}
+                              disabled={processingId === e.id}
+                              className="text-xs font-semibold px-3 py-1.5 rounded-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+                            >
+                              {processingId === e.id ? '…' : 'Tak, usuń dane'}
+                            </button>
+                            <button onClick={() => setConfirm(null)} className="text-xs font-semibold px-3 py-1.5 rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">Anuluj</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 justify-end whitespace-nowrap">
+                          <span className="text-xs text-gray-500">
+                            {confirm.type === 'softdelete' ? 'Usunąć uczestnika?' : 'Usunąć z kursu?'}
+                          </span>
+                          <button
+                            onClick={() => confirm.type === 'softdelete' ? handleSoftDelete(e.id, '') : handleRemoveFromCourse(e.id)}
+                            disabled={processingId === e.id}
+                            className="text-xs font-semibold text-red-600 hover:text-red-800 disabled:opacity-50"
+                          >
+                            {processingId === e.id ? '…' : 'Tak'}
+                          </button>
+                          <button onClick={() => setConfirm(null)} className="text-xs text-gray-400 hover:text-gray-600">Nie</button>
+                        </div>
+                      )
+                    ) : (
+                      <div className="flex flex-col items-end gap-1.5">
+                        <div className="flex gap-1.5">
+                          <button onClick={() => setEditingEnrollment(e)} className="text-xs font-semibold px-2.5 py-1 rounded-md bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors">Edytuj</button>
+                          <button onClick={() => openTransfer(e)} className="text-xs font-semibold px-2.5 py-1 rounded-md bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors">Przenieś</button>
+                        </div>
+                        <div className="flex gap-1.5">
+                          <button onClick={() => setConfirm({ type: 'remove', id: e.id })} className="text-xs font-semibold px-2.5 py-1 rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">Usuń z kursu</button>
+                          <button
+                            onClick={() => e.deposit_paid ? setDeletionModal(e) : setConfirm({ type: 'softdelete', id: e.id })}
+                            className="text-xs font-semibold px-2.5 py-1 rounded-md bg-red-100 text-red-600 hover:bg-red-200 transition-colors"
+                          >
+                            Usuń uczestnika
+                          </button>
+                        </div>
+                        <button onClick={() => setConfirm({ type: 'anonymize', id: e.id })} className="text-xs font-semibold px-2.5 py-1 rounded-md bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors">Usuń dane wrażliwe</button>
+                      </div>
+                    )
+                  )}
                 </td>
               </tr>
             ))}
@@ -476,7 +813,7 @@ export default function CourseDetail() {
   if (error)   return <div className="p-8 text-red-600 text-sm">{error}</div>
 
   return (
-    <div className="p-8 max-w-4xl">
+    <div className="p-8">
       <button onClick={() => navigate('/admin/courses')}
         className="text-sm text-gray-400 hover:text-red-600 transition-colors mb-6 block">
         ← Wróć do listy kursów
@@ -506,9 +843,9 @@ export default function CourseDetail() {
         ))}
       </div>
 
-      {tab === 'dane' && <CourseForm initial={course} onSaved={setCourse} />}
+      {tab === 'dane' && <div className="max-w-4xl"><CourseForm initial={course} onSaved={setCourse} /></div>}
       {tab === 'uczestnicy' && <EnrollmentTable courseId={id} courseName={course.name} />}
-      {tab === 'dokumenty' && <DocumentsTab courseId={id} />}
+      {tab === 'dokumenty' && <div className="max-w-4xl"><DocumentsTab courseId={id} /></div>}
     </div>
   )
 }

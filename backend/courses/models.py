@@ -110,7 +110,7 @@ class Course(models.Model):
 
     @property
     def spots_left(self):
-        return self.max_participants - self.enrollments.count()
+        return self.max_participants - self.enrollments.filter(is_deleted=False).count()
 
     @property
     def is_full(self):
@@ -122,7 +122,7 @@ class Course(models.Model):
 
 
 class Enrollment(models.Model):
-    course           = models.ForeignKey(Course, on_delete=models.PROTECT, related_name='enrollments')
+    course           = models.ForeignKey(Course, on_delete=models.SET_NULL, null=True, blank=True, related_name='enrollments')
     user             = models.ForeignKey(
                            get_user_model(), on_delete=models.SET_NULL,
                            null=True, blank=True, related_name='enrollments',
@@ -139,7 +139,17 @@ class Enrollment(models.Model):
     house_number     = models.CharField(max_length=20)
     apartment_number = models.CharField(max_length=20, blank=True)
     photo_consent    = models.BooleanField(default=False)
+    deposit_paid     = models.BooleanField(default=False)
     created_at       = models.DateTimeField(auto_now_add=True)
+
+    # Soft-delete
+    is_deleted      = models.BooleanField(default=False)
+    deleted_at      = models.DateTimeField(null=True, blank=True)
+    deletion_reason = models.CharField(max_length=15, blank=True, choices=[
+        ('forfeit',    'Rezygnacja (bez powodu) – zaliczka przepadła'),
+        ('refund',     'Rezygnacja z przyczyn losowych – zwrot zaliczki'),
+        ('reschedule', 'Rezygnacja z przyczyn losowych – zmiana terminu'),
+    ])
 
     class Meta:
         ordering = ['-created_at']
