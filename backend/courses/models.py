@@ -82,12 +82,16 @@ class Course(models.Model):
     exam_time     = models.TimeField(null=True, blank=True)
     exam_location = models.CharField(max_length=300, blank=True)
 
+    # Komunikacja
+    whatsapp_link = models.URLField(max_length=500, blank=True)
+
     # Organizacja
     entity_director   = models.CharField(max_length=200, blank=True)
     academic_director = models.CharField(max_length=200, blank=True)
 
     # Kadra
-    instructors = models.ManyToManyField(Instructor, blank=True, related_name='courses')
+    instructors      = models.ManyToManyField(Instructor, blank=True, related_name='courses')
+    instructor_order = models.JSONField(default=list)  # ordered list of Instructor PKs
 
     # Inne osoby
     psychologist      = models.CharField(max_length=200, blank=True)
@@ -130,7 +134,7 @@ class Enrollment(models.Model):
     first_name       = models.CharField(max_length=100)
     last_name        = models.CharField(max_length=100)
     pesel            = models.CharField(max_length=11)
-    birth_date       = models.DateField()
+    birth_date       = models.DateField(null=True, blank=True)
     email            = models.EmailField(blank=True, default='')
     phone            = models.CharField(max_length=20, blank=True, default='')
     zip_code         = models.CharField(max_length=6)

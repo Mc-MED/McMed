@@ -125,7 +125,7 @@ function EnrolledTable({ courseFilter, onSoftDeleted, refreshKey }) {
             <tr key={e.id} className="hover:bg-gray-50 transition-colors">
               <td className="px-5 py-4 font-medium text-gray-900">{e.last_name} {e.first_name}</td>
               <td className="px-5 py-4 text-gray-600 font-mono tracking-wide">{e.pesel || <span className="text-gray-300 italic">usunięto</span>}</td>
-              <td className="px-5 py-4 text-gray-600 whitespace-nowrap">{formatDate(e.birth_date)}</td>
+              <td className="px-5 py-4 text-gray-600 whitespace-nowrap">{e.birth_date ? formatDate(e.birth_date) : <span className="text-gray-300 italic">usunięto</span>}</td>
               <td className="px-5 py-4 text-gray-600 text-xs leading-relaxed">
                 <div>{e.email}</div>
                 <div>{e.phone || <span className="text-gray-300 italic">usunięto</span>}</div>
@@ -167,12 +167,12 @@ function EnrolledTable({ courseFilter, onSoftDeleted, refreshKey }) {
                     >
                       Usuń uczestnika
                     </button>
-                    <button
+                    {e.pesel && <button
                       onClick={() => setConfirmAnonId(e.id)}
                       className="text-xs font-semibold px-2.5 py-1 rounded-md bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors whitespace-nowrap"
                     >
                       Usuń dane wrażliwe
-                    </button>
+                    </button>}
                   </div>
                 )}
               </td>
@@ -297,7 +297,7 @@ function ReserveTable({ courses, onSoftDeleted, refreshKey }) {
                 <tr key={e.id} className="hover:bg-amber-50/50 transition-colors">
                   <td className="px-5 py-4 font-medium text-gray-900">{e.last_name} {e.first_name}</td>
                   <td className="px-5 py-4 text-gray-600 font-mono tracking-wide">{e.pesel}</td>
-                  <td className="px-5 py-4 text-gray-600 whitespace-nowrap">{formatDate(e.birth_date)}</td>
+                  <td className="px-5 py-4 text-gray-600 whitespace-nowrap">{e.birth_date ? formatDate(e.birth_date) : '-'}</td>
                   <td className="px-5 py-4 text-gray-600 text-xs leading-relaxed">
                     <div>{e.email}</div>
                     <div>{e.phone}</div>
@@ -364,12 +364,12 @@ function ReserveTable({ courses, onSoftDeleted, refreshKey }) {
                             Usuń uczestnika
                           </button>
                         </div>
-                        <button
+                        {e.pesel && <button
                           onClick={() => setConfirmAnonId(e.id)}
                           className="text-xs font-semibold px-2.5 py-1 rounded-md bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors"
                         >
                           Usuń dane wrażliwe
-                        </button>
+                        </button>}
                       </div>
                     )}
                   </td>

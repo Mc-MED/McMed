@@ -9,7 +9,7 @@ from rest_framework.response import Response
 from docxtpl import DocxTemplate
 import openpyxl
 
-from courses.models import Course
+from courses.models import Course, Instructor
 
 TEMPLATES_DIR = Path(__file__).parent / 'templates'
 
@@ -48,7 +48,12 @@ def _build_context(course):
         except Exception:
             return iso
 
-    instructors_list = [_instructor_dict(i) for i in course.instructors.all()]
+    order = course.instructor_order or []
+    if order:
+        inst_map = {i.pk: i for i in Instructor.objects.filter(pk__in=order)}
+        instructors_list = [_instructor_dict(inst_map[pk]) for pk in order if pk in inst_map]
+    else:
+        instructors_list = [_instructor_dict(i) for i in course.instructors.all()]
 
     # Płaskie zmienne instructor_N / instructor_N_name / _title / _profession dla slotów 1–6
     flat_instructors = {}
@@ -60,6 +65,19 @@ def _build_context(course):
         flat_instructors[f'instructor_{n}_profession'] = d['profession']
         flat_instructors[f'instructor_{n}_specs']      = d['specs']
         flat_instructors[f'instructor_{n}_years']      = d['years']
+
+    def fmt_range(start, end):
+        if not start and not end:
+            return ''
+        if not start:
+            return fmt(end)
+        if not end:
+            return fmt(start)
+        if start.month == end.month and start.year == end.year:
+            return f'{start.day} – {end.strftime("%d.%m.%Y")}'
+        if start.year == end.year:
+            return f'{start.strftime("%d.%m")} – {end.strftime("%d.%m.%Y")}'
+        return f'{fmt(start)} – {fmt(end)}'
 
     return {
         'created_at':        course.created_at.strftime('%d.%m.%Y'),
@@ -73,6 +91,7 @@ def _build_context(course):
         'spots_left':        course.spots_left,
         'start_date':        fmt(course.start_date),
         'end_date':          fmt(course.end_date),
+        'date_range':        fmt_range(course.start_date, course.end_date),
         'exam_date':         fmt(course.exam_date),
         'exam_time':         course.exam_time.strftime('%H:%M') if course.exam_time else '',
         'exam_location':     course.exam_location or '',
@@ -133,7 +152,7 @@ def download_xlsx(request, course_id, doc_name):
     except Course.DoesNotExist:
         return Response({'detail': 'Kurs nie istnieje.'}, status=404)
 
-    instructor_count = course.instructors.count()
+    instructor_count = len(course.instructor_order) if course.instructor_order else course.instructors.count()
     tpl_path = _resolve_xlsx(doc_name, instructor_count)
     if tpl_path is None:
         return Response({'detail': 'Brak pliku szablonu.'}, status=404)
@@ -177,7 +196,7 @@ def download_document(request, course_id, doc_name):
     except Course.DoesNotExist:
         return Response({'detail': 'Kurs nie istnieje.'}, status=404)
 
-    instructor_count = course.instructors.count()
+    instructor_count = len(course.instructor_order) if course.instructor_order else course.instructors.count()
     tpl_path = _resolve_template(doc_name, instructor_count)
     if tpl_path is None:
         return Response({'detail': 'Brak pliku szablonu.'}, status=404)

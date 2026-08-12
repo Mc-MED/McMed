@@ -33,6 +33,7 @@ const EMPTY = {
   exam_date: '',
   exam_time: '',
   exam_location: '',
+  whatsapp_link: '',
   entity_director: '',
   academic_director: '',
   instructor_ids: [],
@@ -219,6 +220,9 @@ export default function CourseCreate() {
             <Field label="Miejsce egzaminu" name="exam_location" value={form.exam_location}
               onChange={handleChange} error={errors.exam_location}
               placeholder="np. 30-001 Kraków, ul. Medyczna 5" />
+            <Field label="Link do grupy WhatsApp" name="whatsapp_link" value={form.whatsapp_link}
+              onChange={handleChange} error={errors.whatsapp_link}
+              placeholder="https://chat.whatsapp.com/..." />
           </div>
         </Section>
 

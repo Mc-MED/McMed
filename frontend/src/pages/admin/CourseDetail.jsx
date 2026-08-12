@@ -66,10 +66,11 @@ function CourseForm({ initial, onSaved }) {
       instructor_ids: form.instructor_ids.filter(Boolean),
     }
     try {
-      const res = await adminUpdateCourse(initial.id, payload)
-      setForm({ ...res.data, instructor_ids: (res.data.instructors || []).map(i => i.id) })
+      await adminUpdateCourse(initial.id, payload)
+      const fresh = await adminFetchCourse(initial.id)
+      setForm({ ...fresh, instructor_ids: (fresh.instructors || []).map(i => i.id) })
       setStatus('saved')
-      onSaved && onSaved(res.data)
+      onSaved && onSaved(fresh)
       setTimeout(() => setStatus('idle'), 2500)
     } catch (err) {
       setStatus('error')
@@ -134,6 +135,7 @@ function CourseForm({ initial, onSaved }) {
           <Field label="Data egzaminu" name="exam_date" value={form.exam_date || ''} onChange={handleChange} type="date" required={false} />
           <Field label="Godzina egzaminu" name="exam_time" value={form.exam_time || ''} onChange={handleChange} type="time" required={false} />
           <Field label="Miejsce egzaminu" name="exam_location" value={form.exam_location} onChange={handleChange} required={false} placeholder="np. 30-001 Kraków, ul. Medyczna 5" />
+          <Field label="Link do grupy WhatsApp" name="whatsapp_link" value={form.whatsapp_link || ''} onChange={handleChange} required={false} placeholder="https://chat.whatsapp.com/..." />
         </div>
       </Section>
 
@@ -701,11 +703,11 @@ function EnrollmentTable({ courseId, courseName }) {
                   </td>
                 )}
                 <td className="px-5 py-4 font-medium text-gray-900">{e.last_name} {e.first_name}</td>
-                <td className="px-5 py-4 text-gray-600 font-mono tracking-wide">{e.pesel}</td>
-                <td className="px-5 py-4 text-gray-600 whitespace-nowrap">{formatDate(e.birth_date)}</td>
+                <td className="px-5 py-4 text-gray-600 font-mono tracking-wide">{e.pesel || <span className="text-gray-300 italic">usunięto</span>}</td>
+                <td className="px-5 py-4 text-gray-600 whitespace-nowrap">{e.birth_date ? formatDate(e.birth_date) : <span className="text-gray-300 italic">usunięto</span>}</td>
                 <td className="px-5 py-4 text-gray-600 text-xs leading-relaxed">
                   <div>{e.email}</div>
-                  <div>{e.phone}</div>
+                  <div>{e.phone || <span className="text-gray-300 italic">usunięto</span>}</div>
                 </td>
                 <td className="px-5 py-4 text-gray-600 text-xs leading-relaxed">
                   <div>{e.street} {e.house_number}{e.apartment_number ? `/${e.apartment_number}` : ''}</div>
@@ -778,7 +780,7 @@ function EnrollmentTable({ courseId, courseName }) {
                             Usuń uczestnika
                           </button>
                         </div>
-                        <button onClick={() => setConfirm({ type: 'anonymize', id: e.id })} className="text-xs font-semibold px-2.5 py-1 rounded-md bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors">Usuń dane wrażliwe</button>
+                        {e.pesel && <button onClick={() => setConfirm({ type: 'anonymize', id: e.id })} className="text-xs font-semibold px-2.5 py-1 rounded-md bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors">Usuń dane wrażliwe</button>}
                       </div>
                     )
                   )}

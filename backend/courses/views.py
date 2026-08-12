@@ -166,6 +166,7 @@ def soft_delete_enrollment(request, pk):
 def anonymize_enrollment(request, pk):
     updated = Enrollment.objects.filter(pk=pk).update(
         pesel='',
+        birth_date=None,
         phone='',
         zip_code='',
         city='',

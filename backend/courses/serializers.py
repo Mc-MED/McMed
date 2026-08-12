@@ -37,14 +37,39 @@ class AdminCourseSerializer(serializers.ModelSerializer):
     spots_left          = serializers.IntegerField(read_only=True)
     instructors_count   = serializers.IntegerField(read_only=True)
     course_type_display = serializers.CharField(source='get_course_type_display', read_only=True)
-    instructors         = InstructorSerializer(many=True, read_only=True)
-    instructor_ids      = serializers.PrimaryKeyRelatedField(
-        many=True,
-        queryset=Instructor.objects.all(),
-        source='instructors',
+    instructors         = serializers.SerializerMethodField()
+    instructor_ids      = serializers.ListField(
+        child=serializers.IntegerField(),
         write_only=True,
         required=False,
     )
+
+    def get_instructors(self, obj):
+        order = obj.instructor_order or []
+        inst_map = {i.pk: i for i in obj.instructors.all()}
+        ordered = [inst_map[pk] for pk in order if pk in inst_map]
+        if not ordered:
+            ordered = list(obj.instructors.all())
+        return InstructorSerializer(ordered, many=True).data
+
+    def _save_instructors(self, instance, instructor_ids):
+        instance.instructor_order = instructor_ids
+        instance.save(update_fields=['instructor_order'])
+        instance.instructors.set(Instructor.objects.filter(pk__in=instructor_ids))
+
+    def create(self, validated_data):
+        instructor_ids = validated_data.pop('instructor_ids', [])
+        instance = super().create(validated_data)
+        if instructor_ids is not None:
+            self._save_instructors(instance, instructor_ids)
+        return instance
+
+    def update(self, instance, validated_data):
+        instructor_ids = validated_data.pop('instructor_ids', None)
+        instance = super().update(instance, validated_data)
+        if instructor_ids is not None:
+            self._save_instructors(instance, instructor_ids)
+        return instance
 
     class Meta:
         model  = Course
@@ -52,7 +77,7 @@ class AdminCourseSerializer(serializers.ModelSerializer):
             'id', 'name', 'course_type', 'course_type_display',
             'city', 'max_participants', 'price', 'is_active', 'created_at',
             'course_days', 'start_date', 'end_date',
-            'exam_date', 'exam_time', 'exam_location',
+            'exam_date', 'exam_time', 'exam_location', 'whatsapp_link',
             'entity_director', 'academic_director',
             'instructors', 'instructor_ids', 'instructors_count',
             'psychologist',
@@ -148,11 +173,16 @@ class MyEnrollmentSerializer(serializers.ModelSerializer):
     def get_course_days(self, obj):
         return obj.course.course_days if obj.course else []
 
+    def get_whatsapp_link(self, obj):
+        return obj.course.whatsapp_link if obj.course else ''
+
+    whatsapp_link = serializers.SerializerMethodField()
+
     class Meta:
         model  = Enrollment
         fields = [
             'id', 'course', 'course_name', 'course_type', 'course_type_display',
             'course_city', 'start_date', 'end_date', 'exam_date', 'exam_location',
-            'price', 'course_days',
+            'price', 'course_days', 'whatsapp_link',
             'first_name', 'last_name', 'deposit_paid', 'photo_consent', 'created_at',
         ]
