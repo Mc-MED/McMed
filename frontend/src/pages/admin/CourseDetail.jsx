@@ -855,12 +855,12 @@ export default function CourseDetail() {
 // ─── Zakładka: Dokumenty ──────────────────────────────────────────────
 
 const DOCUMENTS = [
-  { filename: 'file1', label: 'File 1', description: '' },
-  { filename: 'file2', label: 'File 2', description: '' },
-  { filename: 'file3', label: 'File 3', description: '' },
-  { filename: 'file4', label: 'File 4', description: '' },
-  { filename: 'file5', label: 'File 5', description: '' },
-  { filename: 'file6', label: 'File 6', description: '' },
+  { filename: 'oswiadczenie', label: 'Oświadczenie', description: '' },
+  { filename: 'sprzet',       label: 'Sprzęt',       description: '' },
+  { filename: 'sale',         label: 'Sale',          description: '' },
+  { filename: 'wniosek',      label: 'Wniosek',       description: '' },
+  { filename: 'prosba',       label: 'Prośba',        description: '' },
+  { filename: 'instruktorzy', label: 'Instruktorzy',  description: '' },
 ]
 
 const XLSX_DOCUMENTS = [

@@ -13,7 +13,7 @@ from courses.models import Course, Instructor
 
 TEMPLATES_DIR = Path(__file__).parent / 'templates'
 
-ALLOWED_TEMPLATES = {'file1', 'file2', 'file3', 'file4', 'file5', 'file6'}
+ALLOWED_TEMPLATES = {'oswiadczenie', 'sprzet', 'sale', 'wniosek', 'prosba', 'instruktorzy'}
 
 ALLOWED_XLSX_TEMPLATES = {'program'}
 
