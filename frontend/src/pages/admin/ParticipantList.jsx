@@ -117,6 +117,7 @@ function EnrolledTable({ courseFilter, onSoftDeleted, refreshKey }) {
             <th className="px-5 py-3.5 font-semibold text-gray-600">Zaliczka</th>
             <th className="px-5 py-3.5 font-semibold text-gray-600">Zgoda foto</th>
             <th className="px-5 py-3.5 font-semibold text-gray-600">Zapisano</th>
+            <th className="px-5 py-3.5 font-semibold text-gray-600">Data egzaminu</th>
             <th className="px-5 py-3.5 font-semibold text-gray-600 text-right">Akcje</th>
           </tr>
         </thead>
@@ -152,6 +153,7 @@ function EnrolledTable({ courseFilter, onSoftDeleted, refreshKey }) {
                 </span>
               </td>
               <td className="px-5 py-4 text-gray-400 text-xs whitespace-nowrap">{formatDateTime(e.created_at)}</td>
+              <td className="px-5 py-4 text-gray-600 whitespace-nowrap">{e.exam_date ? formatDate(e.exam_date) : <span className="text-gray-300 italic">—</span>}</td>
               <td className="px-4 py-4 text-right">
                 {confirmAnonId === e.id ? (
                   <AnonymizeConfirm

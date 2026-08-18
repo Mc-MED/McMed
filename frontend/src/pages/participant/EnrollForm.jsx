@@ -402,7 +402,9 @@ export default function EnrollForm() {
           </div>
           <div className="grid grid-cols-2 gap-4 mt-4">
             {!isLoggedIn && <Field label="Adres email" name="email" value={form.email} onChange={handleChange} error={errors.email} type="email" placeholder="jan@example.pl" />}
-            <Field label="Nr telefonu" name="phone" value={form.phone} onChange={handleChange} error={errors.phone} type="tel" placeholder="+48 000 000 000" className={isLoggedIn ? 'col-span-2' : ''} />
+            <div className={isLoggedIn ? 'col-span-2' : ''}>
+              <Field label="Nr telefonu" name="phone" value={form.phone} onChange={handleChange} error={errors.phone} type="tel" placeholder="+48 000 000 000" />
+            </div>
           </div>
         </section>
 

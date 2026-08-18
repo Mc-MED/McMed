@@ -1,5 +1,6 @@
 import math
 from django.db import models
+from django.utils import timezone
 from django.contrib.auth import get_user_model
 
 SPECIALIZATION_CODES = ['L', 'P', 'Ps', 'R', 'Rt', 'Rch', 'Re', 'Rwo', 'Rwy']
@@ -70,7 +71,7 @@ class Course(models.Model):
     max_participants = models.PositiveIntegerField(default=0)
     price            = models.DecimalField(max_digits=8, decimal_places=2, default=0)
     is_active        = models.BooleanField(default=True)
-    created_at       = models.DateTimeField(auto_now_add=True)
+    created_at       = models.DateField(default=timezone.now)
 
     # Terminy – 6 wybranych dat
     course_days = models.JSONField(default=list)

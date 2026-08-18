@@ -7,6 +7,14 @@ const NAV = [
 ]
 
 export default function AdminLayout() {
+  const navigate = useNavigate()
+
+  function handleLogout() {
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('refresh_token')
+    navigate('/login')
+  }
+
   return (
     <div className="flex min-h-screen bg-gray-50">
       {/* Sidebar */}
@@ -34,10 +42,16 @@ export default function AdminLayout() {
             </NavLink>
           ))}
         </nav>
-        <div className="px-6 py-4 border-t border-gray-200">
-          <a href="/" className="text-xs text-gray-400 hover:text-red-600 transition-colors">
+        <div className="px-6 py-4 border-t border-gray-200 space-y-3">
+          <a href="/" className="text-xs text-gray-400 hover:text-red-600 transition-colors block">
             ← Wróć na stronę główną
           </a>
+          <button
+            onClick={handleLogout}
+            className="w-full text-left text-xs text-gray-400 hover:text-red-600 transition-colors"
+          >
+            Wyloguj
+          </button>
         </div>
       </aside>
 

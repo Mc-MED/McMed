@@ -84,7 +84,7 @@ class AdminCourseSerializer(serializers.ModelSerializer):
             'committee_chair', 'committee_member1', 'committee_member2',
             'spots_left',
         ]
-        read_only_fields = ['id', 'created_at', 'start_date', 'end_date']
+        read_only_fields = ['id', 'start_date', 'end_date']
 
     def validate_course_days(self, value):
         if not isinstance(value, list):
@@ -99,10 +99,14 @@ class AdminCourseSerializer(serializers.ModelSerializer):
 
 class EnrollmentSerializer(serializers.ModelSerializer):
     course_name            = serializers.SerializerMethodField()
+    exam_date              = serializers.SerializerMethodField()
     deletion_reason_display = serializers.SerializerMethodField()
 
     def get_course_name(self, obj):
         return obj.course.name if obj.course_id else None
+
+    def get_exam_date(self, obj):
+        return str(obj.course.exam_date) if obj.course_id and obj.course.exam_date else None
 
     def get_deletion_reason_display(self, obj):
         return obj.get_deletion_reason_display() if obj.deletion_reason else ''
@@ -110,14 +114,14 @@ class EnrollmentSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Enrollment
         fields = [
-            'id', 'course', 'course_name',
+            'id', 'course', 'course_name', 'exam_date',
             'first_name', 'last_name', 'pesel', 'birth_date',
             'email', 'phone',
             'zip_code', 'city', 'street', 'house_number', 'apartment_number',
             'photo_consent', 'deposit_paid', 'created_at',
             'is_deleted', 'deleted_at', 'deletion_reason', 'deletion_reason_display',
         ]
-        read_only_fields = ['id', 'course_name', 'created_at', 'is_deleted', 'deleted_at', 'deletion_reason', 'deletion_reason_display']
+        read_only_fields = ['id', 'course_name', 'exam_date', 'created_at', 'is_deleted', 'deleted_at', 'deletion_reason', 'deletion_reason_display']
 
     def validate_pesel(self, value):
         if not value.isdigit() or len(value) != 11:

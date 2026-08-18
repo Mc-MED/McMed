@@ -58,6 +58,9 @@ export const adminDeleteInstructor = (id) =>
 export const adminSendEmail = (enrollmentIds, subject, body) =>
   axios.post('/api/courses/enrollments/send-email/', { enrollment_ids: enrollmentIds, subject, body }, { headers: authHeader() })
 
+export const adminSendSms = (enrollmentIds, message) =>
+  axios.post('/api/courses/enrollments/send-sms/', { enrollment_ids: enrollmentIds, message }, { headers: authHeader() })
+
 export const adminDownloadDocument = async (courseId, filename, docName) => {
   const response = await axios.get(`/api/documents/courses/${courseId}/${filename}/`, {
     headers: authHeader(),
@@ -67,6 +70,19 @@ export const adminDownloadDocument = async (courseId, filename, docName) => {
   const a = document.createElement('a')
   a.href = url
   a.download = `${docName}_kurs_${courseId}.docx`
+  a.click()
+  window.URL.revokeObjectURL(url)
+}
+
+export const adminDownloadDocumentPdf = async (courseId, filename, docName) => {
+  const response = await axios.get(`/api/documents/courses/${courseId}/pdf/${filename}/`, {
+    headers: authHeader(),
+    responseType: 'blob',
+  })
+  const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${docName}_kurs_${courseId}.pdf`
   a.click()
   window.URL.revokeObjectURL(url)
 }

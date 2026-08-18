@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { adminFetchCourse, adminUpdateCourse, adminFetchEnrollments, adminDeleteEnrollment, adminUpdateEnrollment, adminAnonymizeEnrollment, adminSoftDeleteEnrollment, adminFetchCourses, adminDownloadDocument, adminDownloadXlsx, adminFetchInstructors, adminSendEmail } from '../../api/admin'
+import { adminFetchCourse, adminUpdateCourse, adminFetchEnrollments, adminDeleteEnrollment, adminUpdateEnrollment, adminAnonymizeEnrollment, adminSoftDeleteEnrollment, adminFetchCourses, adminDownloadDocument, adminDownloadDocumentPdf, adminDownloadXlsx, adminFetchInstructors, adminSendEmail, adminSendSms } from '../../api/admin'
 import DeletionReasonModal from '../../components/DeletionReasonModal'
 import * as XLSX from 'xlsx'
 
@@ -21,6 +21,7 @@ function formatDateTime(iso) {
 function CourseForm({ initial, onSaved }) {
   const [form, setForm]           = useState({
     ...initial,
+    exam_time: initial.exam_time ? initial.exam_time.slice(0, 5) : '',
     instructor_ids: (initial.instructors || []).map(i => i.id),
   })
   const [errors, setErrors]       = useState({})
@@ -62,7 +63,7 @@ function CourseForm({ initial, onSaved }) {
     setErrors({})
     const payload = {
       ...form,
-      max_participants: isRecert ? 0 : parseInt(form.max_participants),
+      max_participants: parseInt(form.max_participants),
       price: parseFloat(form.price) || 0,
       course_days: isRecert ? [] : form.course_days.filter(d => d),
       instructor_ids: isRecert ? [] : form.instructor_ids.filter(Boolean),
@@ -89,8 +90,11 @@ function CourseForm({ initial, onSaved }) {
     <form onSubmit={handleSubmit} className="space-y-6 mt-6">
 
       <Section title="Informacje ogólne">
-        <div className="text-xs text-gray-400">
-          Utworzono: <span className="font-medium text-gray-500">{formatDateTime(form.created_at)}</span>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="field-label">Data utworzenia</label>
+            <input type="date" name="created_at" value={form.created_at || ''} onChange={handleChange} className="field-input" />
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -109,11 +113,9 @@ function CourseForm({ initial, onSaved }) {
           </div>
         </div>
         <Field label="Tytuł kursu" name="name" value={form.name} onChange={handleChange} error={errors.name} />
-        <div className={`grid gap-4 ${isRecert ? 'grid-cols-1' : 'grid-cols-2'}`}>
+        <div className="grid grid-cols-2 gap-4">
           <Field label="Adres kursu" name="city" value={form.city} onChange={handleChange} error={errors.city} placeholder="np. 30-001 Kraków, ul. Medyczna 5" />
-          {!isRecert && (
-            <Field label="Liczba kursantów" name="max_participants" value={form.max_participants} onChange={handleChange} error={errors.max_participants} type="number" min="1" />
-          )}
+          <Field label="Liczba kursantów" name="max_participants" value={form.max_participants} onChange={handleChange} error={errors.max_participants} type="number" min="1" />
         </div>
         <Field label="Cena (zł)" name="price" value={form.price} onChange={handleChange} type="number" min="0" step="0.01" required={false} />
       </Section>
@@ -437,7 +439,7 @@ function TransferModal({ enrollment, courses, currentCourseId, onTransfer, onClo
   )
 }
 
-function EnrollmentTable({ courseId, courseName }) {
+function EnrollmentTable({ courseId, courseName, examDate }) {
   const [enrollments, setEnrollments] = useState([])
   const [loading, setLoading]         = useState(true)
 
@@ -448,6 +450,12 @@ function EnrollmentTable({ courseId, courseName }) {
   const [body, setBody]             = useState('')
   const [sending, setSending]       = useState(false)
   const [sendResult, setSendResult] = useState(null)
+
+  // sms mode
+  const [smsMode, setSmsMode]         = useState(false)
+  const [smsMessage, setSmsMessage]   = useState('')
+  const [smsSending, setSmsSending]   = useState(false)
+  const [smsSendResult, setSmsSendResult] = useState(null)
 
   // inline actions
   const [confirm, setConfirm]             = useState(null) // { type: 'remove'|'delete', id }
@@ -542,8 +550,16 @@ function EnrollmentTable({ courseId, courseName }) {
 
   function toggleEmailMode() {
     setEmailMode(m => !m)
+    setSmsMode(false)
     setSelected(new Set())
     setSendResult(null)
+  }
+
+  function toggleSmsMode() {
+    setSmsMode(m => !m)
+    setEmailMode(false)
+    setSelected(new Set())
+    setSmsSendResult(null)
   }
 
   function toggleSelect(id) {
@@ -568,6 +584,20 @@ function EnrollmentTable({ courseId, courseName }) {
       setSendResult({ error: true })
     } finally {
       setSending(false)
+    }
+  }
+
+  async function handleSendSms() {
+    if (!smsMessage.trim() || selected.size === 0) return
+    setSmsSending(true)
+    setSmsSendResult(null)
+    try {
+      const res = await adminSendSms([...selected], smsMessage)
+      setSmsSendResult(res.data)
+    } catch {
+      setSmsSendResult({ error: true })
+    } finally {
+      setSmsSending(false)
     }
   }
 
@@ -631,8 +661,64 @@ function EnrollmentTable({ courseId, courseName }) {
           >
             {emailMode ? 'Anuluj' : '✉ Wyślij maila'}
           </button>
+          <button
+            onClick={toggleSmsMode}
+            className={`flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-lg transition-colors ${
+              smsMode
+                ? 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+            }`}
+          >
+            {smsMode ? 'Anuluj' : '📱 Wyślij SMS'}
+          </button>
         </div>
       </div>
+
+      {/* Panel SMS */}
+      {smsMode && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-emerald-900">
+              Wybrano: <span className="text-emerald-700">{selected.size}</span> z {count}
+            </p>
+            <div className="flex gap-3 text-xs text-emerald-700">
+              <button onClick={selectAll} className="hover:underline font-medium">Zaznacz wszystkich</button>
+              <button onClick={deselectAll} className="hover:underline">Odznacz wszystkich</button>
+            </div>
+          </div>
+          <div className="relative">
+            <textarea
+              placeholder="Treść SMS *"
+              value={smsMessage}
+              onChange={e => setSmsMessage(e.target.value)}
+              maxLength={160}
+              rows={4}
+              className="w-full border border-emerald-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white resize-none"
+            />
+            <span className={`absolute bottom-2 right-3 text-xs ${smsMessage.length > 140 ? 'text-orange-500' : 'text-gray-400'}`}>
+              {smsMessage.length}/160
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleSendSms}
+              disabled={smsSending || selected.size === 0 || !smsMessage.trim()}
+              className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors"
+            >
+              {smsSending ? 'Wysyłanie…' : `Wyślij do wybranych (${selected.size})`}
+            </button>
+            {smsSendResult && !smsSendResult.error && (
+              <span className="text-sm text-green-700 font-medium">
+                Wysłano: {smsSendResult.sent}
+                {smsSendResult.failed?.length > 0 && `, błędy: ${smsSendResult.failed.length}`}
+              </span>
+            )}
+            {smsSendResult?.error && (
+              <span className="text-sm text-red-600">Błąd wysyłki SMS.</span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Panel email */}
       {emailMode && (
@@ -686,10 +772,12 @@ function EnrollmentTable({ courseId, courseName }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100 bg-gray-50 text-left">
-              {emailMode && <th className="px-4 py-3.5 w-10"></th>}
+              {(emailMode || smsMode) && <th className="px-4 py-3.5 w-10"></th>}
+              <th className="px-4 py-3.5 font-semibold text-gray-600 w-10">Lp.</th>
               <th className="px-5 py-3.5 font-semibold text-gray-600">Uczestnik</th>
               <th className="px-5 py-3.5 font-semibold text-gray-600">PESEL</th>
               <th className="px-5 py-3.5 font-semibold text-gray-600">Data ur.</th>
+              <th className="px-5 py-3.5 font-semibold text-gray-600">Data egzaminu</th>
               <th className="px-5 py-3.5 font-semibold text-gray-600">Kontakt</th>
               <th className="px-5 py-3.5 font-semibold text-gray-600">Adres</th>
               <th className="px-5 py-3.5 font-semibold text-gray-600">Zaliczka</th>
@@ -699,26 +787,28 @@ function EnrollmentTable({ courseId, courseName }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {enrollments.map(e => (
+            {enrollments.map((e, idx) => (
               <tr
                 key={e.id}
-                className={`hover:bg-gray-50 transition-colors ${emailMode && selected.has(e.id) ? 'bg-blue-50 hover:bg-blue-50' : ''}`}
-                onClick={emailMode ? () => toggleSelect(e.id) : undefined}
-                style={emailMode ? { cursor: 'pointer' } : undefined}
+                className={`hover:bg-gray-50 transition-colors ${(emailMode || smsMode) && selected.has(e.id) ? emailMode ? 'bg-blue-50 hover:bg-blue-50' : 'bg-emerald-50 hover:bg-emerald-50' : ''}`}
+                onClick={(emailMode || smsMode) ? () => toggleSelect(e.id) : undefined}
+                style={(emailMode || smsMode) ? { cursor: 'pointer' } : undefined}
               >
-                {emailMode && (
+                {(emailMode || smsMode) && (
                   <td className="px-4 py-4" onClick={ev => ev.stopPropagation()}>
                     <input
                       type="checkbox"
                       checked={selected.has(e.id)}
                       onChange={() => toggleSelect(e.id)}
-                      className="h-4 w-4 accent-blue-600 rounded"
+                      className={`h-4 w-4 rounded ${emailMode ? 'accent-blue-600' : 'accent-emerald-600'}`}
                     />
                   </td>
                 )}
+                <td className="px-4 py-4 text-gray-400 text-sm tabular-nums">{idx + 1}</td>
                 <td className="px-5 py-4 font-medium text-gray-900">{e.last_name} {e.first_name}</td>
                 <td className="px-5 py-4 text-gray-600 font-mono tracking-wide">{e.pesel || <span className="text-gray-300 italic">usunięto</span>}</td>
                 <td className="px-5 py-4 text-gray-600 whitespace-nowrap">{e.birth_date ? formatDate(e.birth_date) : <span className="text-gray-300 italic">usunięto</span>}</td>
+                <td className="px-5 py-4 text-gray-600 whitespace-nowrap">{examDate ? formatDate(examDate) : <span className="text-gray-300 italic">—</span>}</td>
                 <td className="px-5 py-4 text-gray-600 text-xs leading-relaxed">
                   <div>{e.email}</div>
                   <div>{e.phone || <span className="text-gray-300 italic">usunięto</span>}</div>
@@ -746,7 +836,7 @@ function EnrollmentTable({ courseId, courseName }) {
                 </td>
                 <td className="px-5 py-4 text-gray-400 text-xs whitespace-nowrap">{formatDateTime(e.created_at)}</td>
                 <td className="px-4 py-4 text-right">
-                  {!emailMode && (
+                  {!emailMode && !smsMode && (
                     confirm?.id === e.id ? (
                       confirm.type === 'anonymize' ? (
                         <div className="text-right">
@@ -860,15 +950,15 @@ export default function CourseDetail() {
       </div>
 
       {tab === 'dane' && <div className="max-w-4xl"><CourseForm initial={course} onSaved={setCourse} /></div>}
-      {tab === 'uczestnicy' && <EnrollmentTable courseId={id} courseName={course.name} />}
-      {tab === 'dokumenty' && <div className="max-w-4xl"><DocumentsTab courseId={id} /></div>}
+      {tab === 'uczestnicy' && <EnrollmentTable courseId={id} courseName={course.name} examDate={course.exam_date} />}
+      {tab === 'dokumenty' && <div className="max-w-4xl"><DocumentsTab courseId={id} courseType={course.course_type} /></div>}
     </div>
   )
 }
 
 // ─── Zakładka: Dokumenty ──────────────────────────────────────────────
 
-const DOCUMENTS = [
+const DOCUMENTS_KPP = [
   { filename: 'oswiadczenie', label: 'Oświadczenie', description: '' },
   { filename: 'sprzet',       label: 'Sprzęt',       description: '' },
   { filename: 'sale',         label: 'Sale',          description: '' },
@@ -877,11 +967,17 @@ const DOCUMENTS = [
   { filename: 'instruktorzy', label: 'Instruktorzy',  description: '' },
 ]
 
+const DOCUMENTS_RECERT = [
+  { filename: 'prosba-recertyfikacja', label: 'Prośba o recertyfikację', description: '' },
+  { filename: 'informacja-kpp',        label: 'Informacja KPP',          description: '' },
+]
+
 const XLSX_DOCUMENTS = [
   { filename: 'program', label: 'Program zajęć', description: '' },
 ]
 
-function DocumentsTab({ courseId }) {
+function DocumentsTab({ courseId, courseType }) {
+  const DOCUMENTS = courseType === 'recert' ? DOCUMENTS_RECERT : DOCUMENTS_KPP
   const [downloading, setDownloading] = useState(null)
   const [downloaded, setDownloaded]   = useState(new Set())
   const [error, setError]             = useState('')
@@ -894,6 +990,20 @@ function DocumentsTab({ courseId }) {
       setDownloaded(prev => new Set([...prev, filename]))
     } catch {
       setError('Nie udało się pobrać dokumentu.')
+    } finally {
+      setDownloading(null)
+    }
+  }
+
+  async function handleDownloadPdf(filename, label) {
+    const key = `pdf_${filename}`
+    setDownloading(key)
+    setError('')
+    try {
+      await adminDownloadDocumentPdf(courseId, filename, label)
+      setDownloaded(prev => new Set([...prev, key]))
+    } catch {
+      setError('Nie udało się pobrać dokumentu PDF. Upewnij się, że Microsoft Word jest zainstalowany na serwerze.')
     } finally {
       setDownloading(null)
     }
@@ -915,23 +1025,36 @@ function DocumentsTab({ courseId }) {
   return (
     <div className="mt-6 space-y-3">
       {DOCUMENTS.map(({ filename, label, description }) => {
-        const isDone = downloaded.has(filename)
-        const isLoading = downloading === filename
+        const isDoneDocx = downloaded.has(filename)
+        const isDonePdf  = downloaded.has(`pdf_${filename}`)
+        const isLoadingDocx = downloading === filename
+        const isLoadingPdf  = downloading === `pdf_${filename}`
         return (
           <div key={filename} className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm flex items-center justify-between">
             <div>
               <p className="text-sm font-semibold text-gray-900">{label}</p>
               {description && <p className="text-xs text-gray-400 mt-0.5">{description}</p>}
             </div>
-            <button
-              onClick={() => handleDownload(filename, label)}
-              disabled={isLoading}
-              className={`flex items-center gap-1.5 text-sm font-semibold text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-60 ${
-                isDone ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700 active:bg-red-800'
-              }`}
-            >
-              {isLoading ? 'Pobieranie…' : isDone ? '✓ Pobrane' : '↓ Pobierz .docx'}
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleDownload(filename, label)}
+                disabled={isLoadingDocx || isLoadingPdf}
+                className={`flex items-center gap-1.5 text-sm font-semibold text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-60 ${
+                  isDoneDocx ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700 active:bg-red-800'
+                }`}
+              >
+                {isLoadingDocx ? 'Pobieranie…' : isDoneDocx ? '✓ .docx' : '↓ Pobierz .docx'}
+              </button>
+              <button
+                onClick={() => handleDownloadPdf(filename, label)}
+                disabled={isLoadingDocx || isLoadingPdf}
+                className={`flex items-center gap-1.5 text-sm font-semibold text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-60 ${
+                  isDonePdf ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-600 hover:bg-gray-700 active:bg-gray-800'
+                }`}
+              >
+                {isLoadingPdf ? 'Pobieranie…' : isDonePdf ? '✓ .pdf' : '↓ Pobierz .pdf'}
+              </button>
+            </div>
           </div>
         )
       })}

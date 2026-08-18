@@ -6,6 +6,7 @@ urlpatterns = [
     path('enrollments/', views.PublicEnrollView.as_view(), name='enroll'),
     path('enrollments/list/', views.AdminEnrollmentListView.as_view(), name='enrollment-list'),
     path('enrollments/send-email/', views.send_email_to_enrollments, name='enrollment-send-email'),
+    path('enrollments/send-sms/', views.send_sms_to_enrollments, name='enrollment-send-sms'),
     path('enrollments/<int:pk>/', views.AdminEnrollmentDetailView.as_view(), name='enrollment-detail'),
     path('enrollments/<int:pk>/remove/', views.soft_delete_enrollment, name='enrollment-soft-delete'),
     path('enrollments/<int:pk>/anonymize/', views.anonymize_enrollment, name='enrollment-anonymize'),

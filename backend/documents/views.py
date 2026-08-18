@@ -1,4 +1,7 @@
 import re
+import subprocess
+import tempfile
+import os
 from io import BytesIO
 from pathlib import Path
 
@@ -13,7 +16,7 @@ from courses.models import Course, Instructor
 
 TEMPLATES_DIR = Path(__file__).parent / 'templates'
 
-ALLOWED_TEMPLATES = {'oswiadczenie', 'sprzet', 'sale', 'wniosek', 'prosba', 'instruktorzy'}
+ALLOWED_TEMPLATES = {'oswiadczenie', 'sprzet', 'sale', 'wniosek', 'prosba', 'instruktorzy', 'prosba-recertyfikacja', 'informacja-kpp'}
 
 ALLOWED_XLSX_TEMPLATES = {'program'}
 
@@ -213,4 +216,43 @@ def download_document(request, course_id, doc_name):
         content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     )
     response['Content-Disposition'] = f'attachment; filename="{doc_name}_kurs_{course_id}.docx"'
+    return response
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def download_document_pdf(request, course_id, doc_name):
+    if doc_name not in ALLOWED_TEMPLATES:
+        return Response({'detail': 'Nieznany dokument.'}, status=404)
+
+    try:
+        course = Course.objects.get(pk=course_id)
+    except Course.DoesNotExist:
+        return Response({'detail': 'Kurs nie istnieje.'}, status=404)
+
+    instructor_count = len(course.instructor_order) if course.instructor_order else course.instructors.count()
+    tpl_path = _resolve_template(doc_name, instructor_count)
+    if tpl_path is None:
+        return Response({'detail': 'Brak pliku szablonu.'}, status=404)
+
+    tpl = DocxTemplate(tpl_path)
+    tpl.render(_build_context(course))
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        docx_path = os.path.join(tmpdir, f'{doc_name}.docx')
+        pdf_path  = os.path.join(tmpdir, f'{doc_name}.pdf')
+        tpl.save(docx_path)
+
+        result = subprocess.run(
+            ['libreoffice', '--headless', '--convert-to', 'pdf', '--outdir', tmpdir, docx_path],
+            capture_output=True, timeout=30,
+        )
+        if result.returncode != 0 or not os.path.exists(pdf_path):
+            return Response({'detail': 'Błąd konwersji do PDF.'}, status=500)
+
+        with open(pdf_path, 'rb') as f:
+            pdf_bytes = f.read()
+
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{doc_name}_kurs_{course_id}.pdf"'
     return response

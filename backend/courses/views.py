@@ -335,3 +335,25 @@ def send_email_to_enrollments(request):
             failed.append(e.id)
 
     return Response({'sent': sent, 'failed': failed})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def send_sms_to_enrollments(request):
+    enrollment_ids = request.data.get('enrollment_ids', [])
+    message = request.data.get('message', '').strip()
+
+    if not message:
+        return Response({'detail': 'Podaj treść SMS.'}, status=status.HTTP_400_BAD_REQUEST)
+    if not enrollment_ids:
+        return Response({'detail': 'Nie wybrano żadnych uczestników.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    enrollments = Enrollment.objects.filter(
+        id__in=enrollment_ids,
+    ).exclude(phone='')
+
+    # TODO: podpiąć SMSAPI
+    sent = enrollments.count()
+    failed = []
+
+    return Response({'sent': sent, 'failed': failed})

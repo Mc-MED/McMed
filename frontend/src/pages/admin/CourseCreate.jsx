@@ -2,8 +2,6 @@ import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { adminCreateCourse, adminFetchInstructors } from '../../api/admin'
 
-const today = new Date().toISOString().slice(0, 10)
-
 const DUMMY = {
   name: 'Kurs KPP – edycja lipcowa 2026',
   course_type: 'kpp',
@@ -24,6 +22,7 @@ const DUMMY = {
 }
 
 const EMPTY = {
+  created_at: new Date().toISOString().slice(0, 10),
   name: '',
   course_type: 'kpp',
   city: '',
@@ -95,9 +94,9 @@ export default function CourseCreate() {
     if (!form.committee_chair.trim())   e.committee_chair   = 'Podaj przewodniczącego komisji.'
     if (!form.committee_member1.trim()) e.committee_member1 = 'Podaj pierwszego członka komisji.'
     if (!form.committee_member2.trim()) e.committee_member2 = 'Podaj drugiego członka komisji.'
+    if (!form.max_participants || parseInt(form.max_participants) < 1)
+      e.max_participants = 'Podaj liczbę kursantów.'
     if (!isRecert) {
-      if (!form.max_participants || parseInt(form.max_participants) < 1)
-        e.max_participants = 'Podaj liczbę kursantów.'
       const filledDays = form.course_days.filter(d => d)
       if (filledDays.length !== 6) e.course_days = 'Uzupełnij wszystkie 6 dni kursu.'
       if (!form.entity_director.trim())   e.entity_director   = 'Podaj kierownika podmiotu.'
@@ -116,7 +115,7 @@ export default function CourseCreate() {
 
     const payload = {
       ...form,
-      max_participants: isRecert ? 0 : parseInt(form.max_participants),
+      max_participants: parseInt(form.max_participants),
       price: parseFloat(form.price) || 0,
       course_days: isRecert ? [] : form.course_days.filter(d => d),
       instructor_ids: isRecert ? [] : form.instructor_ids.filter(Boolean),
@@ -172,8 +171,8 @@ export default function CourseCreate() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="field-label">Data utworzenia</label>
-              <input type="text" value={today} readOnly
-                className="field-input bg-gray-50 text-gray-400 cursor-not-allowed" />
+              <input type="date" name="created_at" value={form.created_at}
+                onChange={handleChange} className="field-input" />
             </div>
             <div>
               <label className="field-label">Typ kursu *</label>
@@ -186,14 +185,12 @@ export default function CourseCreate() {
           </div>
           <Field label="Tytuł kursu" name="name" value={form.name}
             onChange={handleChange} error={errors.name} />
-          <div className={`grid gap-4 ${isRecert ? 'grid-cols-1' : 'grid-cols-2'}`}>
+          <div className="grid grid-cols-2 gap-4">
             <Field label="Adres kursu" name="city" value={form.city}
               onChange={handleChange} error={errors.city}
               placeholder="np. 30-001 Kraków, ul. Medyczna 5" />
-            {!isRecert && (
-              <Field label="Liczba kursantów" name="max_participants" value={form.max_participants}
-                onChange={handleChange} error={errors.max_participants} type="number" min="1" />
-            )}
+            <Field label="Liczba kursantów" name="max_participants" value={form.max_participants}
+              onChange={handleChange} error={errors.max_participants} type="number" min="1" />
           </div>
           <Field label="Cena (zł)" name="price" value={form.price}
             onChange={handleChange} type="number" min="0" step="0.01" required={false} />
