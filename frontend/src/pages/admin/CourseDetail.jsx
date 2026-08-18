@@ -141,7 +141,7 @@ function CourseForm({ initial, onSaved }) {
         )}
         <div className="grid grid-cols-3 gap-4">
           <Field label="Data egzaminu" name="exam_date" value={form.exam_date || ''} onChange={handleChange} type="date" required={false} />
-          <Field label="Godzina egzaminu" name="exam_time" value={form.exam_time || ''} onChange={handleChange} type="time" required={false} />
+          <Field label="Godzina egzaminu" name="exam_time" value={form.exam_time || ''} onChange={handleChange} type="time" step="60" required={false} />
           <Field label="Miejsce egzaminu" name="exam_location" value={form.exam_location} onChange={handleChange} required={false} placeholder="np. 30-001 Kraków, ul. Medyczna 5" />
           <Field label="Link do grupy WhatsApp" name="whatsapp_link" value={form.whatsapp_link || ''} onChange={handleChange} required={false} placeholder="https://chat.whatsapp.com/..." />
         </div>
