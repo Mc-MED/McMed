@@ -31,6 +31,8 @@ function CourseForm({ initial, onSaved }) {
     adminFetchInstructors().then(setAllInstructors).catch(() => {})
   }, [])
 
+  const isRecert = form.course_type === 'recert'
+
   const instructorsCount = useMemo(() => {
     const n = parseInt(form.max_participants, 10)
     return n > 0 ? Math.ceil(n / 6) : 1
@@ -60,10 +62,10 @@ function CourseForm({ initial, onSaved }) {
     setErrors({})
     const payload = {
       ...form,
-      max_participants: parseInt(form.max_participants),
+      max_participants: isRecert ? 0 : parseInt(form.max_participants),
       price: parseFloat(form.price) || 0,
-      course_days: form.course_days.filter(d => d),
-      instructor_ids: form.instructor_ids.filter(Boolean),
+      course_days: isRecert ? [] : form.course_days.filter(d => d),
+      instructor_ids: isRecert ? [] : form.instructor_ids.filter(Boolean),
     }
     try {
       await adminUpdateCourse(initial.id, payload)
@@ -107,30 +109,34 @@ function CourseForm({ initial, onSaved }) {
           </div>
         </div>
         <Field label="Tytuł kursu" name="name" value={form.name} onChange={handleChange} error={errors.name} />
-        <div className="grid grid-cols-2 gap-4">
+        <div className={`grid gap-4 ${isRecert ? 'grid-cols-1' : 'grid-cols-2'}`}>
           <Field label="Adres kursu" name="city" value={form.city} onChange={handleChange} error={errors.city} placeholder="np. 30-001 Kraków, ul. Medyczna 5" />
-          <Field label="Liczba kursantów" name="max_participants" value={form.max_participants} onChange={handleChange} error={errors.max_participants} type="number" min="1" />
+          {!isRecert && (
+            <Field label="Liczba kursantów" name="max_participants" value={form.max_participants} onChange={handleChange} error={errors.max_participants} type="number" min="1" />
+          )}
         </div>
         <Field label="Cena (zł)" name="price" value={form.price} onChange={handleChange} type="number" min="0" step="0.01" required={false} />
       </Section>
 
       <Section title="Terminy">
-        <div>
-          <label className="field-label">Dni kursu <span className="font-normal text-gray-400">(6 dat)</span></label>
-          <div className="grid grid-cols-3 gap-3">
-            {(form.course_days.length < 6
-              ? [...form.course_days, ...Array(6 - form.course_days.length).fill('')]
-              : form.course_days
-            ).map((d, i) => (
-              <div key={i}>
-                <label className="text-xs text-gray-500 mb-1 block">Dzień {i + 1}</label>
-                <input type="date" value={d} onChange={e => handleDay(i, e.target.value)}
-                  className={`field-input ${errors.course_days ? 'border-red-400 bg-red-50' : ''}`} />
-              </div>
-            ))}
+        {!isRecert && (
+          <div>
+            <label className="field-label">Dni kursu <span className="font-normal text-gray-400">(6 dat)</span></label>
+            <div className="grid grid-cols-3 gap-3">
+              {(form.course_days.length < 6
+                ? [...form.course_days, ...Array(6 - form.course_days.length).fill('')]
+                : form.course_days
+              ).map((d, i) => (
+                <div key={i}>
+                  <label className="text-xs text-gray-500 mb-1 block">Dzień {i + 1}</label>
+                  <input type="date" value={d} onChange={e => handleDay(i, e.target.value)}
+                    className={`field-input ${errors.course_days ? 'border-red-400 bg-red-50' : ''}`} />
+                </div>
+              ))}
+            </div>
+            {errors.course_days && <p className="text-red-500 text-xs mt-1">{errors.course_days}</p>}
           </div>
-          {errors.course_days && <p className="text-red-500 text-xs mt-1">{errors.course_days}</p>}
-        </div>
+        )}
         <div className="grid grid-cols-3 gap-4">
           <Field label="Data egzaminu" name="exam_date" value={form.exam_date || ''} onChange={handleChange} type="date" required={false} />
           <Field label="Godzina egzaminu" name="exam_time" value={form.exam_time || ''} onChange={handleChange} type="time" required={false} />
@@ -139,44 +145,52 @@ function CourseForm({ initial, onSaved }) {
         </div>
       </Section>
 
-      <Section title="Organizacja kursu">
-        <InstSelect label="Kierownik podmiotu" name="entity_director" value={form.entity_director} onChange={handleChange} instructors={allInstructors} />
-        <InstSelect label="Kierownik merytoryczny kursu" name="academic_director" value={form.academic_director} onChange={handleChange} instructors={allInstructors} />
-      </Section>
+      {!isRecert && (
+        <Section title="Organizacja kursu">
+          <InstSelect label="Kierownik podmiotu" name="entity_director" value={form.entity_director} onChange={handleChange} instructors={allInstructors} />
+          <InstSelect label="Kierownik merytoryczny kursu" name="academic_director" value={form.academic_director} onChange={handleChange} instructors={allInstructors} />
+        </Section>
+      )}
 
-      <Section
-        title="Prowadzący"
-        subtitle={`${instructorsCount} prowadzący${instructorsCount > 1 ? 'ch' : ''} (1 na każdych 6 kursantów)`}
-      >
-        {allInstructors.length === 0 ? (
-          <p className="text-sm text-gray-400">Brak ratowników w bazie.</p>
-        ) : (
-          <div className="space-y-3">
-            {Array.from({ length: instructorsCount }, (_, i) => (
-              <div key={i}>
-                <label className="field-label">Prowadzący {i + 1}</label>
-                <select
-                  value={form.instructor_ids[i] ?? ''}
-                  onChange={e => handleInstructorSlot(i, e.target.value)}
-                  className="field-input"
-                >
-                  <option value="">— wybierz ratownika —</option>
-                  {allInstructors.map(inst => (
-                    <option key={inst.id} value={inst.id}>
-                      {inst.full_name}{inst.specializations.length > 0 ? ` (${inst.specializations.join(', ')})` : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ))}
-          </div>
+      {!isRecert && (
+        <Section
+          title="Prowadzący"
+          subtitle={`${instructorsCount} prowadzący${instructorsCount > 1 ? 'ch' : ''} (1 na każdych 6 kursantów)`}
+        >
+          {allInstructors.length === 0 ? (
+            <p className="text-sm text-gray-400">Brak ratowników w bazie.</p>
+          ) : (
+            <div className="space-y-3">
+              {Array.from({ length: instructorsCount }, (_, i) => (
+                <div key={i}>
+                  <label className="field-label">Prowadzący {i + 1}</label>
+                  <select
+                    value={form.instructor_ids[i] ?? ''}
+                    onChange={e => handleInstructorSlot(i, e.target.value)}
+                    className="field-input"
+                  >
+                    <option value="">— wybierz ratownika —</option>
+                    {allInstructors.map(inst => (
+                      <option key={inst.id} value={inst.id}>
+                        {inst.full_name}{inst.specializations.length > 0 ? ` (${inst.specializations.join(', ')})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+          )}
+        </Section>
+      )}
+
+      <Section title={isRecert ? 'Komisja egzaminacyjna' : 'Komisja egzaminacyjna i psycholog'}>
+        {!isRecert && (
+          <InstSelect label="Psycholog" name="psychologist" value={form.psychologist} onChange={handleChange} instructors={allInstructors} required={false} nameOnly />
         )}
-      </Section>
-
-      <Section title="Komisja egzaminacyjna i psycholog">
-        <InstSelect label="Psycholog" name="psychologist" value={form.psychologist} onChange={handleChange} instructors={allInstructors} required={false} nameOnly />
-        <div className="border-t border-gray-100 pt-4 mt-2">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Skład komisji egzaminacyjnej</p>
+        <div className={!isRecert ? 'border-t border-gray-100 pt-4 mt-2' : ''}>
+          {!isRecert && (
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Skład komisji egzaminacyjnej</p>
+          )}
           <InstSelect label="Przewodniczący komisji" name="committee_chair" value={form.committee_chair} onChange={handleChange} instructors={allInstructors} required={false} />
           <InstSelect label="Członek komisji 1" name="committee_member1" value={form.committee_member1} onChange={handleChange} instructors={allInstructors} required={false} />
           <InstSelect label="Członek komisji 2" name="committee_member2" value={form.committee_member2} onChange={handleChange} instructors={allInstructors} required={false} />
