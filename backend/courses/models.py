@@ -83,7 +83,7 @@ class Course(models.Model):
     exam_location = models.CharField(max_length=300, blank=True)
 
     # Komunikacja
-    whatsapp_link = models.URLField(max_length=500, blank=True)
+    whatsapp_link = models.CharField(max_length=500, blank=True)
 
     # Organizacja
     entity_director   = models.CharField(max_length=200, blank=True)
