@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { fetchMyEnrollments, cancelMyEnrollment } from '../../api/participant'
+import { fetchCourses } from '../../api/courses'
 
 function decodeJwt(token) {
   try {
@@ -153,6 +154,53 @@ function CourseCard({ enrollment, onCancelled }) {
   )
 }
 
+function RecertCourseCard({ course }) {
+  return (
+    <div className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${course.is_full ? 'border-gray-200 opacity-70' : 'border-blue-100'}`}>
+      <div className="px-6 py-4 bg-blue-50 flex items-start justify-between gap-4">
+        <div>
+          <h3 className="font-bold text-gray-900 text-base leading-snug">{course.name}</h3>
+          <p className="text-sm text-gray-500 mt-0.5">{course.city}</p>
+        </div>
+        <div className="text-right shrink-0">
+          <div className="text-xs text-gray-400 mb-0.5">Wolne miejsca</div>
+          <span className={`text-sm font-bold ${course.is_full ? 'text-gray-400' : course.spots_left <= 3 ? 'text-orange-500' : 'text-emerald-600'}`}>
+            {course.is_full ? 'Brak' : course.spots_left}
+          </span>
+        </div>
+      </div>
+      <div className="px-6 py-4 grid grid-cols-3 gap-x-4 gap-y-2 text-sm">
+        <div>
+          <div className="text-xs text-gray-400 mb-0.5">Termin</div>
+          <div className="font-medium text-gray-800 text-xs">{formatDate(course.start_date)} – {formatDate(course.end_date)}</div>
+        </div>
+        <div>
+          <div className="text-xs text-gray-400 mb-0.5">Egzamin</div>
+          <div className="font-medium text-gray-800 text-xs">{formatDate(course.exam_date) || '—'}</div>
+        </div>
+        <div>
+          <div className="text-xs text-gray-400 mb-0.5">Cena</div>
+          <div className="font-medium text-gray-800 text-xs">{course.price} zł</div>
+        </div>
+      </div>
+      <div className="px-6 pb-5">
+        {course.is_full ? (
+          <span className="inline-block text-xs font-semibold px-4 py-2 rounded-lg bg-gray-100 text-gray-400">
+            Brak miejsc
+          </span>
+        ) : (
+          <a
+            href={`/zapisz-sie?kurs=${course.id}`}
+            className="inline-block text-sm font-semibold px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white transition-colors"
+          >
+            Zapisz się
+          </a>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function NavCard({ icon, title, description, active, soon, onClick }) {
   return (
     <button
@@ -179,6 +227,9 @@ export default function ParticipantDashboard() {
   const [enrollments, setEnrollments] = useState([])
   const [loading, setLoading] = useState(true)
   const [activeCard, setActiveCard] = useState(null)
+  const [recertCourses, setRecertCourses] = useState([])
+  const [recertLoading, setRecertLoading] = useState(false)
+  const [recertFetched, setRecertFetched] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -193,6 +244,19 @@ export default function ParticipantDashboard() {
       .catch(() => navigate('/zaloguj-sie'))
       .finally(() => setLoading(false))
   }, [navigate])
+
+  useEffect(() => {
+    if (activeCard === 'recert' && !recertFetched) {
+      setRecertLoading(true)
+      fetchCourses()
+        .then(data => {
+          setRecertCourses(data.filter(c => c.course_type === 'recert'))
+          setRecertFetched(true)
+        })
+        .catch(() => {})
+        .finally(() => setRecertLoading(false))
+    }
+  }, [activeCard, recertFetched])
 
   function handleLogout() {
     localStorage.removeItem('participant_access_token')
@@ -225,13 +289,20 @@ export default function ParticipantDashboard() {
         <h1 className="text-2xl font-extrabold text-gray-900 mb-2">Moje konto</h1>
         <p className="text-gray-500 text-sm mb-8">Strefa uczestnika Mc Med</p>
 
-        <div className="grid gap-4 sm:grid-cols-3 mb-4">
+        <div className="grid gap-4 grid-cols-2 sm:grid-cols-4 mb-4">
           <NavCard
             icon="📋"
             title="Moje kursy"
             description="Historia i nadchodzące kursy"
             active={activeCard === 'courses'}
             onClick={() => setActiveCard(activeCard === 'courses' ? null : 'courses')}
+          />
+          <NavCard
+            icon="🔁"
+            title="Recertyfikacje"
+            description="Dostępne kursy recertyfikacyjne"
+            active={activeCard === 'recert'}
+            onClick={() => setActiveCard(activeCard === 'recert' ? null : 'recert')}
           />
           <NavCard icon="📄" title="Materiały" description="Podręczniki i harmonogramy" soon />
           <NavCard icon="🏅" title="Certyfikaty" description="Wyniki egzaminów i zaświadczenia" soon />
@@ -260,6 +331,23 @@ export default function ParticipantDashboard() {
             </a>
           ))
         }
+
+        {activeCard === 'recert' && (
+          recertLoading ? (
+            <div className="text-center text-gray-400 py-10 text-sm">Ładowanie…</div>
+          ) : recertCourses.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-gray-200 p-10 text-center">
+              <div className="text-4xl mb-4">🔁</div>
+              <p className="font-semibold text-gray-700 mb-1">Brak dostępnych recertyfikacji</p>
+              <p className="text-sm text-gray-400">Sprawdź ponownie później lub skontaktuj się z organizatorem.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-xs text-gray-400 uppercase tracking-widest font-bold">Dostępne terminy</p>
+              {recertCourses.map(c => <RecertCourseCard key={c.id} course={c} />)}
+            </div>
+          )
+        )}
 
         {activeCard === 'courses' && (
           loading ? (

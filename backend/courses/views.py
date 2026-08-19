@@ -42,9 +42,16 @@ class PublicEnrollView(generics.CreateAPIView):
         if existing:
             if existing.is_active:
                 msg = 'Posiadasz już konto w systemie. Zaloguj się, aby zapisać się na kolejny kurs.'
+                return Response(
+                    {'email': msg, 'email_exists': True, 'account_active': True},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             else:
                 msg = 'Konto z tym adresem e-mail już istnieje, ale nie zostało jeszcze aktywowane. Sprawdź skrzynkę mailową.'
-            return Response({'email': msg}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {'email': msg, 'email_exists': True, 'account_active': False},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         with transaction.atomic():
             user = User.objects.create_user(
@@ -184,6 +191,7 @@ class MyProfileView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        has_previous = Enrollment.objects.filter(user=request.user).exists()
         enrollment = (
             Enrollment.objects
             .filter(user=request.user, is_deleted=False)
@@ -191,8 +199,9 @@ class MyProfileView(generics.GenericAPIView):
             .first()
         )
         if not enrollment:
-            return Response(None)
+            return Response({'has_previous': has_previous})
         return Response({
+            'has_previous':     True,
             'first_name':       enrollment.first_name,
             'last_name':        enrollment.last_name,
             'pesel':            enrollment.pesel,
@@ -221,19 +230,13 @@ def enroll_me(request):
     if course.is_full:
         return Response({'course': 'Brak wolnych miejsc na wybranym kursie.'}, status=status.HTTP_400_BAD_REQUEST)
 
-    previous = (
-        Enrollment.objects
-        .filter(user=request.user, is_deleted=False)
-        .order_by('-created_at')
-        .first()
-    )
-
     fields = ['first_name', 'last_name', 'pesel', 'birth_date', 'email',
               'phone', 'zip_code', 'city', 'street', 'house_number', 'apartment_number', 'photo_consent']
 
-    if previous:
-        data = {f: getattr(previous, f) for f in fields}
-    else:
+    # Jeśli formularz przesłał dane osobowe (pełny formularz), użyj ich.
+    # Jeśli nie (szybki zapis zalogowanego), skopiuj z ostatniego zapisu.
+    submitted_name = request.data.get('first_name', '').strip()
+    if submitted_name:
         data = {f: request.data.get(f, '') for f in fields}
         data['email'] = data.get('email') or request.user.email
         data['apartment_number'] = data.get('apartment_number') or ''
@@ -243,6 +246,19 @@ def enroll_me(request):
         missing = {f: 'To pole jest wymagane.' for f in required if not data.get(f)}
         if missing:
             return Response(missing, status=status.HTTP_400_BAD_REQUEST)
+    else:
+        previous = (
+            Enrollment.objects
+            .filter(user=request.user, is_deleted=False, pesel__gt='')
+            .order_by('-created_at')
+            .first()
+        )
+        if not previous:
+            return Response(
+                {'error': 'Brak danych profilu. Wypełnij formularz zapisu.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        data = {f: getattr(previous, f) for f in fields}
 
     enrollment = Enrollment.objects.create(user=request.user, course=course, **data)
     return Response({'id': enrollment.id}, status=status.HTTP_201_CREATED)

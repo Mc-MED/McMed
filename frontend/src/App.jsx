@@ -11,6 +11,8 @@ import EnrollForm from './pages/participant/EnrollForm'
 import ActivateAccount from './pages/participant/ActivateAccount'
 import ParticipantLogin from './pages/participant/ParticipantLogin'
 import ParticipantDashboard from './pages/participant/ParticipantDashboard'
+import ForgotPassword from './pages/participant/ForgotPassword'
+import ResetPassword from './pages/participant/ResetPassword'
 
 export default function App() {
   return (
@@ -23,6 +25,8 @@ export default function App() {
         <Route path="/aktywuj/:token" element={<ActivateAccount />} />
         <Route path="/zaloguj-sie" element={<ParticipantLogin />} />
         <Route path="/konto" element={<ParticipantDashboard />} />
+        <Route path="/zapomnialem-hasla" element={<ForgotPassword />} />
+        <Route path="/reset-hasla/:token" element={<ResetPassword />} />
 
         {/* Panel właściciela */}
         <Route path="/admin" element={<AdminLayout />}>

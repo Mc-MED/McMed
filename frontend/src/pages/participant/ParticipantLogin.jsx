@@ -1,9 +1,12 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 
 export default function ParticipantLogin() {
-  const [email, setEmail]       = useState('')
+  const [searchParams] = useSearchParams()
+  const redirectTo = searchParams.get('redirect') || '/konto'
+
+  const [email, setEmail]       = useState(searchParams.get('email') || '')
   const [password, setPassword] = useState('')
   const [error, setError]       = useState('')
   const [loading, setLoading]   = useState(false)
@@ -17,7 +20,7 @@ export default function ParticipantLogin() {
       const { data } = await axios.post('/api/auth/token/', { username: email, password })
       localStorage.setItem('participant_access_token', data.access)
       localStorage.setItem('participant_refresh_token', data.refresh)
-      navigate('/konto')
+      navigate(redirectTo)
     } catch {
       setError('Nieprawidłowy login lub hasło.')
     } finally {
@@ -50,7 +53,15 @@ export default function ParticipantLogin() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Hasło</label>
+            <div className="flex justify-between items-center mb-1.5">
+              <label className="text-sm font-medium text-gray-700">Hasło</label>
+              <a
+                href={`/zapomnialem-hasla${email ? `?email=${encodeURIComponent(email)}` : ''}`}
+                className="text-xs text-red-600 hover:text-red-700 hover:underline"
+              >
+                Nie pamiętam hasła
+              </a>
+            </div>
             <input
               type="password"
               value={password}
