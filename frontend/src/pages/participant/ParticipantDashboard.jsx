@@ -309,7 +309,7 @@ export default function ParticipantDashboard() {
         </div>
 
         {enrollments
-          .filter(e => e.whatsapp_link && (!e.end_date || new Date(e.end_date) >= new Date()))
+          .filter(e => e.whatsapp_link && /^https?:\/\//i.test(e.whatsapp_link) && (!e.end_date || new Date(e.end_date) >= new Date()))
           .map(e => (
             <a
               key={e.id}

@@ -140,6 +140,13 @@ class AdminEnrollmentDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset           = Enrollment.objects.all()
     http_method_names  = ['get', 'patch', 'delete']
 
+    def perform_destroy(self, instance):
+        user = instance.user
+        instance.delete()
+        # Jeśli user nie ma innych zapisów, usuń jego konto – inaczej blokuje ponowną rejestrację
+        if user and not user.enrollments.filter(is_deleted=False).exists():
+            user.delete()
+
 
 class InstructorListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
@@ -364,12 +371,19 @@ def send_sms_to_enrollments(request):
     if not enrollment_ids:
         return Response({'detail': 'Nie wybrano żadnych uczestników.'}, status=status.HTTP_400_BAD_REQUEST)
 
+    from .sms import send_sms
+
     enrollments = Enrollment.objects.filter(
         id__in=enrollment_ids,
     ).exclude(phone='')
 
-    # TODO: podpiąć SMSAPI
-    sent = enrollments.count()
+    sent = 0
     failed = []
+    for enrollment in enrollments:
+        ok, err = send_sms(enrollment.phone, message)
+        if ok:
+            sent += 1
+        else:
+            failed.append({'id': enrollment.id, 'name': f'{enrollment.first_name} {enrollment.last_name}', 'error': err})
 
     return Response({'sent': sent, 'failed': failed})

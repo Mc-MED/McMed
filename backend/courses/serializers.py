@@ -89,7 +89,7 @@ class AdminCourseSerializer(serializers.ModelSerializer):
     def validate_course_days(self, value):
         if not isinstance(value, list):
             raise serializers.ValidationError('Podaj listę dat.')
-        course_type = self.initial_data.get('course_type', '')
+        course_type = self.initial_data.get('course_type') or (self.instance.course_type if self.instance else '')
         if course_type != 'recert':
             filled = [d for d in value if d]
             if len(filled) != 6:
