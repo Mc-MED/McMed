@@ -4,7 +4,7 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 
 from .models import Course, Enrollment, Instructor
@@ -97,25 +97,25 @@ class PublicEnrollView(generics.CreateAPIView):
 
 
 class AdminCourseListView(generics.ListAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
     serializer_class   = AdminCourseSerializer
     queryset           = Course.objects.all()
 
 
 class AdminCourseCreateView(generics.CreateAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
     serializer_class   = AdminCourseSerializer
 
 
 class AdminCourseDetailView(generics.RetrieveUpdateAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
     serializer_class   = AdminCourseSerializer
     queryset           = Course.objects.all()
     http_method_names  = ['get', 'patch']
 
 
 class AdminEnrollmentListView(generics.ListAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
     serializer_class   = EnrollmentSerializer
 
     def get_queryset(self):
@@ -135,7 +135,7 @@ class AdminEnrollmentListView(generics.ListAPIView):
 
 
 class AdminEnrollmentDetailView(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
     serializer_class   = EnrollmentSerializer
     queryset           = Enrollment.objects.all()
     http_method_names  = ['get', 'patch', 'delete']
@@ -149,19 +149,19 @@ class AdminEnrollmentDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class InstructorListCreateView(generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
     serializer_class   = InstructorSerializer
     queryset           = Instructor.objects.all()
 
 
 class InstructorDetailView(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
     serializer_class   = InstructorSerializer
     queryset           = Instructor.objects.all()
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAdminUser])
 def soft_delete_enrollment(request, pk):
     try:
         enrollment = Enrollment.objects.get(pk=pk, is_deleted=False)
@@ -176,7 +176,7 @@ def soft_delete_enrollment(request, pk):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAdminUser])
 def anonymize_enrollment(request, pk):
     updated = Enrollment.objects.filter(pk=pk).update(
         pesel='',
@@ -211,7 +211,6 @@ class MyProfileView(generics.GenericAPIView):
             'has_previous':     True,
             'first_name':       enrollment.first_name,
             'last_name':        enrollment.last_name,
-            'pesel':            enrollment.pesel,
             'birth_date':       str(enrollment.birth_date) if enrollment.birth_date else None,
             'email':            enrollment.email,
             'phone':            enrollment.phone,
@@ -303,7 +302,7 @@ def cancel_my_enrollment(request, pk):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAdminUser])
 def restore_enrollment(request, pk):
     try:
         enrollment = Enrollment.objects.get(pk=pk, is_deleted=True)
@@ -317,7 +316,7 @@ def restore_enrollment(request, pk):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAdminUser])
 def send_email_to_enrollments(request):
     enrollment_ids = request.data.get('enrollment_ids', [])
     subject = request.data.get('subject', '').strip()
@@ -361,7 +360,7 @@ def send_email_to_enrollments(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAdminUser])
 def send_sms_to_enrollments(request):
     enrollment_ids = request.data.get('enrollment_ids', [])
     message = request.data.get('message', '').strip()

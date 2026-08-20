@@ -60,7 +60,7 @@ export default function EnrollForm() {
       fetchMyProfile()
         .then(data => {
           const hasFullData = !!(
-            data?.first_name && data?.pesel && data?.phone &&
+            data?.first_name && data?.phone &&
             data?.zip_code && data?.city && data?.street && data?.house_number
           )
           setProfile(hasFullData ? data : null)
@@ -359,7 +359,6 @@ export default function EnrollForm() {
             <h2 className="text-base font-bold text-gray-900 mb-4">Twoje dane</h2>
             <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
               <Info label="Imię i nazwisko" value={`${profile.first_name} ${profile.last_name}`} />
-              <Info label="PESEL" value={profile.pesel} mono />
               <Info label="Telefon" value={profile.phone} />
               <Info label="Adres" value={`${profile.street} ${profile.house_number}${profile.apartment_number ? `/${profile.apartment_number}` : ''}, ${profile.zip_code} ${profile.city}`} />
             </div>

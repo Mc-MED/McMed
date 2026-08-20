@@ -2,6 +2,7 @@ import math
 from django.db import models
 from django.utils import timezone
 from django.contrib.auth import get_user_model
+from .fields import EncryptedCharField
 
 SPECIALIZATION_CODES = ['L', 'P', 'Ps', 'R', 'Rt', 'Rch', 'Re', 'Rwo', 'Rwy']
 
@@ -134,7 +135,7 @@ class Enrollment(models.Model):
                        )
     first_name       = models.CharField(max_length=100)
     last_name        = models.CharField(max_length=100)
-    pesel            = models.CharField(max_length=11)
+    pesel            = EncryptedCharField(blank=True, default='')
     birth_date       = models.DateField(null=True, blank=True)
     email            = models.EmailField(blank=True, default='')
     phone            = models.CharField(max_length=20, blank=True, default='')

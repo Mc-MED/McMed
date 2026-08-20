@@ -4,7 +4,8 @@ import axios from 'axios'
 
 export default function ParticipantLogin() {
   const [searchParams] = useSearchParams()
-  const redirectTo = searchParams.get('redirect') || '/konto'
+  const r = searchParams.get('redirect')
+  const redirectTo = (r && r.startsWith('/') && !r.startsWith('//')) ? r : '/konto'
 
   const [email, setEmail]       = useState(searchParams.get('email') || '')
   const [password, setPassword] = useState('')

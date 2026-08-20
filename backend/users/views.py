@@ -9,6 +9,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .models import ActivationToken, PasswordResetToken
 from .emails import send_activation_email, send_password_reset_email
+from config.throttles import AuthRateThrottle, PasswordResetRateThrottle
 
 
 class ParticipantTokenSerializer(TokenObtainPairSerializer):
@@ -23,6 +24,7 @@ class ParticipantTokenSerializer(TokenObtainPairSerializer):
 
 class ParticipantTokenView(TokenObtainPairView):
     serializer_class = ParticipantTokenSerializer
+    throttle_classes = [AuthRateThrottle]
 
 User = get_user_model()
 
@@ -57,6 +59,7 @@ class ActivateAccountView(APIView):
 
 class ResendActivationView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes   = [PasswordResetRateThrottle]
 
     def post(self, request):
         email = (request.data.get('email') or '').strip().lower()
@@ -103,6 +106,7 @@ class ResendActivationView(APIView):
 
 class PasswordResetRequestView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes   = [PasswordResetRateThrottle]
 
     def post(self, request):
         email = (request.data.get('email') or '').strip().lower()

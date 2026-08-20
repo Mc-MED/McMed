@@ -98,12 +98,22 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticatedOrReadOnly',
     ),
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon':           '200/day',
+        'user':           '2000/day',
+        'auth':           '5/minute',
+        'password_reset': '3/hour',
+    },
 }
 
 # ─── JWT ─────────────────────────────────────────────────────────────
 from datetime import timedelta
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME':  timedelta(hours=2),
+    'ACCESS_TOKEN_LIFETIME':  timedelta(minutes=15),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
 }
 
@@ -128,9 +138,25 @@ DEFAULT_FROM_EMAIL  = config('DEFAULT_FROM_EMAIL',  default='noreply@mcmed.pl')
 BUG_REPORT_EMAIL    = config('BUG_REPORT_EMAIL',    default='')
 EMAIL_TIMEOUT  = 10
 
+# ─── Field encryption ────────────────────────────────────────────────
+FIELD_ENCRYPTION_KEY = config('FIELD_ENCRYPTION_KEY', default='')
+
 # ─── SMS API ─────────────────────────────────────────────────────────
 SMS_API_TOKEN = config('SMS_API_TOKEN', default='')
 SMS_API_SENDER = config('SMS_API_SENDER', default='McMed')
 
 # ─── Frontend ────────────────────────────────────────────────────────
 FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3000')
+
+# ─── Security headers ────────────────────────────────────────────────
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
+SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True

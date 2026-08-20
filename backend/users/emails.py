@@ -1,3 +1,4 @@
+import html as html_lib
 from io import BytesIO
 from pathlib import Path
 from email.mime.image import MIMEImage
@@ -210,6 +211,10 @@ def _plain(first_name, activation_link, course_info, resend):
 
 
 def _html_course_email(first_name, subject, body, course_info):
+    first_name = html_lib.escape(first_name)
+    subject    = html_lib.escape(subject)
+    body_html  = html_lib.escape(body).replace('\n', '<br>')
+
     rows = ''
     if course_info:
         rows = ''.join(
@@ -234,8 +239,6 @@ def _html_course_email(first_name, subject, body, course_info):
         </tr>'''
     else:
         course_block = ''
-
-    body_html = body.replace('\n', '<br>')
 
     logo_img = (
         '<img src="cid:mcmed_logo" alt="Mc Med" width="99" height="110"'
