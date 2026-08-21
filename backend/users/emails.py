@@ -24,7 +24,7 @@ def _logo_transparent_bytes():
     return buf.getvalue()
 
 
-def _html(first_name, activation_link, course_info, resend):
+def _html(first_name, activation_link, course_info, resend, payment_title=''):
     subtext = (
         'Twoje zgłoszenie zostało przyjęte. Aktywuj konto, aby uzyskać dostęp do platformy.'
         if not resend else
@@ -57,9 +57,9 @@ def _html(first_name, activation_link, course_info, resend):
 
     # --- kroki ---
     steps = [
-        ('Aktywuj konto',      'Kliknij przycisk poniżej i zaloguj się na swoim nowym koncie.'),
-        ('Potwierdź zapis',    'Zadzwonimy do Ciebie telefonicznie, aby potwierdzić udział w kursie.'),
-        ('Materiały i wyniki', 'Na koncie znajdziesz harmonogram, podręczniki i wyniki egzaminu.'),
+        ('Opłać zaliczkę',  'Przelej 300 zł na konto podane poniżej. Tytuł przelewu znajdziesz w sekcji „Zaliczka".'),
+        ('Aktywuj konto',   'Kliknij przycisk poniżej i zaloguj się na swoim nowym koncie.'),
+        ('Oczekuj na kurs', 'Po opłaceniu zaliczki i aktywacji konta jesteś zapisany. Do zobaczenia na kursie!'),
     ]
     steps_rows = ''
     for i, (title, desc) in enumerate(steps, 1):
@@ -75,6 +75,40 @@ def _html(first_name, activation_link, course_info, resend):
               <div style="font-size:13px;color:#6b7280;line-height:1.6;">{desc}</div>
             </td>
           </tr>'''
+
+    # --- blok z informacją o zaliczce ---
+    payment_block = ''
+    if payment_title:
+        safe_title = html_lib.escape(payment_title)
+        payment_block = f'''
+        <tr>
+          <td style="background:#ffffff;padding:0 40px 28px;">
+            <table width="100%" cellpadding="0" cellspacing="0"
+                   style="background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;">
+              <tr><td style="padding:18px 22px;">
+                <div style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;
+                            letter-spacing:1.5px;margin-bottom:14px;">&#128179;&nbsp; Zaliczka &ndash; 300 z&#322;</div>
+                <table cellpadding="0" cellspacing="0" width="100%">
+                  <tr>
+                    <td style="padding:5px 16px 5px 0;font-size:13px;color:#6b7280;white-space:nowrap;vertical-align:top;">Nr&nbsp;konta</td>
+                    <td style="padding:5px 0;font-size:13px;color:#111827;font-weight:700;font-family:'Courier New',Courier,monospace;letter-spacing:0.5px;">93&nbsp;1140&nbsp;2004&nbsp;0000&nbsp;3102&nbsp;8633&nbsp;5268</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:5px 16px 5px 0;font-size:13px;color:#6b7280;white-space:nowrap;vertical-align:top;">Odbiorca</td>
+                    <td style="padding:5px 0;font-size:13px;color:#111827;font-weight:600;">Mc Med Maciej Świerszcz<br>19-300 Ełk, ul. Szyszkowa&nbsp;14/7</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:5px 16px 5px 0;font-size:13px;color:#6b7280;white-space:nowrap;vertical-align:top;">Tytu&#322;&nbsp;przelewu</td>
+                    <td style="padding:5px 0;font-size:13px;color:#111827;font-weight:600;">{safe_title}</td>
+                  </tr>
+                </table>
+                <div style="margin-top:12px;font-size:12px;color:#92400e;font-weight:600;">
+                  Pytania: tel. 785-725-603
+                </div>
+              </td></tr>
+            </table>
+          </td>
+        </tr>'''
 
     # Logo: jeśli plik istnieje – CID, w przeciwnym razie fallback tekstowy
     logo_img = (
@@ -127,7 +161,27 @@ def _html(first_name, activation_link, course_info, resend):
           </td>
         </tr>
 
+        <!-- ── KROKI ── -->
+        <tr>
+          <td style="background:#ffffff;padding:4px 40px 28px;">
+            <div style="font-size:10px;font-weight:700;color:#9ca3af;
+                        text-transform:uppercase;letter-spacing:1.5px;margin-bottom:20px;">Co dalej?</div>
+            <table width="100%" cellpadding="0" cellspacing="0">
+              {steps_rows}
+            </table>
+          </td>
+        </tr>
+
+        <!-- ── DIVIDER ── -->
+        <tr>
+          <td style="background:#ffffff;padding:0 40px;">
+            <div style="height:1px;background:#f3f4f6;"></div>
+          </td>
+        </tr>
+
         {course_block}
+
+        {payment_block}
 
         <!-- ── CTA ── -->
         <tr>
@@ -144,24 +198,6 @@ def _html(first_name, activation_link, course_info, resend):
               <a href="{activation_link}"
                  style="color:#dc2626;word-break:break-all;">{activation_link}</a>
             </p>
-          </td>
-        </tr>
-
-        <!-- ── DIVIDER ── -->
-        <tr>
-          <td style="background:#ffffff;padding:0 40px;">
-            <div style="height:1px;background:#f3f4f6;"></div>
-          </td>
-        </tr>
-
-        <!-- ── KROKI ── -->
-        <tr>
-          <td style="background:#ffffff;padding:28px 40px 36px;">
-            <div style="font-size:10px;font-weight:700;color:#9ca3af;
-                        text-transform:uppercase;letter-spacing:1.5px;margin-bottom:20px;">Co dalej?</div>
-            <table width="100%" cellpadding="0" cellspacing="0">
-              {steps_rows}
-            </table>
           </td>
         </tr>
 
@@ -183,7 +219,7 @@ def _html(first_name, activation_link, course_info, resend):
 </html>'''
 
 
-def _plain(first_name, activation_link, course_info, resend):
+def _plain(first_name, activation_link, course_info, resend, payment_title=''):
     lines = [f'Dzień dobry {first_name},\n']
     if not resend:
         lines.append('Twoje zgłoszenie na kurs zostało przyjęte!\n')
@@ -193,6 +229,15 @@ def _plain(first_name, activation_link, course_info, resend):
         for k, v in course_info.items():
             lines.append(f'{k}: {v}')
         lines.append('')
+    if payment_title:
+        lines += [
+            '--- ZALICZKA (300 zł) ---',
+            'Nr konta: 93 1140 2004 0000 3102 8633 5268',
+            'Odbiorca: Mc Med Maciej Świerszcz, 19-300 Ełk ul. Szyszkowa 14/7',
+            f'Tytuł przelewu: {payment_title}',
+            'Pytania: tel. 785-725-603',
+            '',
+        ]
     lines += [
         'Aktywuj swoje konto:',
         activation_link,
@@ -200,9 +245,9 @@ def _plain(first_name, activation_link, course_info, resend):
         'Link ważny przez 72 godziny.',
         '',
         'Co dalej?',
-        '1. Kliknij link powyżej, aby aktywować konto.',
-        '2. Zadzwonimy do Ciebie, aby potwierdzić zapis.',
-        '3. Na koncie znajdziesz materiały szkoleniowe i wyniki egzaminu.',
+        '1. Opłać zaliczkę – dane do przelewu znajdziesz powyżej.',
+        '2. Aktywuj konto – kliknij link powyżej.',
+        '3. Oczekuj na kurs – po opłaceniu zaliczki i aktywacji konta jesteś zapisany.',
         '',
         'Pozdrawiamy,',
         'Zespół Mc Med',
@@ -442,11 +487,12 @@ def send_password_reset_email(*, to_email, first_name, reset_link):
     msg.send(fail_silently=True)
 
 
-def send_activation_email(*, to_email, first_name, activation_link, course_info=None, resend=False):
+def send_activation_email(*, to_email, first_name, activation_link, course_info=None, resend=False, payment_title=''):
     """Wysyła HTML-owy mail z linkiem aktywacyjnym.
 
-    course_info – opcjonalny słownik {etykieta: wartość} z danymi kursu.
-    resend      – True jeśli to ponowne wysłanie (zmienia nagłówek i tekst).
+    course_info   – opcjonalny słownik {etykieta: wartość} z danymi kursu.
+    resend        – True jeśli to ponowne wysłanie (zmienia nagłówek i tekst).
+    payment_title – gotowy tytuł przelewu do bloku z zaliczką.
     """
     subject = (
         'Ponowna aktywacja konta – Mc Med'
@@ -455,7 +501,7 @@ def send_activation_email(*, to_email, first_name, activation_link, course_info=
     )
     msg = EmailMultiAlternatives(
         subject=subject,
-        body=_plain(first_name, activation_link, course_info, resend),
+        body=_plain(first_name, activation_link, course_info, resend, payment_title),
         from_email=settings.DEFAULT_FROM_EMAIL,
         to=[to_email],
     )
@@ -463,7 +509,7 @@ def send_activation_email(*, to_email, first_name, activation_link, course_info=
     # Osadź HTML i logo jako powiązane części (multipart/related)
     msg.mixed_subtype = 'related'
     msg.attach_alternative(
-        _html(first_name, activation_link, course_info, resend),
+        _html(first_name, activation_link, course_info, resend, payment_title),
         'text/html',
     )
 

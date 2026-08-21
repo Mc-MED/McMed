@@ -88,11 +88,29 @@ class PublicEnrollView(generics.CreateAPIView):
             'Cena':    f'{course.price} zł',
         }
 
+        _MONTHS_PL = ['', 'Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec',
+                      'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień']
+        if course.start_date:
+            month_pl = _MONTHS_PL[course.start_date.month]
+            year = course.start_date.year
+        else:
+            month_pl, year = '', ''
+        course_label = (
+            'Kurs Kwalifikowanej Pierwszej Pomocy'
+            if course.course_type == 'kpp' else
+            'Recertyfikacja KPP'
+        )
+        payment_title = (
+            f'{enrollment.first_name} {enrollment.last_name} '
+            f'{course_label} - zaliczka, {month_pl} - {course.city} {year}'
+        )
+
         send_activation_email(
             to_email=enrollment.email,
             first_name=enrollment.first_name,
             activation_link=f'{frontend_url}/aktywuj/{token}',
             course_info=course_info,
+            payment_title=payment_title,
         )
 
 
