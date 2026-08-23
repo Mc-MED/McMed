@@ -118,10 +118,12 @@ SIMPLE_JWT = {
 }
 
 # ─── CORS ────────────────────────────────────────────────────────────
-CORS_ALLOWED_ORIGINS = config(
-    'CORS_ALLOWED_ORIGINS',
-    default='http://localhost:3000,http://127.0.0.1:3000'
-).split(',')
+CORS_ALLOWED_ORIGINS = [
+    o.strip() for o in config(
+        'CORS_ALLOWED_ORIGINS',
+        default='http://localhost:3000,http://127.0.0.1:3000'
+    ).split(',') if o.strip()
+]
 
 # ─── Email ───────────────────────────────────────────────────────────
 EMAIL_BACKEND = config(
