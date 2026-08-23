@@ -1593,28 +1593,9 @@
             </p>
         </div>
 
-        <div style="
-            text-align: center;
-            padding: 4rem 2rem;
-            background: #fff;
-            border-radius: 1.5rem;
-            border: 2px dashed #e5e7eb;
-        ">
-            <div style="font-size: 3rem; margin-bottom: 1rem;">📅</div>
-            <h3 style="font-size: 1.4rem; font-weight: 800; color: #111; margin-bottom: 0.5rem;">Dostępne wkrótce</h3>
-            <p style="color: #6b7280; font-size: 0.95rem; max-width: 420px; margin: 0 auto 1.5rem;">
-                Terminy najbliższych kursów pojawią się tu wkrótce. Zadzwoń do nas, aby dowiedzieć się o planowanych datach.
-            </p>
-            <a href="tel:785725603" class="btn-primary" style="display: inline-block;">
-                785 725 603
-            </a>
-        </div>
-
-        <!-- KURSY Z API – odkomentować po uruchomieniu:
         <div class="courses-grid" id="courses-container">
             <div class="courses-loading">Ładowanie kursów…</div>
         </div>
-        -->
     </div>
 </section>
 
@@ -1775,7 +1756,6 @@ window.addEventListener('resize', () => {
     }
 });
 
-/* ── Kursy z API – odkomentować po uruchomieniu ──
 const SITE_URL = window.location.hostname === 'p01--mc-med--gwjg2s9pdfr6.code.run'
     ? ''
     : 'https://p01--mc-med--gwjg2s9pdfr6.code.run';
@@ -1838,7 +1818,6 @@ function buildCourseCard(c) {
         container.innerHTML = `<div class="no-courses"><h3>Nie można załadować kursów</h3><p>Spróbuj odświeżyć stronę lub zadzwoń do nas bezpośrednio.</p></div>`;
     }
 })();
-── */
 </script>
 </body>
 </html>
