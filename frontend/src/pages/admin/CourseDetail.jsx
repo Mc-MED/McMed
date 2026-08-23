@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { adminFetchCourse, adminUpdateCourse, adminFetchEnrollments, adminDeleteEnrollment, adminUpdateEnrollment, adminAnonymizeEnrollment, adminSoftDeleteEnrollment, adminFetchCourses, adminDownloadDocument, adminDownloadDocumentPdf, adminDownloadXlsx, adminFetchInstructors, adminSendEmail, adminSendSms } from '../../api/admin'
+import { adminFetchCourse, adminUpdateCourse, adminDeleteCourse, adminFetchEnrollments, adminDeleteEnrollment, adminUpdateEnrollment, adminAnonymizeEnrollment, adminSoftDeleteEnrollment, adminFetchCourses, adminDownloadDocument, adminDownloadDocumentPdf, adminDownloadXlsx, adminFetchInstructors, adminSendEmail, adminSendSms } from '../../api/admin'
 import DeletionReasonModal from '../../components/DeletionReasonModal'
 import * as XLSX from 'xlsx'
 
@@ -142,7 +142,7 @@ function CourseForm({ initial, onSaved }) {
         <div className="grid grid-cols-3 gap-4">
           <Field label="Data egzaminu" name="exam_date" value={form.exam_date || ''} onChange={handleChange} type="date" required={false} />
           <Field label="Godzina egzaminu" name="exam_time" value={form.exam_time || ''} onChange={handleChange} type="time" step="60" required={false} />
-          <Field label="Miejsce egzaminu" name="exam_location" value={form.exam_location} onChange={handleChange} required={false} placeholder="np. 30-001 Kraków, ul. Medyczna 5" />
+          <Field label="Miejsce egzaminu (kod pocztowy, adres)" name="exam_location" value={form.exam_location} onChange={handleChange} required={false} placeholder="np. 30-001 Kraków, ul. Medyczna 5" />
           <Field label="Link do grupy WhatsApp" name="whatsapp_link" value={form.whatsapp_link || ''} onChange={handleChange} required={false} placeholder="https://chat.whatsapp.com/..." />
         </div>
       </Section>
@@ -699,22 +699,33 @@ function EnrollmentTable({ courseId, courseName, examDate }) {
               {smsMessage.length}/160
             </span>
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleSendSms}
-              disabled={smsSending || selected.size === 0 || !smsMessage.trim()}
-              className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors"
-            >
-              {smsSending ? 'Wysyłanie…' : `Wyślij do wybranych (${selected.size})`}
-            </button>
-            {smsSendResult && !smsSendResult.error && (
-              <span className="text-sm text-green-700 font-medium">
-                Wysłano: {smsSendResult.sent}
-                {smsSendResult.failed?.length > 0 && `, błędy: ${smsSendResult.failed.length}`}
-              </span>
-            )}
-            {smsSendResult?.error && (
-              <span className="text-sm text-red-600">Błąd wysyłki SMS.</span>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleSendSms}
+                disabled={smsSending || selected.size === 0 || !smsMessage.trim()}
+                className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors"
+              >
+                {smsSending ? 'Wysyłanie…' : `Wyślij do wybranych (${selected.size})`}
+              </button>
+              {smsSendResult && !smsSendResult.error && (
+                <span className="text-sm text-green-700 font-medium">
+                  Wysłano: {smsSendResult.sent}
+                  {smsSendResult.failed?.length > 0 && `, błędy: ${smsSendResult.failed.length}`}
+                </span>
+              )}
+              {smsSendResult?.error && (
+                <span className="text-sm text-red-600">Błąd wysyłki SMS.</span>
+              )}
+            </div>
+            {smsSendResult?.failed?.length > 0 && (
+              <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 space-y-1">
+                {smsSendResult.failed.map((f, i) => (
+                  <p key={i} className="text-xs text-red-700">
+                    <span className="font-semibold">{f.name || `#${f.id}`}:</span> {f.error}
+                  </p>
+                ))}
+              </div>
             )}
           </div>
         </div>
@@ -907,6 +918,8 @@ export default function CourseDetail() {
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState('')
   const [tab, setTab]         = useState('dane')
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [deleting, setDeleting]           = useState(false)
 
   useEffect(() => {
     adminFetchCourse(id)
@@ -914,6 +927,17 @@ export default function CourseDetail() {
       .catch(() => setError('Nie udało się pobrać kursu.'))
       .finally(() => setLoading(false))
   }, [id])
+
+  async function handleDeleteCourse() {
+    setDeleting(true)
+    try {
+      await adminDeleteCourse(id)
+      navigate('/admin/courses')
+    } catch {
+      setDeleting(false)
+      setDeleteConfirm(false)
+    }
+  }
 
   if (loading) return <div className="p-8 text-gray-400 text-sm">Ładowanie…</div>
   if (error)   return <div className="p-8 text-red-600 text-sm">{error}</div>
@@ -932,9 +956,31 @@ export default function CourseDetail() {
             {course.city} · {formatDate(course.start_date)} – {formatDate(course.end_date)}
           </p>
         </div>
-        <span className={`text-xs font-semibold px-3 py-1.5 rounded-full mt-1 ${course.is_active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-          {course.is_active ? 'Aktywny' : 'Nieaktywny'}
-        </span>
+        <div className="flex items-center gap-3 mt-1">
+          <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${course.is_active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+            {course.is_active ? 'Aktywny' : 'Nieaktywny'}
+          </span>
+          {deleteConfirm ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">Na pewno usunąć kurs?</span>
+              <button
+                onClick={handleDeleteCourse}
+                disabled={deleting}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-60 transition-colors"
+              >
+                {deleting ? 'Usuwanie…' : 'Tak, usuń'}
+              </button>
+              <button onClick={() => setDeleteConfirm(false)} className="text-xs text-gray-400 hover:text-gray-700">Anuluj</button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setDeleteConfirm(true)}
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
+            >
+              Usuń kurs
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Zakładki */}

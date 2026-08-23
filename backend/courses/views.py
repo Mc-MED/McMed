@@ -125,11 +125,11 @@ class AdminCourseCreateView(generics.CreateAPIView):
     serializer_class   = AdminCourseSerializer
 
 
-class AdminCourseDetailView(generics.RetrieveUpdateAPIView):
+class AdminCourseDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAdminUser]
     serializer_class   = AdminCourseSerializer
     queryset           = Course.objects.all()
-    http_method_names  = ['get', 'patch']
+    http_method_names  = ['get', 'patch', 'delete']
 
 
 class AdminEnrollmentListView(generics.ListAPIView):

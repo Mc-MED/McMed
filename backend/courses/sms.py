@@ -32,18 +32,21 @@ def send_sms(phone: str, message: str) -> tuple[bool, str]:
     if not normalized:
         return False, f'Niepoprawny numer telefonu: {phone}'
 
-    sender = getattr(settings, 'SMS_API_SENDER', 'McMed')
+    sender = getattr(settings, 'SMS_API_SENDER', '')
+
+    payload = {
+        'to': normalized,
+        'message': message,
+        'format': 'json',
+    }
+    if sender:
+        payload['from'] = sender
 
     try:
         resp = requests.post(
             SMSAPI_URL,
             headers={'Authorization': f'Bearer {token}'},
-            data={
-                'to': normalized,
-                'message': message,
-                'from': sender,
-                'format': 'json',
-            },
+            data=payload,
             timeout=10,
         )
         data = resp.json()

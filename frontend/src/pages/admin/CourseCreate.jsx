@@ -222,7 +222,7 @@ export default function CourseCreate() {
               onChange={handleChange} error={errors.exam_date} type="date" />
             <Field label="Godzina egzaminu" name="exam_time" value={form.exam_time}
               onChange={handleChange} error={errors.exam_time} type="time" step="60" />
-            <Field label="Miejsce egzaminu" name="exam_location" value={form.exam_location}
+            <Field label="Miejsce egzaminu (kod pocztowy, adres)" name="exam_location" value={form.exam_location}
               onChange={handleChange} error={errors.exam_location}
               placeholder="np. 30-001 Kraków, ul. Medyczna 5" />
             <Field label="Link do grupy WhatsApp" name="whatsapp_link" value={form.whatsapp_link}

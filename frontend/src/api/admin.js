@@ -12,6 +12,9 @@ export const adminFetchCourse = (id) =>
 export const adminUpdateCourse = (id, data) =>
   adminAxios.patch(`/api/courses/admin/${id}/`, data)
 
+export const adminDeleteCourse = (id) =>
+  adminAxios.delete(`/api/courses/admin/${id}/`)
+
 export const adminFetchEnrollments = (courseId) => {
   const params = courseId ? `?course=${courseId}` : ''
   return adminAxios.get(`/api/courses/enrollments/list/${params}`).then(r => r.data)
