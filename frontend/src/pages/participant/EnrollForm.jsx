@@ -77,6 +77,25 @@ export default function EnrollForm() {
     return `${d}.${m}.${y}`
   }
 
+  function formatCourseDays(course) {
+    if (!course) return ''
+    if (course.course_type === 'recert') return formatDate(course.exam_date || course.start_date)
+    const filled = (course.course_days || []).filter(d => d).sort()
+    if (!filled.length) {
+      if (course.start_date && course.end_date && course.start_date !== course.end_date)
+        return `${formatDate(course.start_date)} – ${formatDate(course.end_date)}`
+      return formatDate(course.start_date || course.end_date)
+    }
+    const groups = {}, order = []
+    filled.forEach(iso => {
+      const [y, m, d] = iso.split('-')
+      const key = `${y}-${m}`
+      if (!groups[key]) { groups[key] = { y, m, days: [] }; order.push(key) }
+      groups[key].days.push(d)
+    })
+    return order.map(k => `${groups[k].days.join(', ')}.${groups[k].m}.${groups[k].y}`).join(' – ')
+  }
+
   function handleChange(e) {
     const { name, value, type, checked } = e.target
     setForm(f => ({ ...f, [name]: type === 'checkbox' ? checked : value }))
@@ -347,7 +366,7 @@ export default function EnrollForm() {
             {selectedCourse && (
               <div className="mt-4 p-4 bg-red-50 rounded-lg border border-red-100 text-sm text-gray-700 space-y-1">
                 <div><span className="font-medium">Typ:</span> {selectedCourse.course_type_display}</div>
-                <div><span className="font-medium">Termin:</span> {formatDate(selectedCourse.start_date)} – {formatDate(selectedCourse.end_date)}</div>
+                <div><span className="font-medium">Termin:</span> {formatCourseDays(selectedCourse)}</div>
                 <div><span className="font-medium">Miejsce:</span> {selectedCourse.city}</div>
                 <div><span className="font-medium">Cena:</span> {selectedCourse.price} zł</div>
                 <div><span className="font-medium">Wolne miejsca:</span> {selectedCourse.spots_left}</div>

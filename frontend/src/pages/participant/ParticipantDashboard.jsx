@@ -17,6 +17,25 @@ function formatDate(iso) {
   return `${d}.${m}.${y}`
 }
 
+function formatCourseDays(course) {
+  if (!course) return '—'
+  if (course.course_type === 'recert') return formatDate(course.exam_date || course.start_date)
+  const filled = (course.course_days || []).filter(d => d).sort()
+  if (!filled.length) {
+    if (course.start_date && course.end_date && course.start_date !== course.end_date)
+      return `${formatDate(course.start_date)} – ${formatDate(course.end_date)}`
+    return formatDate(course.start_date || course.end_date)
+  }
+  const groups = {}, order = []
+  filled.forEach(iso => {
+    const [y, m, d] = iso.split('-')
+    const key = `${y}-${m}`
+    if (!groups[key]) { groups[key] = { y, m, days: [] }; order.push(key) }
+    groups[key].days.push(d)
+  })
+  return order.map(k => `${groups[k].days.join(', ')}.${groups[k].m}.${groups[k].y}`).join(' – ')
+}
+
 const CANCEL_REASONS = [
   { value: 'forfeit',    label: 'Rezygnacja bez podania przyczyny (zaliczka przepada)' },
   { value: 'refund',     label: 'Rezygnacja z przyczyn losowych – zwrot zaliczki (wymagany kontakt z organizatorem na min. 7 dni przed rozpoczęciem kursu)' },
@@ -72,7 +91,7 @@ function CourseCard({ enrollment, onCancelled }) {
       <div className="px-6 py-4 grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
         <div>
           <div className="text-xs text-gray-400 mb-0.5">Termin kursu</div>
-          <div className="font-medium text-gray-800">{formatDate(c.start_date)} – {formatDate(c.end_date)}</div>
+          <div className="font-medium text-gray-800">{formatCourseDays(c)}</div>
         </div>
         <div>
           <div className="text-xs text-gray-400 mb-0.5">Egzamin</div>
@@ -89,18 +108,6 @@ function CourseCard({ enrollment, onCancelled }) {
         )}
       </div>
 
-      {c.course_days && c.course_days.filter(Boolean).length > 0 && (
-        <div className="px-6 pb-4">
-          <div className="text-xs text-gray-400 mb-2">Dni szkoleniowe</div>
-          <div className="flex flex-wrap gap-2">
-            {c.course_days.filter(Boolean).map((d, i) => (
-              <span key={i} className="text-xs bg-gray-100 text-gray-600 px-2.5 py-1 rounded-lg font-mono">
-                {formatDate(d)}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
 
       {!isPast && (
         <div className="px-6 pb-5">
@@ -172,7 +179,7 @@ function RecertCourseCard({ course }) {
       <div className="px-6 py-4 grid grid-cols-3 gap-x-4 gap-y-2 text-sm">
         <div>
           <div className="text-xs text-gray-400 mb-0.5">Termin</div>
-          <div className="font-medium text-gray-800 text-xs">{formatDate(course.start_date)} – {formatDate(course.end_date)}</div>
+          <div className="font-medium text-gray-800 text-xs">{formatCourseDays(course)}</div>
         </div>
         <div>
           <div className="text-xs text-gray-400 mb-0.5">Egzamin</div>
