@@ -7,7 +7,7 @@ from pathlib import Path
 
 from django.http import HttpResponse
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 from docxtpl import DocxTemplate
 import openpyxl
@@ -145,7 +145,7 @@ def _resolve_xlsx(doc_name, instructor_count):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAdminUser])
 def download_xlsx(request, course_id, doc_name):
     if doc_name not in ALLOWED_XLSX_TEMPLATES:
         return Response({'detail': 'Nieznany dokument.'}, status=404)
@@ -189,7 +189,7 @@ def _resolve_template(doc_name, instructor_count):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAdminUser])
 def download_document(request, course_id, doc_name):
     if doc_name not in ALLOWED_TEMPLATES:
         return Response({'detail': 'Nieznany dokument.'}, status=404)
@@ -220,7 +220,7 @@ def download_document(request, course_id, doc_name):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAdminUser])
 def download_document_pdf(request, course_id, doc_name):
     if doc_name not in ALLOWED_TEMPLATES:
         return Response({'detail': 'Nieznany dokument.'}, status=404)

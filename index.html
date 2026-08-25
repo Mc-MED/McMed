@@ -1768,6 +1768,15 @@ function formatCoursePrice(price) {
     return Number(price).toLocaleString('pl-PL') + ' zł';
 }
 
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 function buildCourseCard(c) {
     const start = formatCourseDate(c.start_date);
     const end   = formatCourseDate(c.end_date);
@@ -1783,12 +1792,12 @@ function buildCourseCard(c) {
     return `
     <div class="course-card">
         <div class="course-head">
-            <h3>${c.name}</h3>
+            <h3>${escapeHtml(c.name)}</h3>
             <span class="course-type-badge">${c.course_type_display}</span>
         </div>
         <div class="course-body">
             <div class="course-row"><span>📅</span><span>${dates}</span></div>
-            <div class="course-row"><span>📍</span><span>${c.city}</span></div>
+            <div class="course-row"><span>📍</span><span>${escapeHtml(c.city)}</span></div>
         </div>
         <div class="course-footer">
             <span class="spots-badge ${spotsClass}">${spotsText}</span>
