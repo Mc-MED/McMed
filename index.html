@@ -1764,6 +1764,29 @@ function formatCourseDate(iso) {
     return d.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
+function formatDateDMY(iso) {
+    if (!iso) return '';
+    const [y, m, d] = iso.split('-');
+    return `${d}.${m}.${y}`;
+}
+
+function formatCourseDays(courseDays) {
+    const filled = (courseDays || []).filter(d => d).sort();
+    if (!filled.length) return '';
+    const groups = {};
+    const order  = [];
+    filled.forEach(iso => {
+        const [y, m, d] = iso.split('-');
+        const key = `${y}-${m}`;
+        if (!groups[key]) { groups[key] = { y, m, days: [] }; order.push(key); }
+        groups[key].days.push(d);
+    });
+    return order.map(k => {
+        const { y, m, days } = groups[k];
+        return `${days.join(', ')}.${m}.${y}`;
+    }).join(' – ');
+}
+
 function formatCoursePrice(price) {
     return Number(price).toLocaleString('pl-PL') + ' zł';
 }
@@ -1778,9 +1801,19 @@ function escapeHtml(str) {
 }
 
 function buildCourseCard(c) {
-    const start = formatCourseDate(c.start_date);
-    const end   = formatCourseDate(c.end_date);
-    const dates = start === end ? start : `${start} – ${end}`;
+    let dates;
+    if (c.course_type === 'recert') {
+        dates = formatDateDMY(c.exam_date || c.start_date);
+    } else {
+        dates = formatCourseDays(c.course_days);
+        if (!dates) {
+            const rawStart = c.start_date || (c.course_days && c.course_days.find(d => d));
+            const rawEnd   = c.end_date   || (c.course_days && [...c.course_days].reverse().find(d => d));
+            dates = (rawStart && rawEnd && rawStart !== rawEnd)
+                ? `${formatDateDMY(rawStart)} – ${formatDateDMY(rawEnd)}`
+                : formatDateDMY(rawStart || rawEnd);
+        }
+    }
 
     const spotsClass = c.is_full ? 'spots-full' : c.spots_left <= 3 ? 'spots-few' : 'spots-ok';
     const spotsText  = c.is_full ? 'Brak miejsc' : `${c.spots_left} wolnych miejsc`;
@@ -1796,7 +1829,7 @@ function buildCourseCard(c) {
             <span class="course-type-badge">${c.course_type_display}</span>
         </div>
         <div class="course-body">
-            <div class="course-row"><span>📅</span><span>${dates}</span></div>
+            ${dates ? `<div class="course-row"><span>📅</span><span>${dates}</span></div>` : ''}
             <div class="course-row"><span>📍</span><span>${escapeHtml(c.city)}</span></div>
         </div>
         <div class="course-footer">
