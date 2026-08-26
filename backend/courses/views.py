@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.decorators import api_view, permission_classes
@@ -17,7 +18,15 @@ User = get_user_model()
 class PublicCourseListView(generics.ListAPIView):
     permission_classes = [AllowAny]
     serializer_class   = CourseSerializer
-    queryset           = Course.objects.filter(is_active=True)
+
+    def get_queryset(self):
+        today = timezone.now().date()
+        return Course.objects.filter(is_active=True).filter(
+            Q(course_type=Course.TYPE_RECERT, exam_date__gte=today)
+            | Q(course_type=Course.TYPE_RECERT, exam_date__isnull=True)
+            | Q(course_type=Course.TYPE_KPP, end_date__gte=today)
+            | Q(course_type=Course.TYPE_KPP, end_date__isnull=True)
+        )
 
 
 class PublicEnrollView(generics.CreateAPIView):
