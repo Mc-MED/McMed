@@ -22,10 +22,10 @@ class PublicCourseListView(generics.ListAPIView):
     def get_queryset(self):
         today = timezone.now().date()
         return Course.objects.filter(is_active=True).filter(
-            Q(course_type=Course.TYPE_RECERT, exam_date__gte=today)
+            Q(course_type=Course.TYPE_RECERT, exam_date__gt=today)
             | Q(course_type=Course.TYPE_RECERT, exam_date__isnull=True)
-            | Q(course_type=Course.TYPE_KPP, end_date__gte=today)
-            | Q(course_type=Course.TYPE_KPP, end_date__isnull=True)
+            | Q(course_type=Course.TYPE_KPP, start_date__gt=today)
+            | Q(course_type=Course.TYPE_KPP, start_date__isnull=True)
         )
 
 
