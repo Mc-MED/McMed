@@ -61,8 +61,13 @@ export default function CourseList() {
               </td>
               <td className="px-5 py-4 text-gray-600">{c.city || '—'}</td>
               <td className="px-5 py-4 text-gray-600 whitespace-nowrap">
-                {formatDate(c.start_date)}
-                {c.end_date && c.end_date !== c.start_date && ` – ${formatDate(c.end_date)}`}
+                {c.course_type === 'recert'
+                  ? formatDate(c.exam_date)
+                  : <>
+                      {formatDate(c.start_date)}
+                      {c.end_date && c.end_date !== c.start_date && ` – ${formatDate(c.end_date)}`}
+                    </>
+                }
               </td>
               <td className="px-5 py-4">
                 <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${

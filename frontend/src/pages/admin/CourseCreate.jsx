@@ -2,25 +2,6 @@ import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { adminCreateCourse, adminFetchInstructors } from '../../api/admin'
 
-const DUMMY = {
-  name: 'Kurs KPP – edycja lipcowa 2026',
-  course_type: 'kpp',
-  city: '30-001 Kraków, ul. Medyczna 5',
-  max_participants: '12',
-  price: '800',
-  course_days: ['2026-07-07', '2026-07-08', '2026-07-09', '2026-07-14', '2026-07-15', '2026-07-16'],
-  exam_date: '2026-07-16',
-  exam_time: '10:00',
-  exam_location: 'ul. Medyczna 5, Kraków',
-  entity_director: 'dr Jan Wiśniewski',
-  academic_director: 'mgr Anna Kowalska',
-  instructor_ids: [],
-  psychologist: 'mgr Piotr Malinowski',
-  committee_chair: 'dr hab. Maria Wójcik',
-  committee_member1: 'dr Krzysztof Dąbrowski',
-  committee_member2: 'mgr Joanna Kamińska',
-}
-
 const EMPTY = {
   created_at: new Date().toISOString().slice(0, 10),
   name: '',
@@ -149,18 +130,9 @@ export default function CourseCreate() {
         >
           ← Wróć do listy kursów
         </button>
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-extrabold text-gray-900 mb-1">Utwórz kurs</h1>
-            <p className="text-gray-500 text-sm">Wypełnij dane nowego kursu.</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => { setForm(DUMMY); setErrors({}) }}
-            className="text-xs text-gray-400 border border-gray-200 hover:border-red-300 hover:text-red-500 px-3 py-1.5 rounded-lg transition-colors"
-          >
-            Wstaw dane testowe
-          </button>
+        <div>
+          <h1 className="text-2xl font-extrabold text-gray-900 mb-1">Utwórz kurs</h1>
+          <p className="text-gray-500 text-sm">Wypełnij dane nowego kursu.</p>
         </div>
       </div>
 

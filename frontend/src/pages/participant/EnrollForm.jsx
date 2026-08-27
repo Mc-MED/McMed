@@ -357,7 +357,7 @@ export default function EnrollForm() {
               <option value="">— Wybierz kurs —</option>
               {courses.map(c => (
                 <option key={c.id} value={c.id} disabled={c.is_full}>
-                  {c.name} | {formatDate(c.start_date)}
+                  {c.name} | {formatCourseDays(c)}
                   {c.is_full ? ' (brak miejsc)' : ` | ${c.spots_left} miejsc`}
                 </option>
               ))}
@@ -405,6 +405,12 @@ export default function EnrollForm() {
               <RecertConsents form={form} errors={errors} onChange={handleChange} />
             )}
           </section>
+
+          {quickError && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-900">
+              {quickError}
+            </div>
+          )}
 
           <button
             type="submit"
@@ -457,7 +463,7 @@ export default function EnrollForm() {
               <option value="">— Wybierz kurs —</option>
               {courses.map(c => (
                 <option key={c.id} value={c.id} disabled={c.is_full}>
-                  {c.name} | {formatDate(c.start_date)}
+                  {c.name} | {formatCourseDays(c)}
                   {c.is_full ? ' (brak miejsc)' : ` | ${c.spots_left} miejsc`}
                 </option>
               ))}
@@ -468,7 +474,7 @@ export default function EnrollForm() {
           {selectedCourse && (
             <div className="mt-4 p-4 bg-red-50 rounded-lg border border-red-100 text-sm text-gray-700 space-y-1">
               <div><span className="font-medium">Typ:</span> {selectedCourse.course_type_display}</div>
-              <div><span className="font-medium">Termin:</span> {formatDate(selectedCourse.start_date)} – {formatDate(selectedCourse.end_date)}</div>
+              <div><span className="font-medium">Termin:</span> {formatCourseDays(selectedCourse)}</div>
               <div><span className="font-medium">Miejsce:</span> {selectedCourse.city}</div>
               <div><span className="font-medium">Cena:</span> {selectedCourse.price} zł</div>
               <div><span className="font-medium">Wolne miejsca:</span> {selectedCourse.spots_left}</div>
@@ -505,37 +511,6 @@ export default function EnrollForm() {
             <Field label="Nr telefonu" name="phone" value={form.phone} onChange={handleChange} error={errors.phone} type="tel" placeholder="+48 000 000 000" />
           </div>
 
-          {emailExists?.active === true && (
-            <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-4">
-              <p className="text-sm font-semibold text-amber-900 mb-1">Masz już konto w Mc Med</p>
-              <p className="text-sm text-amber-800 mb-3 leading-relaxed">
-                Na ten adres e-mail jest założone aktywne konto. Zaloguj się, aby zapisać się na kolejny kurs.
-              </p>
-              <div className="flex flex-wrap gap-3">
-                <a
-                  href={`/zaloguj-sie?email=${encodeURIComponent(form.email)}&redirect=/zapisz-sie`}
-                  className="inline-block bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-                >
-                  Zaloguj się
-                </a>
-                <a
-                  href={`/zapomnialem-hasla?email=${encodeURIComponent(form.email)}`}
-                  className="inline-block border border-amber-300 text-amber-900 text-sm font-medium px-4 py-2 rounded-lg hover:bg-amber-100 transition-colors"
-                >
-                  Nie pamiętam hasła
-                </a>
-              </div>
-            </div>
-          )}
-
-          {emailExists?.active === false && (
-            <div className="mt-4 bg-blue-50 border border-blue-200 rounded-xl p-4">
-              <p className="text-sm font-semibold text-blue-900 mb-1">Konto oczekuje na aktywację</p>
-              <p className="text-sm text-blue-800 leading-relaxed">
-                Sprawdź skrzynkę mailową i kliknij link aktywacyjny. Sprawdź też folder SPAM.
-              </p>
-            </div>
-          )}
         </section>
 
         {/* Adres */}
@@ -606,6 +581,39 @@ export default function EnrollForm() {
             <RecertConsents form={form} errors={errors} onChange={handleChange} />
           )}
         </section>
+
+        {emailExists?.active === true && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+            <p className="text-sm font-semibold text-amber-900 mb-1">Masz już konto w Mc Med</p>
+            <p className="text-sm text-amber-800 mb-3 leading-relaxed">
+              Na ten adres e-mail jest założone aktywne konto. Zaloguj się, aby zapisać się na kolejny kurs.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <a
+                href={`/zaloguj-sie?email=${encodeURIComponent(form.email)}&redirect=/konto`}
+                className="inline-block bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+              >
+                Zaloguj się
+              </a>
+              <a
+                href={`/zapomnialem-hasla?email=${encodeURIComponent(form.email)}`}
+                className="inline-block border border-amber-300 text-amber-900 text-sm font-medium px-4 py-2 rounded-lg hover:bg-amber-100 transition-colors"
+              >
+                Nie pamiętam hasła
+              </a>
+            </div>
+          </div>
+        )}
+
+        {emailExists?.active === false && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+            <p className="text-sm font-semibold text-blue-900 mb-1">Konto oczekuje na aktywację</p>
+            <p className="text-sm text-blue-800 leading-relaxed">
+              Konto o adresie <span className="font-medium">{form.email}</span> już istnieje,
+              ale nie zostało jeszcze aktywowane. Sprawdź skrzynkę mailową i kliknij link aktywacyjny. Sprawdź też folder SPAM.
+            </p>
+          </div>
+        )}
 
         {serverError && (
           <p className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-3">

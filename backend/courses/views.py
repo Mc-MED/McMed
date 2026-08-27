@@ -90,9 +90,13 @@ class PublicEnrollView(generics.CreateAPIView):
         def fmt(d):
             return d.strftime('%d.%m.%Y') if d else '–'
 
+        if course.course_type == Course.TYPE_RECERT:
+            termin = fmt(course.exam_date)
+        else:
+            termin = f'{fmt(course.start_date)} – {fmt(course.end_date)}'
         course_info = {
             'Kurs':    course.name,
-            'Termin':  f'{fmt(course.start_date)} – {fmt(course.end_date)}',
+            'Termin':  termin,
             'Miejsce': course.city,
             'Cena':    f'{course.price} zł',
         }
@@ -262,6 +266,19 @@ def enroll_me(request):
         return Response({'course': 'Kurs nie istnieje.'}, status=status.HTTP_400_BAD_REQUEST)
     if course.is_full:
         return Response({'course': 'Brak wolnych miejsc na wybranym kursie.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    today = timezone.now().date()
+    active = Enrollment.objects.filter(user=request.user, is_deleted=False).filter(
+        Q(course__course_type='kpp',    course__end_date__isnull=True)
+        | Q(course__course_type='kpp',    course__end_date__gt=today)
+        | Q(course__course_type='recert', course__exam_date__isnull=True)
+        | Q(course__course_type='recert', course__exam_date__gt=today)
+    ).select_related('course').first()
+    if active:
+        return Response(
+            {'course': f'Masz już aktywny zapis na kurs „{active.course.name}". Możesz zapisać się na kolejny po jego zakończeniu.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     fields = ['first_name', 'last_name', 'pesel', 'birth_date', 'email',
               'phone', 'zip_code', 'city', 'street', 'house_number', 'apartment_number', 'photo_consent']
