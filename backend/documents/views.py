@@ -5,14 +5,15 @@ import os
 from io import BytesIO
 from pathlib import Path
 
-from django.http import HttpResponse
+from django.http import HttpResponse, FileResponse
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAdminUser
+from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from docxtpl import DocxTemplate
 import openpyxl
 
 from courses.models import Course, Instructor
+from .models import Presentation
 
 TEMPLATES_DIR = Path(__file__).parent / 'templates'
 
@@ -255,4 +256,42 @@ def download_document_pdf(request, course_id, doc_name):
 
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="{doc_name}_kurs_{course_id}.pdf"'
+    return response
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAdminUser])
+def admin_presentation(request):
+    if request.method == 'GET':
+        p = Presentation.get_current()
+        if not p:
+            return Response({'has_file': False})
+        return Response({'has_file': True, 'uploaded_at': p.uploaded_at.isoformat()})
+
+    f = request.FILES.get('file')
+    if not f or not f.name.lower().endswith('.pdf'):
+        return Response({'detail': 'Wymagany plik PDF.'}, status=400)
+
+    for old in Presentation.objects.all():
+        old.file.delete(save=False)
+        old.delete()
+
+    p = Presentation.objects.create(file=f)
+    return Response({'has_file': True, 'uploaded_at': p.uploaded_at.isoformat()}, status=201)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def participant_presentation(request):
+    p = Presentation.get_current()
+    if not p:
+        return Response({'detail': 'Brak materiałów.'}, status=404)
+
+    try:
+        f = p.file.open('rb')
+    except (FileNotFoundError, OSError):
+        return Response({'detail': 'Plik nie istnieje na serwerze.'}, status=404)
+
+    response = FileResponse(f, content_type='application/pdf')
+    response['Content-Disposition'] = 'inline; filename="materialy.pdf"'
     return response

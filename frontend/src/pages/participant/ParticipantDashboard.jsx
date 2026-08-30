@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { fetchMyEnrollments, cancelMyEnrollment } from '../../api/participant'
 import { fetchCourses } from '../../api/courses'
+import { fetchPresentationBlob } from '../../api/documents'
+import PdfViewer from '../../components/PdfViewer'
 
 function decodeJwt(token) {
   try {
@@ -237,6 +239,10 @@ export default function ParticipantDashboard() {
   const [recertCourses, setRecertCourses] = useState([])
   const [recertLoading, setRecertLoading] = useState(false)
   const [recertFetched, setRecertFetched] = useState(false)
+  const [pdfUrl, setPdfUrl] = useState(null)
+  const [pdfLoading, setPdfLoading] = useState(false)
+  const [pdfError, setPdfError] = useState('')
+  const pdfUrlRef = useRef(null)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -251,6 +257,27 @@ export default function ParticipantDashboard() {
       .catch(() => navigate('/zaloguj-sie'))
       .finally(() => setLoading(false))
   }, [navigate])
+
+  useEffect(() => {
+    if (activeCard === 'materials' && !pdfUrl && !pdfLoading) {
+      setPdfLoading(true)
+      setPdfError('')
+      fetchPresentationBlob()
+        .then(blob => {
+          const url = URL.createObjectURL(blob)
+          pdfUrlRef.current = url
+          setPdfUrl(url)
+        })
+        .catch(() => setPdfError('Brak materiałów lub błąd serwera.'))
+        .finally(() => setPdfLoading(false))
+    }
+    if (activeCard !== 'materials' && pdfUrlRef.current) {
+      URL.revokeObjectURL(pdfUrlRef.current)
+      pdfUrlRef.current = null
+      setPdfUrl(null)
+      setPdfError('')
+    }
+  }, [activeCard])
 
   useEffect(() => {
     if (activeCard === 'recert' && !recertFetched) {
@@ -311,7 +338,13 @@ export default function ParticipantDashboard() {
             active={activeCard === 'recert'}
             onClick={() => setActiveCard(activeCard === 'recert' ? null : 'recert')}
           />
-          <NavCard icon="📄" title="Materiały" description="Podręczniki i harmonogramy" soon />
+          <NavCard
+            icon="📄"
+            title="Materiały"
+            description="Podręczniki i harmonogramy"
+            active={activeCard === 'materials'}
+            onClick={() => setActiveCard(activeCard === 'materials' ? null : 'materials')}
+          />
           <NavCard icon="🏅" title="Certyfikaty" description="Wyniki egzaminów i zaświadczenia" soon />
         </div>
 
@@ -338,6 +371,25 @@ export default function ParticipantDashboard() {
             </a>
           ))
         }
+
+        {activeCard === 'materials' && (
+          pdfLoading ? (
+            <div className="text-center text-gray-400 py-10 text-sm">Ładowanie materiałów…</div>
+          ) : pdfError ? (
+            <div className="bg-white rounded-2xl border border-gray-200 p-10 text-center">
+              <div className="text-4xl mb-4">📄</div>
+              <p className="font-semibold text-gray-700 mb-1">Brak materiałów</p>
+              <p className="text-sm text-gray-400">{pdfError}</p>
+            </div>
+          ) : pdfUrl ? (
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+              <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
+                <span className="text-sm font-semibold text-gray-700">Materiały kursowe</span>
+              </div>
+              <PdfViewer url={pdfUrl} />
+            </div>
+          ) : null
+        )}
 
         {activeCard === 'recert' && (
           recertLoading ? (
