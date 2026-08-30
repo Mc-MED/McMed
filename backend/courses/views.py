@@ -9,7 +9,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 
 from .models import Course, Enrollment, Instructor
-from .serializers import CourseSerializer, AdminCourseSerializer, EnrollmentSerializer, InstructorSerializer, MyEnrollmentSerializer
+from .serializers import CourseSerializer, AdminCourseSerializer, EnrollmentSerializer, AdminEnrollmentCreateSerializer, InstructorSerializer, MyEnrollmentSerializer
 from users.emails import send_activation_email, send_course_email
 
 User = get_user_model()
@@ -163,6 +163,11 @@ class AdminEnrollmentListView(generics.ListAPIView):
         if course_id:
             qs = qs.filter(course_id=course_id)
         return qs
+
+
+class AdminEnrollmentCreateView(generics.CreateAPIView):
+    permission_classes = [IsAdminUser]
+    serializer_class   = AdminEnrollmentCreateSerializer
 
 
 class AdminEnrollmentDetailView(generics.RetrieveUpdateDestroyAPIView):

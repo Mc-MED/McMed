@@ -16,6 +16,8 @@ const EMPTY = {
   street: '',
   house_number: '',
   apartment_number: '',
+  cert_number: '',
+  cert_date: '',
   password: '',
   confirm_password: '',
   photo_consent: false,
@@ -126,6 +128,8 @@ export default function EnrollForm() {
     if (form.password.length < 8)  e.password = 'Hasło musi mieć min. 8 znaków.'
     if (form.password !== form.confirm_password) e.confirm_password = 'Hasła nie są zgodne.'
     if (courseType === 'recert') {
+      if (!form.cert_number.trim()) e.cert_number = 'Podaj numer certyfikatu.'
+      if (!form.cert_date)          e.cert_date   = 'Podaj datę wydania certyfikatu.'
       if (!form.cert_validity_consent) e.cert_validity_consent = 'To oświadczenie jest wymagane.'
       if (!form.employment_consent)    e.employment_consent    = 'To oświadczenie jest wymagane.'
     }
@@ -256,6 +260,8 @@ export default function EnrollForm() {
     if (!form.materials_consent) errs.materials_consent = 'Potwierdzenie odbioru materiałów jest wymagane.'
     const courseMeta = courses.find(c => String(c.id) === String(quickCourse))
     if (courseMeta?.course_type === 'recert') {
+      if (!form.cert_number.trim()) errs.cert_number = 'Podaj numer certyfikatu.'
+      if (!form.cert_date)          errs.cert_date   = 'Podaj datę wydania certyfikatu.'
       if (!form.cert_validity_consent) errs.cert_validity_consent = 'To oświadczenie jest wymagane.'
       if (!form.employment_consent)    errs.employment_consent    = 'To oświadczenie jest wymagane.'
     }
@@ -264,7 +270,7 @@ export default function EnrollForm() {
     setQuickError('')
     setStatus('loading')
     try {
-      await enrollMe(quickCourse)
+      await enrollMe(quickCourse, { cert_number: form.cert_number, cert_date: form.cert_date || null })
       setEnrolledEmail(profile?.email || '')
       setStatus('success')
     } catch (err) {
@@ -294,6 +300,8 @@ export default function EnrollForm() {
       errs.data_consent = 'Zgoda na przetwarzanie danych jest wymagana.'
     }
     if (courseMeta?.course_type === 'recert') {
+      if (!form.cert_number.trim()) errs.cert_number = 'Podaj numer certyfikatu.'
+      if (!form.cert_date)          errs.cert_date   = 'Podaj datę wydania certyfikatu.'
       if (!form.cert_validity_consent) errs.cert_validity_consent = 'To oświadczenie jest wymagane.'
       if (!form.employment_consent)    errs.employment_consent    = 'To oświadczenie jest wymagane.'
     }
@@ -309,6 +317,8 @@ export default function EnrollForm() {
         street: form.street, house_number: form.house_number,
         apartment_number: form.apartment_number,
         photo_consent: form.photo_consent,
+        cert_number: form.cert_number,
+        cert_date: form.cert_date || null,
       })
       setEnrolledEmail(form.email || accountEmail)
       setStatus('success')
@@ -402,6 +412,12 @@ export default function EnrollForm() {
               />
             </div>
             {selectedCourse?.course_type === 'recert' && (
+              <div className="border-t border-gray-100 pt-4 mt-4 grid grid-cols-2 gap-4">
+                <Field label="Numer certyfikatu" name="cert_number" value={form.cert_number} onChange={handleChange} error={errors.cert_number} placeholder="np. KPP/2021/00123" />
+                <Field label="Data wydania certyfikatu" name="cert_date" value={form.cert_date} onChange={handleChange} error={errors.cert_date} type="date" />
+              </div>
+            )}
+          {selectedCourse?.course_type === 'recert' && (
               <RecertConsents form={form} errors={errors} onChange={handleChange} />
             )}
           </section>
@@ -510,6 +526,12 @@ export default function EnrollForm() {
             )}
             <Field label="Nr telefonu" name="phone" value={form.phone} onChange={handleChange} error={errors.phone} type="tel" placeholder="+48 000 000 000" />
           </div>
+          {selectedCourse?.course_type === 'recert' && (
+            <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-100">
+              <Field label="Numer certyfikatu" name="cert_number" value={form.cert_number} onChange={handleChange} error={errors.cert_number} placeholder="np. KPP/2021/00123" />
+              <Field label="Data wydania certyfikatu" name="cert_date" value={form.cert_date} onChange={handleChange} error={errors.cert_date} type="date" />
+            </div>
+          )}
 
         </section>
 

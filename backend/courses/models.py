@@ -145,6 +145,8 @@ class Enrollment(models.Model):
     street           = models.CharField(max_length=200)
     house_number     = models.CharField(max_length=20)
     apartment_number = models.CharField(max_length=20, blank=True)
+    cert_number      = models.CharField(max_length=100, blank=True, default='')
+    cert_date        = models.DateField(null=True, blank=True)
     photo_consent    = models.BooleanField(default=False)
     deposit_paid     = models.BooleanField(default=False)
     created_at       = models.DateTimeField(auto_now_add=True)

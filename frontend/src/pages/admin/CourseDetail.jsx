@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { adminFetchCourse, adminUpdateCourse, adminDeleteCourse, adminFetchEnrollments, adminDeleteEnrollment, adminUpdateEnrollment, adminAnonymizeEnrollment, adminSoftDeleteEnrollment, adminFetchCourses, adminDownloadDocument, adminDownloadDocumentPdf, adminDownloadXlsx, adminFetchInstructors, adminSendEmail, adminSendSms } from '../../api/admin'
+import { adminFetchCourse, adminUpdateCourse, adminDeleteCourse, adminFetchEnrollments, adminDeleteEnrollment, adminUpdateEnrollment, adminAnonymizeEnrollment, adminSoftDeleteEnrollment, adminFetchCourses, adminDownloadDocument, adminDownloadDocumentPdf, adminDownloadXlsx, adminFetchInstructors, adminSendEmail, adminSendSms, adminCreateEnrollment } from '../../api/admin'
 import DeletionReasonModal from '../../components/DeletionReasonModal'
 import * as XLSX from 'xlsx'
 
@@ -218,6 +218,7 @@ function exportToExcel(enrollments, courseName) {
     'Lp.', 'Nazwisko', 'Imię', 'PESEL', 'Data urodzenia',
     'Email', 'Telefon',
     'Ulica', 'Nr domu', 'Nr mieszkania', 'Kod pocztowy', 'Miejscowość',
+    'Nr certyfikatu', 'Data wydania certyfikatu',
     'Zaliczka', 'Zgoda na zdjęcia', 'Data zapisu',
   ]
   const rows = enrollments.map((e, i) => [
@@ -233,6 +234,8 @@ function exportToExcel(enrollments, courseName) {
     e.apartment_number || '',
     e.zip_code,
     e.city,
+    e.cert_number || '',
+    formatDate(e.cert_date),
     e.deposit_paid ? 'Tak' : 'Nie',
     e.photo_consent ? 'Tak' : 'Nie',
     formatDateTime(e.created_at),
@@ -243,6 +246,7 @@ function exportToExcel(enrollments, courseName) {
     { wch: 4 }, { wch: 18 }, { wch: 15 }, { wch: 13 }, { wch: 14 },
     { wch: 26 }, { wch: 13 },
     { wch: 22 }, { wch: 9 }, { wch: 11 }, { wch: 11 }, { wch: 16 },
+    { wch: 18 }, { wch: 22 },
     { wch: 10 }, { wch: 16 }, { wch: 18 },
   ]
 
@@ -268,6 +272,8 @@ function EditEnrollmentModal({ enrollment, onSave, onClose }) {
     street: enrollment.street,
     house_number: enrollment.house_number,
     apartment_number: enrollment.apartment_number || '',
+    cert_number: enrollment.cert_number || '',
+    cert_date: enrollment.cert_date || '',
     photo_consent: enrollment.photo_consent,
     deposit_paid: enrollment.deposit_paid,
   })
@@ -358,6 +364,19 @@ function EditEnrollmentModal({ enrollment, onSave, onClose }) {
               </div>
             </div>
           </div>
+          <div className="border-t border-gray-100 pt-4">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Certyfikat (recertyfikacja)</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="field-label">Numer certyfikatu</label>
+                <input name="cert_number" value={form.cert_number} onChange={set} className="field-input" placeholder="np. KPP/2021/00123" />
+              </div>
+              <div>
+                <label className="field-label">Data wydania certyfikatu</label>
+                <input type="date" name="cert_date" value={form.cert_date} onChange={set} className="field-input" />
+              </div>
+            </div>
+          </div>
           <div className="border-t border-gray-100 pt-4 flex items-center gap-8">
             <label className="flex items-center gap-2 cursor-pointer select-none">
               <input type="checkbox" name="photo_consent" checked={form.photo_consent} onChange={set} className="h-4 w-4 accent-red-600 rounded" />
@@ -439,6 +458,155 @@ function TransferModal({ enrollment, courses, currentCourseId, onTransfer, onClo
   )
 }
 
+function AddParticipantModal({ courseId, onSave, onClose }) {
+  const [form, setForm] = useState({
+    course: courseId,
+    first_name: '',
+    last_name: '',
+    pesel: '',
+    birth_date: '',
+    email: '',
+    phone: '',
+    zip_code: '',
+    city: '',
+    street: '',
+    house_number: '',
+    apartment_number: '',
+    cert_number: '',
+    cert_date: '',
+    deposit_paid: false,
+    photo_consent: false,
+  })
+  const [saving, setSaving] = useState(false)
+  const [error, setError]   = useState('')
+
+  function set(e) {
+    const { name, value, type, checked } = e.target
+    setForm(f => ({ ...f, [name]: type === 'checkbox' ? checked : value }))
+  }
+
+  async function submit(e) {
+    e.preventDefault()
+    setSaving(true)
+    setError('')
+    try {
+      const res = await adminCreateEnrollment(form)
+      onSave(res.data)
+    } catch (err) {
+      const data = err.response?.data
+      if (data && typeof data === 'object') {
+        const msgs = Object.values(data).flat().join(' ')
+        setError(msgs || 'Błąd zapisu.')
+      } else {
+        setError('Błąd zapisu. Sprawdź dane.')
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h2 className="text-base font-bold text-gray-900">Dodaj uczestnika</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
+        </div>
+        <form onSubmit={submit} className="p-6 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="field-label">Imię</label>
+              <input name="first_name" value={form.first_name} onChange={set} className="field-input" />
+            </div>
+            <div>
+              <label className="field-label">Nazwisko</label>
+              <input name="last_name" value={form.last_name} onChange={set} className="field-input" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="field-label">PESEL</label>
+              <input name="pesel" value={form.pesel} onChange={set} className="field-input font-mono" maxLength={11} />
+            </div>
+            <div>
+              <label className="field-label">Data urodzenia</label>
+              <input type="date" name="birth_date" value={form.birth_date} onChange={set} className="field-input" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="field-label">E-mail</label>
+              <input type="email" name="email" value={form.email} onChange={set} className="field-input" />
+            </div>
+            <div>
+              <label className="field-label">Telefon</label>
+              <input name="phone" value={form.phone} onChange={set} className="field-input" />
+            </div>
+          </div>
+          <div className="border-t border-gray-100 pt-4">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Adres</p>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="field-label">Kod pocztowy</label>
+                <input name="zip_code" value={form.zip_code} onChange={set} className="field-input" />
+              </div>
+              <div className="col-span-2">
+                <label className="field-label">Miejscowość</label>
+                <input name="city" value={form.city} onChange={set} className="field-input" />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3 mt-3">
+              <div>
+                <label className="field-label">Ulica</label>
+                <input name="street" value={form.street} onChange={set} className="field-input" />
+              </div>
+              <div>
+                <label className="field-label">Nr domu</label>
+                <input name="house_number" value={form.house_number} onChange={set} className="field-input" />
+              </div>
+              <div>
+                <label className="field-label">Nr mieszk.</label>
+                <input name="apartment_number" value={form.apartment_number} onChange={set} className="field-input" />
+              </div>
+            </div>
+          </div>
+          <div className="border-t border-gray-100 pt-4">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Certyfikat (recertyfikacja)</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="field-label">Numer certyfikatu</label>
+                <input name="cert_number" value={form.cert_number} onChange={set} className="field-input" placeholder="np. KPP/2021/00123" />
+              </div>
+              <div>
+                <label className="field-label">Data wydania certyfikatu</label>
+                <input type="date" name="cert_date" value={form.cert_date} onChange={set} className="field-input" />
+              </div>
+            </div>
+          </div>
+          <div className="border-t border-gray-100 pt-4 flex items-center gap-8">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" name="deposit_paid" checked={form.deposit_paid} onChange={set} className="h-4 w-4 accent-emerald-600 rounded" />
+              <span className="text-sm text-gray-700">Wpłacono zaliczkę</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" name="photo_consent" checked={form.photo_consent} onChange={set} className="h-4 w-4 accent-red-600 rounded" />
+              <span className="text-sm text-gray-700">Zgoda na zdjęcia</span>
+            </label>
+          </div>
+          {error && <p className="text-red-600 text-sm">{error}</p>}
+          <div className="flex items-center gap-3 pt-2">
+            <button type="submit" disabled={saving}
+              className="bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-bold px-7 py-2.5 rounded-xl text-sm transition-colors">
+              {saving ? 'Dodawanie…' : 'Dodaj uczestnika'}
+            </button>
+            <button type="button" onClick={onClose} className="text-gray-500 hover:text-gray-800 px-4 py-2.5 text-sm font-medium">Anuluj</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 function EnrollmentTable({ courseId, courseName, examDate }) {
   const [enrollments, setEnrollments] = useState([])
   const [loading, setLoading]         = useState(true)
@@ -467,6 +635,7 @@ function EnrollmentTable({ courseId, courseName, examDate }) {
   const [transferEnrollment, setTransferEnrollment] = useState(null)
   const [allCourses, setAllCourses]                 = useState(null)
   const [deletionModal, setDeletionModal]           = useState(null) // enrollment object
+  const [addingParticipant, setAddingParticipant]   = useState(false)
 
   useEffect(() => {
     adminFetchEnrollments(courseId)
@@ -603,14 +772,21 @@ function EnrollmentTable({ courseId, courseName, examDate }) {
 
   if (loading) return <div className="p-12 text-center text-gray-400 text-sm">Ładowanie…</div>
 
-  if (enrollments.length === 0)
-    return <div className="p-12 text-center text-gray-400 text-sm">Brak zapisanych uczestników na ten kurs.</div>
-
   const count = enrollments.length
   const suffix = count === 1 ? '' : count < 5 ? 'ów' : 'ów'
 
   return (
     <div className="mt-6">
+      {addingParticipant && (
+        <AddParticipantModal
+          courseId={parseInt(courseId)}
+          onSave={created => {
+            setEnrollments(prev => [created, ...prev])
+            setAddingParticipant(false)
+          }}
+          onClose={() => setAddingParticipant(false)}
+        />
+      )}
       {editingEnrollment && (
         <EditEnrollmentModal
           enrollment={editingEnrollment}
@@ -670,6 +846,12 @@ function EnrollmentTable({ courseId, courseName, examDate }) {
             }`}
           >
             {smsMode ? 'Anuluj' : '📱 Wyślij SMS'}
+          </button>
+          <button
+            onClick={() => setAddingParticipant(true)}
+            className="flex items-center gap-1.5 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 active:bg-red-800 px-4 py-2 rounded-lg transition-colors"
+          >
+            + Dodaj uczestnika
           </button>
         </div>
       </div>
@@ -779,6 +961,9 @@ function EnrollmentTable({ courseId, courseName, examDate }) {
       )}
 
       {/* Tabela */}
+      {enrollments.length === 0 ? (
+        <div className="p-12 text-center text-gray-400 text-sm">Brak zapisanych uczestników na ten kurs.</div>
+      ) : (
       <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -791,6 +976,7 @@ function EnrollmentTable({ courseId, courseName, examDate }) {
               <th className="px-5 py-3.5 font-semibold text-gray-600">Data egzaminu</th>
               <th className="px-5 py-3.5 font-semibold text-gray-600">Kontakt</th>
               <th className="px-5 py-3.5 font-semibold text-gray-600">Adres</th>
+              <th className="px-5 py-3.5 font-semibold text-gray-600">Certyfikat</th>
               <th className="px-5 py-3.5 font-semibold text-gray-600">Zaliczka</th>
               <th className="px-5 py-3.5 font-semibold text-gray-600">Zgoda foto</th>
               <th className="px-5 py-3.5 font-semibold text-gray-600">Zapisano</th>
@@ -827,6 +1013,14 @@ function EnrollmentTable({ courseId, courseName, examDate }) {
                 <td className="px-5 py-4 text-gray-600 text-xs leading-relaxed">
                   <div>{e.street} {e.house_number}{e.apartment_number ? `/${e.apartment_number}` : ''}</div>
                   <div>{e.zip_code} {e.city}</div>
+                </td>
+                <td className="px-5 py-4 text-gray-600 text-xs leading-relaxed">
+                  {e.cert_number || e.cert_date ? (
+                    <>
+                      {e.cert_number && <div className="font-mono">{e.cert_number}</div>}
+                      {e.cert_date && <div className="text-gray-400">{formatDate(e.cert_date)}</div>}
+                    </>
+                  ) : <span className="text-gray-300">—</span>}
                 </td>
                 <td className="px-5 py-4">
                   <button
@@ -905,6 +1099,7 @@ function EnrollmentTable({ courseId, courseName, examDate }) {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   )
 }

@@ -118,6 +118,7 @@ class EnrollmentSerializer(serializers.ModelSerializer):
             'first_name', 'last_name', 'pesel', 'birth_date',
             'email', 'phone',
             'zip_code', 'city', 'street', 'house_number', 'apartment_number',
+            'cert_number', 'cert_date',
             'photo_consent', 'deposit_paid', 'created_at',
             'is_deleted', 'deleted_at', 'deletion_reason', 'deletion_reason_display',
         ]
@@ -134,6 +135,53 @@ class EnrollmentSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {'course': 'Brak wolnych miejsc na wybranym kursie.'}
             )
+        return data
+
+
+class AdminEnrollmentCreateSerializer(serializers.ModelSerializer):
+    course_name             = serializers.SerializerMethodField()
+    exam_date               = serializers.SerializerMethodField()
+    deletion_reason_display = serializers.SerializerMethodField()
+
+    def get_course_name(self, obj):
+        return obj.course.name if obj.course_id else None
+
+    def get_exam_date(self, obj):
+        return str(obj.course.exam_date) if obj.course_id and obj.course.exam_date else None
+
+    def get_deletion_reason_display(self, obj):
+        return obj.get_deletion_reason_display() if obj.deletion_reason else ''
+
+    class Meta:
+        model  = Enrollment
+        fields = [
+            'id', 'course', 'course_name', 'exam_date',
+            'first_name', 'last_name', 'pesel', 'birth_date',
+            'email', 'phone',
+            'zip_code', 'city', 'street', 'house_number', 'apartment_number',
+            'cert_number', 'cert_date',
+            'photo_consent', 'deposit_paid', 'created_at',
+            'is_deleted', 'deleted_at', 'deletion_reason', 'deletion_reason_display',
+        ]
+        read_only_fields = ['id', 'course_name', 'exam_date', 'created_at', 'is_deleted', 'deleted_at', 'deletion_reason', 'deletion_reason_display']
+        extra_kwargs = {
+            'first_name':   {'required': False, 'allow_blank': True, 'default': ''},
+            'last_name':    {'required': False, 'allow_blank': True, 'default': ''},
+            'zip_code':     {'required': False, 'allow_blank': True, 'default': ''},
+            'city':         {'required': False, 'allow_blank': True, 'default': ''},
+            'street':       {'required': False, 'allow_blank': True, 'default': ''},
+            'house_number': {'required': False, 'allow_blank': True, 'default': ''},
+        }
+
+    def validate_pesel(self, value):
+        if value and (not value.isdigit() or len(value) != 11):
+            raise serializers.ValidationError('PESEL musi składać się z 11 cyfr.')
+        return value
+
+    def validate(self, data):
+        course = data.get('course')
+        if course and course.is_full:
+            raise serializers.ValidationError({'course': 'Brak wolnych miejsc na wybranym kursie.'})
         return data
 
 

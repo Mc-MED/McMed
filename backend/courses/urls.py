@@ -5,6 +5,7 @@ urlpatterns = [
     path('', views.PublicCourseListView.as_view(), name='course-list'),
     path('enrollments/', views.PublicEnrollView.as_view(), name='enroll'),
     path('enrollments/list/', views.AdminEnrollmentListView.as_view(), name='enrollment-list'),
+    path('enrollments/admin-create/', views.AdminEnrollmentCreateView.as_view(), name='enrollment-admin-create'),
     path('enrollments/send-email/', views.send_email_to_enrollments, name='enrollment-send-email'),
     path('enrollments/send-sms/', views.send_sms_to_enrollments, name='enrollment-send-sms'),
     path('enrollments/<int:pk>/', views.AdminEnrollmentDetailView.as_view(), name='enrollment-detail'),
