@@ -4,6 +4,7 @@ import { fetchMyEnrollments, cancelMyEnrollment } from '../../api/participant'
 import { fetchCourses } from '../../api/courses'
 import { fetchPresentationBlob } from '../../api/documents'
 import PdfViewer from '../../components/PdfViewer'
+import QuizPanel from './QuizPanel'
 
 function decodeJwt(token) {
   try {
@@ -323,7 +324,7 @@ export default function ParticipantDashboard() {
         <h1 className="text-2xl font-extrabold text-gray-900 mb-2">Moje konto</h1>
         <p className="text-gray-500 text-sm mb-8">Strefa uczestnika Mc Med</p>
 
-        <div className="grid gap-4 grid-cols-2 sm:grid-cols-4 mb-4">
+        <div className="grid gap-4 grid-cols-2 sm:grid-cols-5 mb-4">
           <NavCard
             icon="📋"
             title="Moje kursy"
@@ -344,6 +345,13 @@ export default function ParticipantDashboard() {
             description="Podręczniki i harmonogramy"
             active={activeCard === 'materials'}
             onClick={() => setActiveCard(activeCard === 'materials' ? null : 'materials')}
+          />
+          <NavCard
+            icon="🧠"
+            title="Pytania"
+            description="Nauka i egzamin próbny"
+            active={activeCard === 'questions'}
+            onClick={() => setActiveCard(activeCard === 'questions' ? null : 'questions')}
           />
           <NavCard icon="🏅" title="Certyfikaty" description="Wyniki egzaminów i zaświadczenia" soon />
         </div>
@@ -390,6 +398,8 @@ export default function ParticipantDashboard() {
             </div>
           ) : null
         )}
+
+        {activeCard === 'questions' && <QuizPanel />}
 
         {activeCard === 'recert' && (
           recertLoading ? (

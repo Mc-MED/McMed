@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { adminFetchCourse, adminUpdateCourse, adminDeleteCourse, adminFetchEnrollments, adminDeleteEnrollment, adminUpdateEnrollment, adminAnonymizeEnrollment, adminSoftDeleteEnrollment, adminFetchCourses, adminDownloadDocument, adminDownloadDocumentPdf, adminDownloadXlsx, adminFetchInstructors, adminSendEmail, adminSendSms, adminCreateEnrollment } from '../../api/admin'
+import { adminFetchCourse, adminUpdateCourse, adminDeleteCourse, adminFetchEnrollments, adminDeleteEnrollment, adminUpdateEnrollment, adminAnonymizeEnrollment, adminSoftDeleteEnrollment, adminFetchCourses, adminDownloadDocument, adminDownloadDocumentPdf, adminDownloadXlsx, adminFetchInstructors, adminSendEmail, adminSendSms, adminCreateEnrollment, adminDownloadCertificate } from '../../api/admin'
 import DeletionReasonModal from '../../components/DeletionReasonModal'
 import * as XLSX from 'xlsx'
 
@@ -629,6 +629,7 @@ function EnrollmentTable({ courseId, courseName, examDate }) {
   const [confirm, setConfirm]             = useState(null) // { type: 'remove'|'delete', id }
   const [processingId, setProcessingId]   = useState(null)
   const [togglingDeposit, setTogglingDeposit] = useState(null)
+  const [downloadingCert, setDownloadingCert] = useState(null)
 
   // modals
   const [editingEnrollment, setEditingEnrollment]   = useState(null)
@@ -1079,6 +1080,18 @@ function EnrollmentTable({ courseId, courseName, examDate }) {
                         <div className="flex gap-1.5">
                           <button onClick={() => setEditingEnrollment(e)} className="text-xs font-semibold px-2.5 py-1 rounded-md bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors">Edytuj</button>
                           <button onClick={() => openTransfer(e)} className="text-xs font-semibold px-2.5 py-1 rounded-md bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors">Przenieś</button>
+                          <button
+                            onClick={async () => {
+                              setDownloadingCert(e.id)
+                              try { await adminDownloadCertificate(e.id, e.last_name, e.first_name) }
+                              catch { alert('Błąd pobierania certyfikatu. Sprawdź czy plik certyfikat.docx istnieje w szablonach.') }
+                              finally { setDownloadingCert(null) }
+                            }}
+                            disabled={downloadingCert === e.id}
+                            className="text-xs font-semibold px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-50 transition-colors"
+                          >
+                            {downloadingCert === e.id ? '…' : 'Certyfikat'}
+                          </button>
                         </div>
                         <div className="flex gap-1.5">
                           <button onClick={() => setConfirm({ type: 'remove', id: e.id })} className="text-xs font-semibold px-2.5 py-1 rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">Usuń z kursu</button>

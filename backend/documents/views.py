@@ -12,12 +12,14 @@ from rest_framework.response import Response
 from docxtpl import DocxTemplate
 import openpyxl
 
-from courses.models import Course, Instructor
+from courses.models import Course, Enrollment, Instructor
 from .models import Presentation
 
 TEMPLATES_DIR = Path(__file__).parent / 'templates'
 
 ALLOWED_TEMPLATES = {'oswiadczenie', 'sprzet', 'sale', 'wniosek', 'prosba', 'instruktorzy', 'prosba-recertyfikacja', 'informacja-kpp'}
+
+ALLOWED_CERT_TEMPLATES = {'certyfikat'}
 
 ALLOWED_XLSX_TEMPLATES = {'program'}
 
@@ -256,6 +258,69 @@ def download_document_pdf(request, course_id, doc_name):
 
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="{doc_name}_kurs_{course_id}.pdf"'
+    return response
+
+
+def _build_certificate_context(enrollment):
+    course = enrollment.course
+    ctx = _build_context(course) if course else {}
+
+    def fmt(date):
+        return date.strftime('%d.%m.%Y') if date else ''
+
+    address_parts = [enrollment.street, enrollment.house_number]
+    if enrollment.apartment_number:
+        address_parts[-1] += f'/{enrollment.apartment_number}'
+    full_address = f'{" ".join(address_parts)}, {enrollment.zip_code} {enrollment.city}'
+
+    ctx.update({
+        'p_first_name':       enrollment.first_name,
+        'p_last_name':        enrollment.last_name,
+        'p_full_name':        f'{enrollment.first_name} {enrollment.last_name}',
+        'p_pesel':            enrollment.pesel or '',
+        'p_birth_date':       fmt(enrollment.birth_date),
+        'p_email':            enrollment.email or '',
+        'p_phone':            enrollment.phone or '',
+        'p_zip_code':         enrollment.zip_code or '',
+        'p_city':             enrollment.city or '',
+        'p_street':           enrollment.street or '',
+        'p_house_number':     enrollment.house_number or '',
+        'p_apartment_number': enrollment.apartment_number or '',
+        'p_address':          full_address,
+        'p_cert_number':      enrollment.cert_number or '',
+        'p_cert_date':        fmt(enrollment.cert_date),
+    })
+    return ctx
+
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def download_certificate(request, enrollment_id, doc_name):
+    if doc_name not in ALLOWED_CERT_TEMPLATES:
+        return Response({'detail': 'Nieznany szablon certyfikatu.'}, status=404)
+
+    try:
+        enrollment = Enrollment.objects.select_related('course').get(pk=enrollment_id)
+    except Enrollment.DoesNotExist:
+        return Response({'detail': 'Uczestnik nie istnieje.'}, status=404)
+
+    tpl_path = TEMPLATES_DIR / f'{doc_name}.docx'
+    if not tpl_path.exists():
+        return Response({'detail': 'Brak pliku szablonu certyfikatu.'}, status=404)
+
+    tpl = DocxTemplate(tpl_path)
+    tpl.render(_build_certificate_context(enrollment))
+
+    buf = BytesIO()
+    tpl.save(buf)
+    buf.seek(0)
+
+    safe_name = f'{enrollment.last_name}_{enrollment.first_name}'.replace(' ', '_')
+    response = HttpResponse(
+        buf.read(),
+        content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    )
+    response['Content-Disposition'] = f'attachment; filename="{doc_name}_{safe_name}.docx"'
     return response
 
 

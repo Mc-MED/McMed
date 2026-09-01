@@ -86,6 +86,18 @@ export const adminDownloadDocumentPdf = async (courseId, filename, docName) => {
   window.URL.revokeObjectURL(url)
 }
 
+export const adminDownloadCertificate = async (enrollmentId, lastName, firstName) => {
+  const response = await adminAxios.get(`/api/documents/enrollments/${enrollmentId}/certyfikat/`, {
+    responseType: 'blob',
+  })
+  const url = window.URL.createObjectURL(new Blob([response.data]))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `certyfikat_${lastName}_${firstName}.docx`
+  a.click()
+  window.URL.revokeObjectURL(url)
+}
+
 export const adminDownloadXlsx = async (courseId, filename, docName) => {
   const response = await adminAxios.get(`/api/documents/courses/${courseId}/xlsx/${filename}/`, {
     responseType: 'blob',
