@@ -1,4 +1,5 @@
 import re
+import datetime
 import subprocess
 import tempfile
 import os
@@ -23,6 +24,8 @@ ALLOWED_CERT_TEMPLATES = {'certyfikat'}
 
 ALLOWED_XLSX_TEMPLATES = {'program'}
 
+ALLOWED_ATTENDANCE_XLSX_TEMPLATES = {'obecnosc'}
+
 
 def _instructor_dict(inst):
     name_only = f'{inst.first_name} {inst.last_name}'.strip()
@@ -37,6 +40,17 @@ def _instructor_dict(inst):
 
 
 _EMPTY_INST = {'full_name': '', 'name_only': '', 'title': '', 'profession': '', 'specs': '', 'years': ''}
+
+
+_STREET_PREFIX = re.compile(r'\s+(?:ul\.|al\.|pl\.|os\.|sk\.|rynek)\b', re.IGNORECASE)
+
+def _extract_city(exam_location):
+    if not exam_location:
+        return ''
+    m = re.search(r'\d{2}-\d{3}\s+([^,]+)', exam_location)
+    if m:
+        return _STREET_PREFIX.split(m.group(1))[0].strip()
+    return _STREET_PREFIX.split(exam_location.split(',')[0])[0].strip()
 
 
 def _build_context(course):
@@ -101,6 +115,8 @@ def _build_context(course):
         'exam_date':         fmt(course.exam_date),
         'exam_time':         course.exam_time.strftime('%H:%M') if course.exam_time else '',
         'exam_location':     course.exam_location or '',
+        'exam_c':            _extract_city(course.exam_location),
+        'y':                 str(datetime.date.today().year)[-2:],
         'course_days':       [fmt_str(d) for d in (course.course_days or [])],
         'entity_director':   course.entity_director or '',
         'academic_director': course.academic_director or '',
@@ -304,7 +320,11 @@ def download_certificate(request, enrollment_id, doc_name):
     except Enrollment.DoesNotExist:
         return Response({'detail': 'Uczestnik nie istnieje.'}, status=404)
 
-    tpl_path = TEMPLATES_DIR / f'{doc_name}.docx'
+    is_recert = enrollment.course and enrollment.course.course_type == 'recert'
+    variant = f'{doc_name}.r.docx' if is_recert else f'{doc_name}.docx'
+    tpl_path = TEMPLATES_DIR / variant
+    if not tpl_path.exists():
+        tpl_path = TEMPLATES_DIR / f'{doc_name}.docx'
     if not tpl_path.exists():
         return Response({'detail': 'Brak pliku szablonu certyfikatu.'}, status=404)
 
@@ -321,6 +341,83 @@ def download_certificate(request, enrollment_id, doc_name):
         content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     )
     response['Content-Disposition'] = f'attachment; filename="{doc_name}_{safe_name}.docx"'
+    return response
+
+
+def _build_enrollment_context(enrollment, course_ctx, lp):
+    def fmt(date):
+        return date.strftime('%d.%m.%Y') if date else ''
+
+    street = enrollment.street or ''
+    house  = enrollment.house_number or ''
+    if enrollment.apartment_number:
+        house += f'/{enrollment.apartment_number}'
+    full_address = f'{street} {house}, {enrollment.zip_code or ""} {enrollment.city or ""}'.strip(', ')
+
+    return {
+        **course_ctx,
+        'p_lp':               str(lp),
+        'p_first_name':       enrollment.first_name or '',
+        'p_last_name':        enrollment.last_name or '',
+        'p_full_name':        f'{enrollment.first_name or ""} {enrollment.last_name or ""}'.strip(),
+        'p_pesel':            enrollment.pesel or '',
+        'p_birth_date':       fmt(enrollment.birth_date),
+        'p_email':            enrollment.email or '',
+        'p_phone':            enrollment.phone or '',
+        'p_zip_code':         enrollment.zip_code or '',
+        'p_city':             enrollment.city or '',
+        'p_street':           enrollment.street or '',
+        'p_house_number':     enrollment.house_number or '',
+        'p_apartment_number': enrollment.apartment_number or '',
+        'p_address':          full_address,
+        'p_cert_number':      enrollment.cert_number or '',
+        'p_cert_date':        fmt(enrollment.cert_date) if enrollment.cert_date else '',
+    }
+
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def download_xlsx_per_enrollment(request, course_id, doc_name):
+    if doc_name not in ALLOWED_ATTENDANCE_XLSX_TEMPLATES:
+        return Response({'detail': 'Nieznany dokument.'}, status=404)
+
+    try:
+        course = Course.objects.get(pk=course_id)
+    except Course.DoesNotExist:
+        return Response({'detail': 'Kurs nie istnieje.'}, status=404)
+
+    tpl_path = TEMPLATES_DIR / f'{doc_name}.xlsx'
+    if not tpl_path.exists():
+        return Response({'detail': 'Brak pliku szablonu.'}, status=404)
+
+    enrollments = list(
+        course.enrollments.filter(deleted_at__isnull=True).order_by('last_name', 'first_name')
+    )
+    if not enrollments:
+        return Response({'detail': 'Brak uczestników na tym kursie.'}, status=404)
+
+    course_ctx = _build_context(course)
+    wb = openpyxl.load_workbook(tpl_path)
+    ws_tpl = wb.active
+
+    for lp, enrollment in enumerate(enrollments, start=1):
+        ws = wb.copy_worksheet(ws_tpl)
+        raw_title = f'{enrollment.last_name} {enrollment.first_name}'
+        ws.title = raw_title[:31]
+        ctx = _build_enrollment_context(enrollment, course_ctx, lp)
+        _xlsx_replace(ws, ctx)
+
+    wb.remove(ws_tpl)
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    response = HttpResponse(
+        buf.read(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = f'attachment; filename="{doc_name}_kurs_{course_id}.xlsx"'
     return response
 
 

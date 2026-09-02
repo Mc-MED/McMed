@@ -109,3 +109,15 @@ export const adminDownloadXlsx = async (courseId, filename, docName) => {
   a.click()
   window.URL.revokeObjectURL(url)
 }
+
+export const adminDownloadAttendanceXlsx = async (courseId, filename, docName) => {
+  const response = await adminAxios.get(`/api/documents/courses/${courseId}/xlsx-per-enrollment/${filename}/`, {
+    responseType: 'blob',
+  })
+  const url = window.URL.createObjectURL(new Blob([response.data]))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${docName}_kurs_${courseId}.xlsx`
+  a.click()
+  window.URL.revokeObjectURL(url)
+}

@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { adminFetchCourse, adminUpdateCourse, adminDeleteCourse, adminFetchEnrollments, adminDeleteEnrollment, adminUpdateEnrollment, adminAnonymizeEnrollment, adminSoftDeleteEnrollment, adminFetchCourses, adminDownloadDocument, adminDownloadDocumentPdf, adminDownloadXlsx, adminFetchInstructors, adminSendEmail, adminSendSms, adminCreateEnrollment, adminDownloadCertificate } from '../../api/admin'
+import { adminFetchCourse, adminUpdateCourse, adminDeleteCourse, adminFetchEnrollments, adminDeleteEnrollment, adminUpdateEnrollment, adminAnonymizeEnrollment, adminSoftDeleteEnrollment, adminFetchCourses, adminDownloadDocument, adminDownloadDocumentPdf, adminDownloadXlsx, adminDownloadAttendanceXlsx, adminFetchInstructors, adminSendEmail, adminSendSms, adminCreateEnrollment, adminDownloadCertificate } from '../../api/admin'
 import DeletionReasonModal from '../../components/DeletionReasonModal'
 import * as XLSX from 'xlsx'
 
@@ -259,7 +259,7 @@ function exportToExcel(enrollments, courseName) {
 
 // ─── Zakładka: Uczestnicy ─────────────────────────────────────────────
 
-function EditEnrollmentModal({ enrollment, onSave, onClose }) {
+function EditEnrollmentModal({ enrollment, courseType, onSave, onClose }) {
   const [form, setForm] = useState({
     first_name: enrollment.first_name,
     last_name: enrollment.last_name,
@@ -364,19 +364,21 @@ function EditEnrollmentModal({ enrollment, onSave, onClose }) {
               </div>
             </div>
           </div>
-          <div className="border-t border-gray-100 pt-4">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Certyfikat (recertyfikacja)</p>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="field-label">Numer certyfikatu</label>
-                <input name="cert_number" value={form.cert_number} onChange={set} className="field-input" placeholder="np. KPP/2021/00123" />
-              </div>
-              <div>
-                <label className="field-label">Data wydania certyfikatu</label>
-                <input type="date" name="cert_date" value={form.cert_date} onChange={set} className="field-input" />
+          {courseType === 'recert' && (
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Certyfikat (recertyfikacja)</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="field-label">Numer certyfikatu</label>
+                  <input name="cert_number" value={form.cert_number} onChange={set} className="field-input" placeholder="np. KPP/2021/00123" />
+                </div>
+                <div>
+                  <label className="field-label">Data wydania certyfikatu</label>
+                  <input type="date" name="cert_date" value={form.cert_date} onChange={set} className="field-input" />
+                </div>
               </div>
             </div>
-          </div>
+          )}
           <div className="border-t border-gray-100 pt-4 flex items-center gap-8">
             <label className="flex items-center gap-2 cursor-pointer select-none">
               <input type="checkbox" name="photo_consent" checked={form.photo_consent} onChange={set} className="h-4 w-4 accent-red-600 rounded" />
@@ -458,7 +460,7 @@ function TransferModal({ enrollment, courses, currentCourseId, onTransfer, onClo
   )
 }
 
-function AddParticipantModal({ courseId, onSave, onClose }) {
+function AddParticipantModal({ courseId, courseType, onSave, onClose }) {
   const [form, setForm] = useState({
     course: courseId,
     first_name: '',
@@ -570,19 +572,21 @@ function AddParticipantModal({ courseId, onSave, onClose }) {
               </div>
             </div>
           </div>
-          <div className="border-t border-gray-100 pt-4">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Certyfikat (recertyfikacja)</p>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="field-label">Numer certyfikatu</label>
-                <input name="cert_number" value={form.cert_number} onChange={set} className="field-input" placeholder="np. KPP/2021/00123" />
-              </div>
-              <div>
-                <label className="field-label">Data wydania certyfikatu</label>
-                <input type="date" name="cert_date" value={form.cert_date} onChange={set} className="field-input" />
+          {courseType === 'recert' && (
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Certyfikat (recertyfikacja)</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="field-label">Numer certyfikatu</label>
+                  <input name="cert_number" value={form.cert_number} onChange={set} className="field-input" placeholder="np. KPP/2021/00123" />
+                </div>
+                <div>
+                  <label className="field-label">Data wydania certyfikatu</label>
+                  <input type="date" name="cert_date" value={form.cert_date} onChange={set} className="field-input" />
+                </div>
               </div>
             </div>
-          </div>
+          )}
           <div className="border-t border-gray-100 pt-4 flex items-center gap-8">
             <label className="flex items-center gap-2 cursor-pointer select-none">
               <input type="checkbox" name="deposit_paid" checked={form.deposit_paid} onChange={set} className="h-4 w-4 accent-emerald-600 rounded" />
@@ -607,7 +611,7 @@ function AddParticipantModal({ courseId, onSave, onClose }) {
   )
 }
 
-function EnrollmentTable({ courseId, courseName, examDate }) {
+function EnrollmentTable({ courseId, courseName, examDate, courseType }) {
   const [enrollments, setEnrollments] = useState([])
   const [loading, setLoading]         = useState(true)
 
@@ -781,6 +785,7 @@ function EnrollmentTable({ courseId, courseName, examDate }) {
       {addingParticipant && (
         <AddParticipantModal
           courseId={parseInt(courseId)}
+          courseType={courseType}
           onSave={created => {
             setEnrollments(prev => [created, ...prev])
             setAddingParticipant(false)
@@ -791,6 +796,7 @@ function EnrollmentTable({ courseId, courseName, examDate }) {
       {editingEnrollment && (
         <EditEnrollmentModal
           enrollment={editingEnrollment}
+          courseType={courseType}
           onSave={updated => {
             setEnrollments(prev => prev.map(e => e.id === updated.id ? updated : e))
             setEditingEnrollment(null)
@@ -1193,7 +1199,7 @@ export default function CourseDetail() {
 
       {/* Zakładki */}
       <div className="flex gap-1 border-b border-gray-200 mt-6">
-        {[['dane', 'Dane kursu'], ['uczestnicy', `Uczestnicy (${course.max_participants - course.spots_left}/${course.max_participants})`], ['dokumenty', 'Dokumenty']].map(([key, label]) => (
+        {[['dane', 'Dane kursu'], ['uczestnicy', `Uczestnicy (${course.max_participants - course.spots_left}/${course.max_participants})`], ['dokumenty', 'Dokumenty'], ['obsluga', 'Obsługa kursu']].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)}
             className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
               tab === key ? 'border-red-600 text-red-600' : 'border-transparent text-gray-500 hover:text-gray-800'
@@ -1204,8 +1210,9 @@ export default function CourseDetail() {
       </div>
 
       {tab === 'dane' && <div className="max-w-4xl"><CourseForm initial={course} onSaved={setCourse} /></div>}
-      {tab === 'uczestnicy' && <EnrollmentTable courseId={id} courseName={course.name} examDate={course.exam_date} />}
+      {tab === 'uczestnicy' && <EnrollmentTable courseId={id} courseName={course.name} examDate={course.exam_date} courseType={course.course_type} />}
       {tab === 'dokumenty' && <div className="max-w-4xl"><DocumentsTab courseId={id} courseType={course.course_type} /></div>}
+      {tab === 'obsluga' && <div className="max-w-4xl"><CourseManagementTab courseId={id} courseType={course.course_type} /></div>}
     </div>
   )
 }
@@ -1331,6 +1338,124 @@ function DocumentsTab({ courseId, courseType }) {
             >
               {isLoading ? 'Pobieranie…' : isDone ? '✓ Pobrane' : '↓ Pobierz .xlsx'}
             </button>
+          </div>
+        )
+      })}
+      {error && <p className="text-red-600 text-sm">{error}</p>}
+    </div>
+  )
+}
+
+// ─── Zakładka: Obsługa kursu ──────────────────────────────────────────
+
+const MANAGEMENT_DOCUMENTS_KPP = [
+  // { filename: 'przyklad', label: 'Przykładowy plik', description: '' },
+]
+
+const MANAGEMENT_DOCUMENTS_RECERT = [
+  // { filename: 'przyklad', label: 'Przykładowy plik', description: '' },
+]
+
+function CourseManagementTab({ courseId, courseType }) {
+  const DOCUMENTS = courseType === 'recert' ? MANAGEMENT_DOCUMENTS_RECERT : MANAGEMENT_DOCUMENTS_KPP
+  const [downloading, setDownloading] = useState(null)
+  const [downloaded, setDownloaded]   = useState(new Set())
+  const [error, setError]             = useState('')
+
+  async function handleDownload(filename, label) {
+    setDownloading(filename)
+    setError('')
+    try {
+      await adminDownloadDocument(courseId, filename, label)
+      setDownloaded(prev => new Set([...prev, filename]))
+    } catch {
+      setError('Nie udało się pobrać dokumentu.')
+    } finally {
+      setDownloading(null)
+    }
+  }
+
+  async function handleDownloadPdf(filename, label) {
+    const key = `pdf_${filename}`
+    setDownloading(key)
+    setError('')
+    try {
+      await adminDownloadDocumentPdf(courseId, filename, label)
+      setDownloaded(prev => new Set([...prev, key]))
+    } catch {
+      setError('Nie udało się pobrać dokumentu PDF.')
+    } finally {
+      setDownloading(null)
+    }
+  }
+
+  async function handleDownloadAttendance() {
+    const key = 'obecnosc'
+    setDownloading(key)
+    setError('')
+    try {
+      await adminDownloadAttendanceXlsx(courseId, 'obecnosc', 'obecnosc')
+      setDownloaded(prev => new Set([...prev, key]))
+    } catch (err) {
+      const msg = err.response?.data?.detail
+      setError(msg || 'Nie udało się pobrać karty obecności.')
+    } finally {
+      setDownloading(null)
+    }
+  }
+
+  const isLoadingAttendance = downloading === 'obecnosc'
+  const isDoneAttendance    = downloaded.has('obecnosc')
+
+  return (
+    <div className="mt-6 space-y-3">
+      <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold text-gray-900">Karta obecności uczestników</p>
+          <p className="text-xs text-gray-400 mt-0.5">Osobny arkusz dla każdego uczestnika z jego danymi</p>
+        </div>
+        <button
+          onClick={handleDownloadAttendance}
+          disabled={isLoadingAttendance}
+          className={`flex items-center gap-1.5 text-sm font-semibold text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-60 ${
+            isDoneAttendance ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700 active:bg-red-800'
+          }`}
+        >
+          {isLoadingAttendance ? 'Pobieranie…' : isDoneAttendance ? '✓ Pobrane' : '↓ Pobierz .xlsx'}
+        </button>
+      </div>
+
+      {DOCUMENTS.map(({ filename, label, description }) => {
+        const isDoneDocx    = downloaded.has(filename)
+        const isDonePdf     = downloaded.has(`pdf_${filename}`)
+        const isLoadingDocx = downloading === filename
+        const isLoadingPdf  = downloading === `pdf_${filename}`
+        return (
+          <div key={filename} className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-gray-900">{label}</p>
+              {description && <p className="text-xs text-gray-400 mt-0.5">{description}</p>}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleDownload(filename, label)}
+                disabled={isLoadingDocx || isLoadingPdf}
+                className={`flex items-center gap-1.5 text-sm font-semibold text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-60 ${
+                  isDoneDocx ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700 active:bg-red-800'
+                }`}
+              >
+                {isLoadingDocx ? 'Pobieranie…' : isDoneDocx ? '✓ .docx' : '↓ Pobierz .docx'}
+              </button>
+              <button
+                onClick={() => handleDownloadPdf(filename, label)}
+                disabled={isLoadingDocx || isLoadingPdf}
+                className={`flex items-center gap-1.5 text-sm font-semibold text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-60 ${
+                  isDonePdf ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-600 hover:bg-gray-700 active:bg-gray-800'
+                }`}
+              >
+                {isLoadingPdf ? 'Pobieranie…' : isDonePdf ? '✓ .pdf' : '↓ Pobierz .pdf'}
+              </button>
+            </div>
           </div>
         )
       })}

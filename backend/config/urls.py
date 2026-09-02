@@ -14,7 +14,7 @@ def spa_index(request):
 
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    path('django-admin/', admin.site.urls),
 
     # JWT auth
     path('api/auth/token/',         ParticipantTokenView.as_view(), name='token_obtain'),
@@ -27,7 +27,7 @@ urlpatterns = [
     path('api/notifications/', include('notifications.urls')),
 
     # React SPA catch-all
-    re_path(r'^(?!api/|admin/).*$', spa_index),
+    re_path(r'^(?!api/|django-admin/).*$', spa_index),
 ]
 
 if settings.DEBUG:
