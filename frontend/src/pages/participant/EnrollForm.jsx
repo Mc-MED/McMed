@@ -147,7 +147,11 @@ export default function EnrollForm() {
     setEmailExists(null)
 
     try {
-      await submitEnrollment(form)
+      await submitEnrollment({
+        ...form,
+        birth_date: form.birth_date || null,
+        cert_date:  form.cert_date  || null,
+      })
       setEnrolledEmail(form.email)
       setStatus('success')
     } catch (err) {
