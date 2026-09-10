@@ -3,6 +3,7 @@ import datetime
 import subprocess
 import tempfile
 import os
+import zipfile
 from io import BytesIO
 from pathlib import Path
 
@@ -14,15 +15,15 @@ from docxtpl import DocxTemplate
 import openpyxl
 
 from courses.models import Course, Enrollment, Instructor
-from .models import Presentation
+from .models import Topic, TopicFile, TopicFileProgress, QuizProgress
 
 TEMPLATES_DIR = Path(__file__).parent / 'templates'
 
-ALLOWED_TEMPLATES = {'oswiadczenie', 'sprzet', 'sale', 'wniosek', 'prosba', 'instruktorzy', 'prosba-recertyfikacja', 'informacja-kpp'}
+ALLOWED_TEMPLATES = {'oswiadczenie', 'sprzet', 'sale', 'wniosek', 'prosba', 'instruktorzy', 'prosba-recertyfikacja', 'informacja-kpp', 'sprawozdanie-egzamin-rec'}
 
 ALLOWED_CERT_TEMPLATES = {'certyfikat'}
 
-ALLOWED_XLSX_TEMPLATES = {'program'}
+ALLOWED_XLSX_TEMPLATES = {'program', 'obsluga-egzaminu-rec'}
 
 ALLOWED_ATTENDANCE_XLSX_TEMPLATES = {'obecnosc'}
 
@@ -421,39 +422,212 @@ def download_xlsx_per_enrollment(request, course_id, doc_name):
     return response
 
 
+# ─── Zbiorcze certyfikaty ZIP ─────────────────────────────────────────
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def download_certificates_zip(request, course_id):
+    try:
+        course = Course.objects.get(pk=course_id)
+    except Course.DoesNotExist:
+        return Response({'detail': 'Kurs nie istnieje.'}, status=404)
+
+    enrollments = list(
+        course.enrollments.filter(deleted_at__isnull=True).order_by('last_name', 'first_name')
+    )
+    if not enrollments:
+        return Response({'detail': 'Brak uczestników na tym kursie.'}, status=404)
+
+    is_recert = course.course_type == 'recert'
+    tpl_name = 'certyfikat.r.docx' if is_recert else 'certyfikat.docx'
+    tpl_path = TEMPLATES_DIR / tpl_name
+    if not tpl_path.exists():
+        tpl_path = TEMPLATES_DIR / 'certyfikat.docx'
+    if not tpl_path.exists():
+        return Response({'detail': 'Brak pliku szablonu certyfikatu.'}, status=404)
+
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for enrollment in enrollments:
+            tpl = DocxTemplate(tpl_path)
+            tpl.render(_build_certificate_context(enrollment))
+            doc_buf = BytesIO()
+            tpl.save(doc_buf)
+            safe = f'{enrollment.last_name}_{enrollment.first_name}'.replace(' ', '_')
+            zf.writestr(f'certyfikat_{safe}.docx', doc_buf.getvalue())
+
+    buf.seek(0)
+    response = HttpResponse(buf.read(), content_type='application/zip')
+    response['Content-Disposition'] = f'attachment; filename="certyfikaty_kurs_{course_id}.zip"'
+    return response
+
+
+# ─── Tematy i pliki (admin) ───────────────────────────────────────────
+
+def _topic_to_dict(topic):
+    return {
+        'id':    topic.id,
+        'title': topic.title,
+        'order': topic.order,
+        'files': [
+            {
+                'id':          tf.id,
+                'title':       tf.title,
+                'uploaded_at': tf.uploaded_at.isoformat(),
+                'order':       tf.order,
+            }
+            for tf in topic.files.all()
+        ],
+    }
+
+
 @api_view(['GET', 'POST'])
 @permission_classes([IsAdminUser])
-def admin_presentation(request):
+def admin_topics(request):
     if request.method == 'GET':
-        p = Presentation.get_current()
-        if not p:
-            return Response({'has_file': False})
-        return Response({'has_file': True, 'uploaded_at': p.uploaded_at.isoformat()})
+        topics = Topic.objects.prefetch_related('files').all()
+        return Response([_topic_to_dict(t) for t in topics])
+
+    title = request.data.get('title', '').strip()
+    if not title:
+        return Response({'detail': 'Podaj tytuł działu.'}, status=400)
+    max_order = Topic.objects.count()
+    topic = Topic.objects.create(title=title, order=max_order)
+    return Response(_topic_to_dict(topic), status=201)
+
+
+@api_view(['PATCH', 'DELETE'])
+@permission_classes([IsAdminUser])
+def admin_topic_detail(request, topic_id):
+    try:
+        topic = Topic.objects.prefetch_related('files').get(pk=topic_id)
+    except Topic.DoesNotExist:
+        return Response({'detail': 'Dział nie istnieje.'}, status=404)
+
+    if request.method == 'DELETE':
+        for tf in topic.files.all():
+            tf.file.delete(save=False)
+        topic.delete()
+        return Response(status=204)
+
+    if 'title' in request.data:
+        topic.title = request.data['title'].strip() or topic.title
+    if 'order' in request.data:
+        topic.order = int(request.data['order'])
+    topic.save()
+    return Response(_topic_to_dict(topic))
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def admin_topic_file_upload(request, topic_id):
+    try:
+        topic = Topic.objects.get(pk=topic_id)
+    except Topic.DoesNotExist:
+        return Response({'detail': 'Dział nie istnieje.'}, status=404)
 
     f = request.FILES.get('file')
     if not f or not f.name.lower().endswith('.pdf'):
         return Response({'detail': 'Wymagany plik PDF.'}, status=400)
+    title = request.data.get('title', '').strip() or f.name
+    max_order = topic.files.count()
+    tf = TopicFile.objects.create(topic=topic, title=title, file=f, order=max_order)
+    return Response({
+        'id':          tf.id,
+        'title':       tf.title,
+        'uploaded_at': tf.uploaded_at.isoformat(),
+        'order':       tf.order,
+    }, status=201)
 
-    for old in Presentation.objects.all():
-        old.file.delete(save=False)
-        old.delete()
 
-    p = Presentation.objects.create(file=f)
-    return Response({'has_file': True, 'uploaded_at': p.uploaded_at.isoformat()}, status=201)
+@api_view(['PATCH', 'DELETE'])
+@permission_classes([IsAdminUser])
+def admin_topic_file_detail(request, file_id):
+    try:
+        tf = TopicFile.objects.select_related('topic').get(pk=file_id)
+    except TopicFile.DoesNotExist:
+        return Response({'detail': 'Plik nie istnieje.'}, status=404)
+
+    if request.method == 'DELETE':
+        tf.file.delete(save=False)
+        tf.delete()
+        return Response(status=204)
+
+    if 'title' in request.data:
+        tf.title = request.data['title'].strip() or tf.title
+    if 'order' in request.data:
+        tf.order = int(request.data['order'])
+    tf.save()
+    return Response({'id': tf.id, 'title': tf.title, 'uploaded_at': tf.uploaded_at.isoformat(), 'order': tf.order})
+
+
+# ─── Tematy i pliki (uczestnik) ───────────────────────────────────────
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def participant_topics(request):
+    topics = Topic.objects.prefetch_related('files').all()
+    return Response([_topic_to_dict(t) for t in topics])
 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def participant_presentation(request):
-    p = Presentation.get_current()
-    if not p:
-        return Response({'detail': 'Brak materiałów.'}, status=404)
+def participant_progress(request):
+    ids = list(TopicFileProgress.objects.filter(user=request.user).values_list('file_id', flat=True))
+    return Response(ids)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def participant_toggle_progress(request, file_id):
+    try:
+        tf = TopicFile.objects.get(pk=file_id)
+    except TopicFile.DoesNotExist:
+        return Response({'detail': 'Plik nie istnieje.'}, status=404)
+
+    obj, created = TopicFileProgress.objects.get_or_create(user=request.user, file=tf)
+    if not created:
+        obj.delete()
+        return Response({'completed': False})
+    return Response({'completed': True}, status=201)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def quiz_progress(request):
+    if request.method == 'GET':
+        qs = QuizProgress.objects.filter(user=request.user)
+        return Response({obj.category_id: obj.last_index for obj in qs})
+
+    cat_id     = request.data.get('category_id', '').strip()
+    last_index = request.data.get('last_index')
+    if not cat_id or last_index is None:
+        return Response({'detail': 'category_id i last_index są wymagane.'}, status=400)
+    if not isinstance(last_index, int) or last_index < 0:
+        return Response({'detail': 'last_index musi być liczbą całkowitą >= 0.'}, status=400)
+
+    obj, _ = QuizProgress.objects.update_or_create(
+        user=request.user,
+        category_id=cat_id,
+        defaults={'last_index': last_index},
+    )
+    return Response({'category_id': obj.category_id, 'last_index': obj.last_index})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def participant_topic_file(request, file_id):
+    try:
+        tf = TopicFile.objects.get(pk=file_id)
+    except TopicFile.DoesNotExist:
+        return Response({'detail': 'Plik nie istnieje.'}, status=404)
 
     try:
-        f = p.file.open('rb')
+        f = tf.file.open('rb')
     except (FileNotFoundError, OSError):
         return Response({'detail': 'Plik nie istnieje na serwerze.'}, status=404)
 
+    safe_title = tf.title.replace(' ', '_')
     response = FileResponse(f, content_type='application/pdf')
-    response['Content-Disposition'] = 'inline; filename="materialy.pdf"'
+    response['Content-Disposition'] = f'inline; filename="{safe_title}.pdf"'
     return response

@@ -121,3 +121,15 @@ export const adminDownloadAttendanceXlsx = async (courseId, filename, docName) =
   a.click()
   window.URL.revokeObjectURL(url)
 }
+
+export const adminDownloadCertificatesZip = async (courseId) => {
+  const response = await adminAxios.get(`/api/documents/courses/${courseId}/certyfikaty-zip/`, {
+    responseType: 'blob',
+  })
+  const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/zip' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `certyfikaty_kurs_${courseId}.zip`
+  a.click()
+  window.URL.revokeObjectURL(url)
+}

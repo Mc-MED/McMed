@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { fetchMyEnrollments, cancelMyEnrollment } from '../../api/participant'
 import { fetchCourses } from '../../api/courses'
-import { fetchPresentationBlob } from '../../api/documents'
+import { fetchTopics, fetchTopicFileBlob, fetchProgress, toggleFileProgress } from '../../api/documents'
 import PdfViewer from '../../components/PdfViewer'
 import QuizPanel from './QuizPanel'
 
@@ -241,9 +241,20 @@ export default function ParticipantDashboard() {
   const [recertLoading, setRecertLoading] = useState(false)
   const [recertFetched, setRecertFetched] = useState(false)
   const [pdfUrl, setPdfUrl] = useState(null)
-  const [pdfLoading, setPdfLoading] = useState(false)
   const [pdfError, setPdfError] = useState('')
-  const pdfUrlRef = useRef(null)
+
+  // działy i pliki
+  const [topics, setTopics]             = useState([])
+  const [topicsLoading, setTopicsLoading] = useState(false)
+  const [topicsFetched, setTopicsFetched] = useState(false)
+  const [openTopicId, setOpenTopicId]   = useState(null)
+  const [openFileId, setOpenFileId]     = useState(null)
+  const [fileLoading, setFileLoading]   = useState(false)
+  const [fileError, setFileError]       = useState('')
+  const fileUrlRef = useRef(null)
+  const [completed, setCompleted]       = useState(new Set())
+  const [togglingId, setTogglingId]     = useState(null)
+
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -260,25 +271,73 @@ export default function ParticipantDashboard() {
   }, [navigate])
 
   useEffect(() => {
-    if (activeCard === 'materials' && !pdfUrl && !pdfLoading) {
-      setPdfLoading(true)
-      setPdfError('')
-      fetchPresentationBlob()
-        .then(blob => {
-          const url = URL.createObjectURL(blob)
-          pdfUrlRef.current = url
-          setPdfUrl(url)
-        })
-        .catch(() => setPdfError('Brak materiałów lub błąd serwera.'))
-        .finally(() => setPdfLoading(false))
+    if (activeCard === 'materials') {
+      if (!topicsFetched) {
+        setTopicsLoading(true)
+        Promise.all([fetchTopics(), fetchProgress()])
+          .then(([topicsData, progressIds]) => {
+            setTopics(topicsData)
+            setCompleted(new Set(progressIds))
+            setTopicsFetched(true)
+          })
+          .catch(() => {})
+          .finally(() => setTopicsLoading(false))
+      }
     }
-    if (activeCard !== 'materials' && pdfUrlRef.current) {
-      URL.revokeObjectURL(pdfUrlRef.current)
-      pdfUrlRef.current = null
+    if (activeCard !== 'materials') {
+      setOpenTopicId(null)
+      if (fileUrlRef.current) {
+        URL.revokeObjectURL(fileUrlRef.current)
+        fileUrlRef.current = null
+      }
+      setOpenFileId(null)
       setPdfUrl(null)
       setPdfError('')
     }
-  }, [activeCard])
+  }, [activeCard, topicsFetched])
+
+  async function openFile(fileId) {
+    if (openFileId === fileId) {
+      // toggle – zamknij
+      if (fileUrlRef.current) { URL.revokeObjectURL(fileUrlRef.current); fileUrlRef.current = null }
+      setOpenFileId(null)
+      setPdfUrl(null)
+      return
+    }
+    if (fileUrlRef.current) { URL.revokeObjectURL(fileUrlRef.current); fileUrlRef.current = null }
+    setOpenFileId(fileId)
+    setPdfUrl(null)
+    setFileLoading(true)
+    setFileError('')
+    try {
+      const blob = await fetchTopicFileBlob(fileId)
+      const url = URL.createObjectURL(blob)
+      fileUrlRef.current = url
+      setPdfUrl(url)
+    } catch {
+      setFileError('Nie udało się załadować pliku.')
+    } finally {
+      setFileLoading(false)
+    }
+  }
+
+  async function handleToggleComplete(e, fileId) {
+    e.stopPropagation()
+    if (togglingId === fileId) return
+    setTogglingId(fileId)
+    try {
+      const { completed: isNowDone } = await toggleFileProgress(fileId)
+      setCompleted(prev => {
+        const next = new Set(prev)
+        isNowDone ? next.add(fileId) : next.delete(fileId)
+        return next
+      })
+    } catch {
+      // ignoruj błąd
+    } finally {
+      setTogglingId(null)
+    }
+  }
 
   useEffect(() => {
     if (activeCard === 'recert' && !recertFetched) {
@@ -381,22 +440,93 @@ export default function ParticipantDashboard() {
         }
 
         {activeCard === 'materials' && (
-          pdfLoading ? (
+          topicsLoading ? (
             <div className="text-center text-gray-400 py-10 text-sm">Ładowanie materiałów…</div>
-          ) : pdfError ? (
+          ) : topics.length === 0 ? (
             <div className="bg-white rounded-2xl border border-gray-200 p-10 text-center">
               <div className="text-4xl mb-4">📄</div>
               <p className="font-semibold text-gray-700 mb-1">Brak materiałów</p>
-              <p className="text-sm text-gray-400">{pdfError}</p>
+              <p className="text-sm text-gray-400">Organizator nie dodał jeszcze materiałów kursowych.</p>
             </div>
-          ) : pdfUrl ? (
-            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-              <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
-                <span className="text-sm font-semibold text-gray-700">Materiały kursowe</span>
-              </div>
-              <PdfViewer url={pdfUrl} />
+          ) : (
+            <div className="space-y-3">
+              {topics.map(topic => {
+                const doneCount = topic.files.filter(tf => completed.has(tf.id)).length
+                const allDone = topic.files.length > 0 && doneCount === topic.files.length
+                return (
+                <div key={topic.id} className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                  <button
+                    onClick={() => setOpenTopicId(id => id === topic.id ? null : topic.id)}
+                    className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-gray-50 transition-colors"
+                  >
+                    <span className="text-gray-400 text-base leading-none">{openTopicId === topic.id ? '▾' : '▸'}</span>
+                    <span className={`flex-1 font-semibold text-sm ${allDone ? 'text-emerald-700' : 'text-gray-900'}`}>{topic.title}</span>
+                    {topic.files.length > 0 && (
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${allDone ? 'bg-emerald-100 text-emerald-700' : doneCount > 0 ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
+                        {doneCount}/{topic.files.length}
+                      </span>
+                    )}
+                  </button>
+
+                  {openTopicId === topic.id && (
+                    <div className="border-t border-gray-100 px-5 py-3 space-y-2">
+                      {topic.files.length === 0 ? (
+                        <p className="text-sm text-gray-400 text-center py-3">Brak plików w tym dziale.</p>
+                      ) : topic.files.map(tf => {
+                        const isDone = completed.has(tf.id)
+                        const isToggling = togglingId === tf.id
+                        return (
+                        <div key={tf.id}>
+                          <div className={`flex items-center gap-2 px-4 py-3 rounded-xl transition-colors ${
+                            openFileId === tf.id ? 'bg-red-50 border border-red-200' : 'bg-gray-50 hover:bg-gray-100'
+                          }`}>
+                            <button
+                              onClick={() => openFile(tf.id)}
+                              className="flex-1 flex items-center gap-3 text-left min-w-0"
+                            >
+                              <span className="text-base shrink-0">📄</span>
+                              <span className={`flex-1 text-sm font-medium truncate ${isDone ? 'line-through text-gray-400' : 'text-gray-800'}`}>{tf.title}</span>
+                              {fileLoading && openFileId === tf.id ? (
+                                <span className="text-xs text-gray-400 shrink-0">Ładowanie…</span>
+                              ) : openFileId === tf.id ? (
+                                <span className="text-xs text-red-600 font-semibold shrink-0">Zamknij ▴</span>
+                              ) : (
+                                <span className="text-xs text-gray-400 shrink-0">Otwórz ▾</span>
+                              )}
+                            </button>
+                            <button
+                              onClick={(e) => handleToggleComplete(e, tf.id)}
+                              disabled={isToggling}
+                              className={`shrink-0 flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${
+                                isDone
+                                  ? 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100'
+                                  : 'bg-white border-gray-300 text-gray-500 hover:border-emerald-400 hover:text-emerald-600'
+                              } ${isToggling ? 'opacity-50' : ''}`}
+                            >
+                              <svg viewBox="0 0 12 12" fill="none" className="w-3 h-3 shrink-0">
+                                <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                              </svg>
+                              {isDone ? 'Ukończone' : 'Zrobione?'}
+                            </button>
+                          </div>
+                          {openFileId === tf.id && !fileLoading && pdfUrl && (
+                            <div className="mt-2 rounded-xl overflow-hidden border border-gray-200">
+                              <PdfViewer url={pdfUrl} />
+                            </div>
+                          )}
+                          {openFileId === tf.id && fileError && (
+                            <p className="text-sm text-red-600 text-center py-3">{fileError}</p>
+                          )}
+                        </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+                )
+              })}
             </div>
-          ) : null
+          )
         )}
 
         {activeCard === 'questions' && <QuizPanel />}

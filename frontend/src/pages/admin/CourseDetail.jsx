@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { adminFetchCourse, adminUpdateCourse, adminDeleteCourse, adminFetchEnrollments, adminDeleteEnrollment, adminUpdateEnrollment, adminAnonymizeEnrollment, adminSoftDeleteEnrollment, adminFetchCourses, adminDownloadDocument, adminDownloadDocumentPdf, adminDownloadXlsx, adminDownloadAttendanceXlsx, adminFetchInstructors, adminSendEmail, adminSendSms, adminCreateEnrollment, adminDownloadCertificate } from '../../api/admin'
+import { adminFetchCourse, adminUpdateCourse, adminDeleteCourse, adminFetchEnrollments, adminDeleteEnrollment, adminUpdateEnrollment, adminAnonymizeEnrollment, adminSoftDeleteEnrollment, adminFetchCourses, adminDownloadDocument, adminDownloadDocumentPdf, adminDownloadXlsx, adminDownloadAttendanceXlsx, adminFetchInstructors, adminSendEmail, adminSendSms, adminCreateEnrollment, adminDownloadCertificate, adminDownloadCertificatesZip } from '../../api/admin'
 import DeletionReasonModal from '../../components/DeletionReasonModal'
 import * as XLSX from 'xlsx'
 
@@ -1348,16 +1348,21 @@ function DocumentsTab({ courseId, courseType }) {
 
 // ─── Zakładka: Obsługa kursu ──────────────────────────────────────────
 
-const MANAGEMENT_DOCUMENTS_KPP = [
-  // { filename: 'przyklad', label: 'Przykładowy plik', description: '' },
-]
+const MANAGEMENT_DOCUMENTS_KPP = []
 
 const MANAGEMENT_DOCUMENTS_RECERT = [
-  // { filename: 'przyklad', label: 'Przykładowy plik', description: '' },
+  { filename: 'sprawozdanie-egzamin-rec', label: 'Sprawozdanie z egzaminu recertyfikacyjnego', description: '' },
+]
+
+const MANAGEMENT_XLSX_DOCUMENTS_KPP = []
+
+const MANAGEMENT_XLSX_DOCUMENTS_RECERT = [
+  { filename: 'obsluga-egzaminu-rec', label: 'Obsługa egzaminu recertyfikacyjnego', description: '' },
 ]
 
 function CourseManagementTab({ courseId, courseType }) {
-  const DOCUMENTS = courseType === 'recert' ? MANAGEMENT_DOCUMENTS_RECERT : MANAGEMENT_DOCUMENTS_KPP
+  const DOCUMENTS      = courseType === 'recert' ? MANAGEMENT_DOCUMENTS_RECERT      : MANAGEMENT_DOCUMENTS_KPP
+  const XLSX_DOCUMENTS = courseType === 'recert' ? MANAGEMENT_XLSX_DOCUMENTS_RECERT : MANAGEMENT_XLSX_DOCUMENTS_KPP
   const [downloading, setDownloading] = useState(null)
   const [downloaded, setDownloaded]   = useState(new Set())
   const [error, setError]             = useState('')
@@ -1389,6 +1394,20 @@ function CourseManagementTab({ courseId, courseType }) {
     }
   }
 
+  async function handleDownloadManagementXlsx(filename, label) {
+    const key = `mgmt_xlsx_${filename}`
+    setDownloading(key)
+    setError('')
+    try {
+      await adminDownloadXlsx(courseId, filename, label)
+      setDownloaded(prev => new Set([...prev, key]))
+    } catch {
+      setError('Nie udało się pobrać dokumentu.')
+    } finally {
+      setDownloading(null)
+    }
+  }
+
   async function handleDownloadAttendance() {
     const key = 'obecnosc'
     setDownloading(key)
@@ -1404,8 +1423,25 @@ function CourseManagementTab({ courseId, courseType }) {
     }
   }
 
-  const isLoadingAttendance = downloading === 'obecnosc'
-  const isDoneAttendance    = downloaded.has('obecnosc')
+  async function handleDownloadCertificatesZip() {
+    const key = 'certyfikaty_zip'
+    setDownloading(key)
+    setError('')
+    try {
+      await adminDownloadCertificatesZip(courseId)
+      setDownloaded(prev => new Set([...prev, key]))
+    } catch (err) {
+      const msg = err.response?.data?.detail
+      setError(msg || 'Nie udało się pobrać certyfikatów. Sprawdź czy szablon certyfikat.docx istnieje.')
+    } finally {
+      setDownloading(null)
+    }
+  }
+
+  const isLoadingAttendance   = downloading === 'obecnosc'
+  const isDoneAttendance      = downloaded.has('obecnosc')
+  const isLoadingCertZip      = downloading === 'certyfikaty_zip'
+  const isDoneCertZip         = downloaded.has('certyfikaty_zip')
 
   return (
     <div className="mt-6 space-y-3">
@@ -1422,6 +1458,22 @@ function CourseManagementTab({ courseId, courseType }) {
           }`}
         >
           {isLoadingAttendance ? 'Pobieranie…' : isDoneAttendance ? '✓ Pobrane' : '↓ Pobierz .xlsx'}
+        </button>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold text-gray-900">Certyfikaty wszystkich uczestników</p>
+          <p className="text-xs text-gray-400 mt-0.5">Jeden plik .zip z certyfikatem .docx dla każdego uczestnika</p>
+        </div>
+        <button
+          onClick={handleDownloadCertificatesZip}
+          disabled={isLoadingCertZip}
+          className={`flex items-center gap-1.5 text-sm font-semibold text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-60 ${
+            isDoneCertZip ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700 active:bg-red-800'
+          }`}
+        >
+          {isLoadingCertZip ? 'Generowanie…' : isDoneCertZip ? '✓ Pobrane' : '↓ Pobierz certyfikaty (.zip)'}
         </button>
       </div>
 
@@ -1456,6 +1508,28 @@ function CourseManagementTab({ courseId, courseType }) {
                 {isLoadingPdf ? 'Pobieranie…' : isDonePdf ? '✓ .pdf' : '↓ Pobierz .pdf'}
               </button>
             </div>
+          </div>
+        )
+      })}
+      {XLSX_DOCUMENTS.map(({ filename, label, description }) => {
+        const key       = `mgmt_xlsx_${filename}`
+        const isDone    = downloaded.has(key)
+        const isLoading = downloading === key
+        return (
+          <div key={key} className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-gray-900">{label}</p>
+              {description && <p className="text-xs text-gray-400 mt-0.5">{description}</p>}
+            </div>
+            <button
+              onClick={() => handleDownloadManagementXlsx(filename, label)}
+              disabled={isLoading}
+              className={`flex items-center gap-1.5 text-sm font-semibold text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-60 ${
+                isDone ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700 active:bg-red-800'
+              }`}
+            >
+              {isLoading ? 'Pobieranie…' : isDone ? '✓ Pobrane' : '↓ Pobierz .xlsx'}
+            </button>
           </div>
         )
       })}
