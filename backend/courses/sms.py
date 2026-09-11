@@ -38,6 +38,7 @@ def send_sms(phone: str, message: str) -> tuple[bool, str]:
         'to': normalized,
         'message': message,
         'format': 'json',
+        'encoding': 'utf-8',
     }
     if sender:
         payload['from'] = sender
