@@ -1,6 +1,30 @@
 import adminAxios from './adminAxios'
 import participantAxios from './participantAxios'
 
+// ─── Pliki kursu (admin) ──────────────────────────────────────────────
+
+export async function adminGetCourseFiles(courseId) {
+  const { data } = await adminAxios.get(`/api/documents/courses/${courseId}/uploads/`)
+  return data
+}
+
+export async function adminUploadCourseFile(courseId, file, label) {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('label', label || file.name)
+  const { data } = await adminAxios.post(`/api/documents/courses/${courseId}/uploads/`, formData)
+  return data
+}
+
+export async function adminDownloadCourseFile(fileId) {
+  const response = await adminAxios.get(`/api/documents/course-files/${fileId}/`, { responseType: 'blob' })
+  return response
+}
+
+export async function adminDeleteCourseFile(fileId) {
+  return adminAxios.delete(`/api/documents/course-files/${fileId}/`)
+}
+
 // ─── Tematy (admin) ───────────────────────────────────────────────────
 
 export async function adminGetTopics() {

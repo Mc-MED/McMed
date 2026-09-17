@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { adminFetchCourses } from '../../api/admin'
+import { adminFetchCourses, adminUpdateCourse } from '../../api/admin'
 
 function formatDate(iso) {
   if (!iso) return '—'
@@ -18,10 +18,11 @@ function isPast(c) {
 
 export default function CourseList() {
   const navigate = useNavigate()
-  const [courses, setCourses]         = useState([])
-  const [loading, setLoading]         = useState(true)
-  const [error, setError]             = useState('')
-  const [showPast, setShowPast]       = useState(false)
+  const [courses, setCourses]   = useState([])
+  const [loading, setLoading]   = useState(true)
+  const [error, setError]       = useState('')
+  const [showPast, setShowPast] = useState(false)
+  const [toggling, setToggling] = useState(null) // `${id}-field`
 
   useEffect(() => {
     adminFetchCourses()
@@ -32,6 +33,48 @@ export default function CourseList() {
 
   const upcoming = courses.filter(c => !isPast(c))
   const past     = courses.filter(c =>  isPast(c))
+
+  async function handleToggleConsent(e, course, field) {
+    e.stopPropagation()
+    const key = `${course.id}-${field}`
+    if (toggling === key) return
+    const newVal = !course[field]
+    setToggling(key)
+    setCourses(prev => prev.map(c => c.id === course.id ? { ...c, [field]: newVal } : c))
+    try {
+      await adminUpdateCourse(course.id, { [field]: newVal })
+    } catch {
+      setCourses(prev => prev.map(c => c.id === course.id ? { ...c, [field]: !newVal } : c))
+    } finally {
+      setToggling(null)
+    }
+  }
+
+  const ConsentToggle = ({ course, field, label }) => {
+    const key = `${course.id}-${field}`
+    const active = course[field]
+    return (
+      <button
+        onClick={ev => handleToggleConsent(ev, course, field)}
+        disabled={toggling === key}
+        title={active ? `${label}: zaznaczone` : `${label}: niezaznaczone`}
+        className={`w-24 flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-md border transition-colors ${
+          toggling === key ? 'opacity-40 cursor-wait' : 'cursor-pointer'
+        } ${
+          active
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+            : 'bg-gray-50 border-gray-200 text-gray-400 hover:bg-gray-100'
+        }`}
+      >
+        <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
+          active ? 'bg-emerald-500 border-emerald-500' : 'border-gray-300 bg-white'
+        }`}>
+          {active && <svg viewBox="0 0 10 8" className="w-2.5 h-2.5 fill-white"><path d="M1 4l2.5 2.5L9 1"/></svg>}
+        </span>
+        {label}
+      </button>
+    )
+  }
 
   const CourseTable = ({ rows, muted = false }) => (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -44,6 +87,7 @@ export default function CourseList() {
             <th className="px-5 py-3.5 font-semibold text-gray-600">Termin</th>
             <th className="px-5 py-3.5 font-semibold text-gray-600">Miejsca</th>
             <th className="px-5 py-3.5 font-semibold text-gray-600">Cena</th>
+            <th className="px-5 py-3.5 font-semibold text-gray-600 text-center">Dokumenty</th>
             <th className="px-5 py-3.5 font-semibold text-gray-600">Status</th>
           </tr>
         </thead>
@@ -51,7 +95,16 @@ export default function CourseList() {
           {rows.map(c => (
             <tr key={c.id} onClick={() => navigate(`/admin/courses/${c.id}`)}
               className={`transition-colors cursor-pointer ${muted ? 'hover:bg-gray-50 opacity-60' : 'hover:bg-gray-50'}`}>
-              <td className="px-5 py-4 font-medium text-gray-900 max-w-xs">{c.name}</td>
+              <td className="px-5 py-4 font-medium text-gray-900 max-w-xs">
+                <div className="flex items-center gap-2">
+                  {c.course_number && (
+                    <span className="shrink-0 text-xs font-bold text-gray-400 bg-gray-100 rounded px-1.5 py-0.5">
+                      #{c.course_number}
+                    </span>
+                  )}
+                  {c.name}
+                </div>
+              </td>
               <td className="px-5 py-4 text-gray-500">
                 <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${
                   c.course_type === 'kpp' ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'
@@ -82,6 +135,12 @@ export default function CourseList() {
               </td>
               <td className="px-5 py-4 font-semibold text-gray-900">
                 {c.price ? `${c.price} zł` : '—'}
+              </td>
+              <td className="px-5 py-4">
+                <div className="flex flex-col gap-1 items-center" onClick={ev => ev.stopPropagation()}>
+                  <ConsentToggle course={c} field="consents_sent"     label="Wysłane" />
+                  <ConsentToggle course={c} field="consents_received" label="Zgody"   />
+                </div>
               </td>
               <td className="px-5 py-4">
                 <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${

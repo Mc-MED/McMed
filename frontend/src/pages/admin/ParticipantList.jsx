@@ -143,8 +143,8 @@ function EnrolledTable({ courseFilter, onSoftDeleted, refreshKey }) {
                 <span className="text-xs line-clamp-2">{e.course_name}</span>
               </td>
               <td className="px-5 py-4">
-                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${e.deposit_paid ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-600'}`}>
-                  {e.deposit_paid ? 'Wpłacono' : 'Brak'}
+                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${e.payment_status === 'paid' ? 'bg-emerald-50 text-emerald-700' : e.payment_status === 'deposit' ? 'bg-yellow-50 text-yellow-700' : 'bg-orange-50 text-orange-600'}`}>
+                  {e.payment_status === 'paid' ? 'Opłacony' : e.payment_status === 'deposit' ? 'Zaliczka' : 'Brak'}
                 </span>
               </td>
               <td className="px-5 py-4">
@@ -164,7 +164,7 @@ function EnrolledTable({ courseFilter, onSoftDeleted, refreshKey }) {
                 ) : (
                   <div className="flex flex-col items-end gap-1.5">
                     <button
-                      onClick={() => e.deposit_paid ? setDeletionModal(e) : setDeletionModal({ ...e, _noDeposit: true })}
+                      onClick={() => e.payment_status !== 'none' ? setDeletionModal(e) : setDeletionModal({ ...e, _noDeposit: true })}
                       className="text-xs font-semibold px-2.5 py-1 rounded-md bg-red-100 text-red-600 hover:bg-red-200 transition-colors whitespace-nowrap"
                     >
                       Usuń uczestnika
@@ -309,8 +309,8 @@ function ReserveTable({ courses, onSoftDeleted, refreshKey }) {
                     <div>{e.zip_code} {e.city}</div>
                   </td>
                   <td className="px-5 py-4">
-                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${e.deposit_paid ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-600'}`}>
-                      {e.deposit_paid ? 'Wpłacono' : 'Brak'}
+                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${e.payment_status === 'paid' ? 'bg-emerald-50 text-emerald-700' : e.payment_status === 'deposit' ? 'bg-yellow-50 text-yellow-700' : 'bg-orange-50 text-orange-600'}`}>
+                      {e.payment_status === 'paid' ? 'Opłacony' : e.payment_status === 'deposit' ? 'Zaliczka' : 'Brak'}
                     </span>
                   </td>
                   <td className="px-5 py-4 text-gray-400 text-xs whitespace-nowrap">{formatDateTime(e.created_at)}</td>
@@ -360,7 +360,7 @@ function ReserveTable({ courses, onSoftDeleted, refreshKey }) {
                             Przypisz do kursu
                           </button>
                           <button
-                            onClick={() => e.deposit_paid ? setDeletionModal(e) : setDeletionModal({ ...e, _noDeposit: true })}
+                            onClick={() => e.payment_status !== 'none' ? setDeletionModal(e) : setDeletionModal({ ...e, _noDeposit: true })}
                             className="text-xs font-semibold px-2.5 py-1 rounded-md bg-red-100 text-red-600 hover:bg-red-200 transition-colors whitespace-nowrap"
                           >
                             Usuń uczestnika
@@ -470,8 +470,8 @@ function DeletedList({ refreshKey, onRestored }) {
                     <span className="line-clamp-2">{e.course_name || <span className="text-gray-300 italic">brak</span>}</span>
                   </td>
                   <td className="px-5 py-4">
-                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${e.deposit_paid ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-600'}`}>
-                      {e.deposit_paid ? 'Wpłacono' : 'Brak'}
+                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${e.payment_status === 'paid' ? 'bg-emerald-50 text-emerald-700' : e.payment_status === 'deposit' ? 'bg-yellow-50 text-yellow-700' : 'bg-orange-50 text-orange-600'}`}>
+                      {e.payment_status === 'paid' ? 'Opłacony' : e.payment_status === 'deposit' ? 'Zaliczka' : 'Brak'}
                     </span>
                   </td>
                   <td className="px-5 py-4 text-gray-600 text-xs max-w-[200px]">

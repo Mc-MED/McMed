@@ -2,6 +2,8 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    path('courses/<int:course_id>/uploads/', views.course_file_list, name='course-file-list'),
+    path('course-files/<int:file_id>/', views.course_file_detail, name='course-file-detail'),
     path('courses/<int:course_id>/certyfikaty-zip/', views.download_certificates_zip, name='certificates-zip'),
     path('courses/<int:course_id>/<str:doc_name>/', views.download_document, name='document-download'),
     path('courses/<int:course_id>/pdf/<str:doc_name>/', views.download_document_pdf, name='document-download-pdf'),

@@ -84,9 +84,9 @@ function CourseCard({ enrollment, onCancelled }) {
           <p className="text-sm text-gray-500 mt-0.5">{c.course_city}</p>
         </div>
         <div className="text-right shrink-0">
-          <div className="text-xs text-gray-400">Zaliczka</div>
-          <span className={`text-xs font-bold ${c.deposit_paid ? 'text-emerald-600' : 'text-orange-500'}`}>
-            {c.deposit_paid ? 'Wpłacona' : 'Brak'}
+          <div className="text-xs text-gray-400">Płatność</div>
+          <span className={`text-xs font-bold ${c.payment_status === 'paid' ? 'text-emerald-600' : c.payment_status === 'deposit' ? 'text-yellow-600' : 'text-orange-500'}`}>
+            {c.payment_status === 'paid' ? 'Opłacony' : c.payment_status === 'deposit' ? 'Zaliczka' : 'Brak'}
           </span>
         </div>
       </div>

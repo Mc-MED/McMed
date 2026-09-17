@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { adminFetchCourse, adminUpdateCourse, adminDeleteCourse, adminFetchEnrollments, adminDeleteEnrollment, adminUpdateEnrollment, adminAnonymizeEnrollment, adminSoftDeleteEnrollment, adminFetchCourses, adminDownloadDocument, adminDownloadDocumentPdf, adminDownloadXlsx, adminDownloadAttendanceXlsx, adminFetchInstructors, adminSendEmail, adminSendSms, adminCreateEnrollment, adminDownloadCertificate, adminDownloadCertificatesZip } from '../../api/admin'
 import DeletionReasonModal from '../../components/DeletionReasonModal'
+import { adminGetCourseFiles, adminUploadCourseFile, adminDownloadCourseFile, adminDeleteCourseFile } from '../../api/documents'
 import * as XLSX from 'xlsx'
 
 function formatDate(iso) {
@@ -91,6 +92,10 @@ function CourseForm({ initial, onSaved }) {
 
       <Section title="Informacje ogólne">
         <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="field-label">Nr kursu</label>
+            <input type="text" name="course_number" value={form.course_number || ''} onChange={handleChange} className="field-input" placeholder="np. 01, 14" />
+          </div>
           <div>
             <label className="field-label">Data utworzenia</label>
             <input type="date" name="created_at" value={form.created_at || ''} onChange={handleChange} className="field-input" />
@@ -236,7 +241,7 @@ function exportToExcel(enrollments, courseName) {
     e.city,
     e.cert_number || '',
     formatDate(e.cert_date),
-    e.deposit_paid ? 'Tak' : 'Nie',
+    e.payment_status === 'paid' ? 'Opłacony' : e.payment_status === 'deposit' ? 'Zaliczka' : 'Brak',
     e.photo_consent ? 'Tak' : 'Nie',
     formatDateTime(e.created_at),
   ])
@@ -275,7 +280,7 @@ function EditEnrollmentModal({ enrollment, courseType, onSave, onClose }) {
     cert_number: enrollment.cert_number || '',
     cert_date: enrollment.cert_date || '',
     photo_consent: enrollment.photo_consent,
-    deposit_paid: enrollment.deposit_paid,
+    payment_status: enrollment.payment_status || 'none',
   })
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState('')
@@ -384,10 +389,14 @@ function EditEnrollmentModal({ enrollment, courseType, onSave, onClose }) {
               <input type="checkbox" name="photo_consent" checked={form.photo_consent} onChange={set} className="h-4 w-4 accent-red-600 rounded" />
               <span className="text-sm text-gray-700">Zgoda na zdjęcia</span>
             </label>
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input type="checkbox" name="deposit_paid" checked={form.deposit_paid} onChange={set} className="h-4 w-4 accent-emerald-600 rounded" />
-              <span className="text-sm text-gray-700">Wpłacono zaliczkę</span>
-            </label>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-700">Płatność:</span>
+              <select name="payment_status" value={form.payment_status} onChange={set} className="text-sm border border-gray-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-red-500">
+                <option value="none">Brak</option>
+                <option value="deposit">Zaliczka</option>
+                <option value="paid">Opłacony</option>
+              </select>
+            </div>
           </div>
           {error && <p className="text-red-600 text-sm">{error}</p>}
           <div className="flex items-center gap-3 pt-2">
@@ -476,7 +485,7 @@ function AddParticipantModal({ courseId, courseType, onSave, onClose }) {
     apartment_number: '',
     cert_number: '',
     cert_date: '',
-    deposit_paid: false,
+    payment_status: 'none',
     photo_consent: false,
   })
   const [saving, setSaving] = useState(false)
@@ -588,10 +597,14 @@ function AddParticipantModal({ courseId, courseType, onSave, onClose }) {
             </div>
           )}
           <div className="border-t border-gray-100 pt-4 flex items-center gap-8">
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input type="checkbox" name="deposit_paid" checked={form.deposit_paid} onChange={set} className="h-4 w-4 accent-emerald-600 rounded" />
-              <span className="text-sm text-gray-700">Wpłacono zaliczkę</span>
-            </label>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-700">Płatność:</span>
+              <select name="payment_status" value={form.payment_status} onChange={set} className="text-sm border border-gray-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-red-500">
+                <option value="none">Brak</option>
+                <option value="deposit">Zaliczka</option>
+                <option value="paid">Opłacony</option>
+              </select>
+            </div>
             <label className="flex items-center gap-2 cursor-pointer select-none">
               <input type="checkbox" name="photo_consent" checked={form.photo_consent} onChange={set} className="h-4 w-4 accent-red-600 rounded" />
               <span className="text-sm text-gray-700">Zgoda na zdjęcia</span>
@@ -648,15 +661,17 @@ function EnrollmentTable({ courseId, courseName, examDate, courseType }) {
       .finally(() => setLoading(false))
   }, [courseId])
 
+  const PAYMENT_CYCLE = { none: 'deposit', deposit: 'paid', paid: 'none' }
+
   async function handleToggleDeposit(enrollment) {
     if (togglingDeposit) return
-    const newVal = !enrollment.deposit_paid
+    const newVal = PAYMENT_CYCLE[enrollment.payment_status] || 'deposit'
     setTogglingDeposit(enrollment.id)
-    setEnrollments(prev => prev.map(e => e.id === enrollment.id ? { ...e, deposit_paid: newVal } : e))
+    setEnrollments(prev => prev.map(e => e.id === enrollment.id ? { ...e, payment_status: newVal } : e))
     try {
-      await adminUpdateEnrollment(enrollment.id, { deposit_paid: newVal })
+      await adminUpdateEnrollment(enrollment.id, { payment_status: newVal })
     } catch {
-      setEnrollments(prev => prev.map(e => e.id === enrollment.id ? { ...e, deposit_paid: !newVal } : e))
+      setEnrollments(prev => prev.map(e => e.id === enrollment.id ? { ...e, payment_status: enrollment.payment_status } : e))
     } finally {
       setTogglingDeposit(null)
     }
@@ -1036,9 +1051,9 @@ function EnrollmentTable({ courseId, courseName, examDate, courseType }) {
                     title={emailMode ? '' : 'Kliknij, aby zmienić'}
                     className={`text-xs font-semibold px-2.5 py-1 rounded-full transition-opacity ${
                       togglingDeposit === e.id ? 'opacity-40 cursor-wait' : emailMode ? '' : 'hover:opacity-70 cursor-pointer'
-                    } ${e.deposit_paid ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-600'}`}
+                    } ${e.payment_status === 'paid' ? 'bg-emerald-50 text-emerald-700' : e.payment_status === 'deposit' ? 'bg-yellow-50 text-yellow-700' : 'bg-orange-50 text-orange-600'}`}
                   >
-                    {e.deposit_paid ? 'Wpłacono' : 'Brak'}
+                    {e.payment_status === 'paid' ? 'Opłacony' : e.payment_status === 'deposit' ? 'Zaliczka' : 'Brak'}
                   </button>
                 </td>
                 <td className="px-5 py-4">
@@ -1102,7 +1117,7 @@ function EnrollmentTable({ courseId, courseName, examDate, courseType }) {
                         <div className="flex gap-1.5">
                           <button onClick={() => setConfirm({ type: 'remove', id: e.id })} className="text-xs font-semibold px-2.5 py-1 rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">Usuń z kursu</button>
                           <button
-                            onClick={() => e.deposit_paid ? setDeletionModal(e) : setConfirm({ type: 'softdelete', id: e.id })}
+                            onClick={() => e.payment_status !== 'none' ? setDeletionModal(e) : setConfirm({ type: 'softdelete', id: e.id })}
                             className="text-xs font-semibold px-2.5 py-1 rounded-md bg-red-100 text-red-600 hover:bg-red-200 transition-colors"
                           >
                             Usuń uczestnika
@@ -1199,7 +1214,7 @@ export default function CourseDetail() {
 
       {/* Zakładki */}
       <div className="flex gap-1 border-b border-gray-200 mt-6">
-        {[['dane', 'Dane kursu'], ['uczestnicy', `Uczestnicy (${course.max_participants - course.spots_left}/${course.max_participants})`], ['dokumenty', 'Dokumenty'], ['obsluga', 'Obsługa kursu']].map(([key, label]) => (
+        {[['dane', 'Dane kursu'], ['uczestnicy', `Uczestnicy (${course.max_participants - course.spots_left}/${course.max_participants})`], ['egzamin', 'Egzamin'], ['dokumenty', 'Dokumenty'], ['obsluga', 'Obsługa kursu']].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)}
             className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
               tab === key ? 'border-red-600 text-red-600' : 'border-transparent text-gray-500 hover:text-gray-800'
@@ -1211,6 +1226,7 @@ export default function CourseDetail() {
 
       {tab === 'dane' && <div className="max-w-4xl"><CourseForm initial={course} onSaved={setCourse} /></div>}
       {tab === 'uczestnicy' && <EnrollmentTable courseId={id} courseName={course.name} examDate={course.exam_date} courseType={course.course_type} />}
+      {tab === 'egzamin' && <div className="max-w-5xl"><ExamTab courseId={id} /></div>}
       {tab === 'dokumenty' && <div className="max-w-4xl"><DocumentsTab courseId={id} courseType={course.course_type} /></div>}
       {tab === 'obsluga' && <div className="max-w-4xl"><CourseManagementTab courseId={id} courseType={course.course_type} /></div>}
     </div>
@@ -1237,11 +1253,194 @@ const XLSX_DOCUMENTS = [
   { filename: 'program', label: 'Program zajęć', description: '' },
 ]
 
+function ExamTab({ courseId }) {
+  const [enrollments, setEnrollments] = useState([])
+  const [loading, setLoading]         = useState(true)
+  const [scores, setScores]           = useState({})   // { [enrollmentId]: { rko, zad1, zad2 } }
+  const [saving, setSaving]           = useState({})   // { [enrollmentId-field]: true }
+
+  useEffect(() => {
+    adminFetchEnrollments(courseId)
+      .then(data => {
+        const active = data.filter(e => !e.is_deleted)
+        setEnrollments(active)
+        const init = {}
+        active.forEach(e => {
+          init[e.id] = {
+            rko:  e.exam_rko  != null ? String(e.exam_rko)  : '',
+            zad1: e.exam_zad1 != null ? String(e.exam_zad1) : '',
+            zad2: e.exam_zad2 != null ? String(e.exam_zad2) : '',
+          }
+        })
+        setScores(init)
+      })
+      .finally(() => setLoading(false))
+  }, [courseId])
+
+  function avg(id) {
+    const s = scores[id] || {}
+    const vals = [s.rko, s.zad1, s.zad2]
+      .map(v => parseFloat(v))
+      .filter(v => !isNaN(v))
+    if (!vals.length) return ''
+    const raw = vals.reduce((a, b) => a + b, 0) / vals.length
+    const rounded = Math.round(raw * 2) / 2
+    return rounded % 1 === 0 ? String(rounded) : rounded.toFixed(1)
+  }
+
+  function handleChange(enrollmentId, field, value) {
+    setScores(prev => ({ ...prev, [enrollmentId]: { ...prev[enrollmentId], [field]: value } }))
+  }
+
+  async function handleBlur(enrollmentId, field, value) {
+    const key = `${enrollmentId}-${field}`
+    const apiField = `exam_${field}`
+    const parsed = value === '' ? null : parseFloat(value)
+    if (value !== '' && isNaN(parsed)) return
+    setSaving(prev => ({ ...prev, [key]: true }))
+    try {
+      await adminUpdateEnrollment(enrollmentId, { [apiField]: parsed })
+    } finally {
+      setSaving(prev => ({ ...prev, [key]: false }))
+    }
+  }
+
+  const ScoreInput = ({ enrollmentId, field }) => {
+    const key = `${enrollmentId}-${field}`
+    const val = scores[enrollmentId]?.[field] ?? ''
+    return (
+      <input
+        type="number"
+        step="0.01"
+        min="0"
+        value={val}
+        onChange={e => handleChange(enrollmentId, field, e.target.value)}
+        onBlur={e => handleBlur(enrollmentId, field, e.target.value)}
+        className={`w-20 text-center text-sm border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-400 transition-colors ${
+          saving[key] ? 'border-yellow-400 bg-yellow-50' : 'border-gray-200 bg-white'
+        }`}
+      />
+    )
+  }
+
+  if (loading) return <p className="text-gray-400 text-sm mt-8">Ładowanie…</p>
+  if (!enrollments.length) return <p className="text-gray-400 text-sm mt-8">Brak uczestników na tym kursie.</p>
+
+  return (
+    <div className="mt-6">
+      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-100 bg-gray-50 text-left">
+              <th className="px-5 py-3.5 font-semibold text-gray-600 w-12">Lp.</th>
+              <th className="px-5 py-3.5 font-semibold text-gray-600">Imię i nazwisko</th>
+              <th className="px-5 py-3.5 font-semibold text-gray-600 text-center">RKO</th>
+              <th className="px-5 py-3.5 font-semibold text-gray-600 text-center">ZAD 1</th>
+              <th className="px-5 py-3.5 font-semibold text-gray-600 text-center">ZAD 2</th>
+              <th className="px-5 py-3.5 font-semibold text-gray-600 text-center">Średnia</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {enrollments.map((e, i) => {
+              const average = avg(e.id)
+              return (
+                <tr key={e.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-5 py-3 text-gray-400 font-medium">{i + 1}</td>
+                  <td className="px-5 py-3 font-medium text-gray-900">
+                    {e.last_name} {e.first_name}
+                  </td>
+                  <td className="px-5 py-3 text-center">
+                    <ScoreInput enrollmentId={e.id} field="rko" />
+                  </td>
+                  <td className="px-5 py-3 text-center">
+                    <ScoreInput enrollmentId={e.id} field="zad1" />
+                  </td>
+                  <td className="px-5 py-3 text-center">
+                    <ScoreInput enrollmentId={e.id} field="zad2" />
+                  </td>
+                  <td className="px-5 py-3 text-center">
+                    {average
+                      ? <span className={`font-bold text-sm ${parseFloat(average) >= 3 ? 'text-emerald-600' : 'text-red-600'}`}>{average}</span>
+                      : <span className="text-gray-300">—</span>
+                    }
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-gray-400 mt-3">Oceny zapisywane automatycznie po opuszczeniu pola.</p>
+    </div>
+  )
+}
+
 function DocumentsTab({ courseId, courseType }) {
   const DOCUMENTS = courseType === 'recert' ? DOCUMENTS_RECERT : DOCUMENTS_KPP
   const [downloading, setDownloading] = useState(null)
   const [downloaded, setDownloaded]   = useState(new Set())
   const [error, setError]             = useState('')
+
+  // Pliki kursu
+  const [courseFiles, setCourseFiles]     = useState([])
+  const [uploadLabel, setUploadLabel]     = useState('')
+  const [uploadFile, setUploadFile]       = useState(null)
+  const [uploading, setUploading]         = useState(false)
+  const [uploadError, setUploadError]     = useState('')
+  const [deletingFile, setDeletingFile]   = useState(null)
+  const [downloadingFile, setDownloadingFile] = useState(null)
+
+  useEffect(() => {
+    adminGetCourseFiles(courseId).then(setCourseFiles).catch(() => {})
+  }, [courseId])
+
+  async function handleUpload(e) {
+    e.preventDefault()
+    if (!uploadFile) return
+    setUploading(true)
+    setUploadError('')
+    try {
+      const created = await adminUploadCourseFile(courseId, uploadFile, uploadLabel || uploadFile.name)
+      setCourseFiles(prev => [...prev, created])
+      setUploadLabel('')
+      setUploadFile(null)
+      e.target.reset()
+    } catch {
+      setUploadError('Nie udało się przesłać pliku.')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function handleDownloadFile(cf) {
+    setDownloadingFile(cf.id)
+    try {
+      const response = await adminDownloadCourseFile(cf.id)
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: response.headers['content-type'] }))
+      const a = document.createElement('a')
+      a.href = url
+      const ext = cf.filename.includes('.') ? '.' + cf.filename.split('.').pop() : ''
+      a.download = `${cf.label}${ext}`
+      a.click()
+      window.URL.revokeObjectURL(url)
+    } catch {
+      setUploadError('Nie udało się pobrać pliku.')
+    } finally {
+      setDownloadingFile(null)
+    }
+  }
+
+  async function handleDeleteFile(cf) {
+    setDeletingFile(cf.id)
+    try {
+      await adminDeleteCourseFile(cf.id)
+      setCourseFiles(prev => prev.filter(f => f.id !== cf.id))
+    } catch {
+      setUploadError('Nie udało się usunąć pliku.')
+    } finally {
+      setDeletingFile(null)
+    }
+  }
 
   async function handleDownload(filename, label) {
     setDownloading(filename)
@@ -1342,6 +1541,72 @@ function DocumentsTab({ courseId, courseType }) {
         )
       })}
       {error && <p className="text-red-600 text-sm">{error}</p>}
+
+      {/* ── Pliki kursu ── */}
+      <div className="mt-8 border-t border-gray-100 pt-6">
+        <h3 className="text-sm font-bold text-gray-700 mb-4">Pliki kursu</h3>
+
+        {courseFiles.length > 0 && (
+          <div className="space-y-2 mb-5">
+            {courseFiles.map(cf => (
+              <div key={cf.id} className="bg-white rounded-xl border border-gray-200 px-4 py-3 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">{cf.label}</p>
+                  <p className="text-xs text-gray-400">{cf.filename}</p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleDownloadFile(cf)}
+                    disabled={downloadingFile === cf.id || deletingFile === cf.id}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 transition-colors"
+                  >
+                    {downloadingFile === cf.id ? '…' : '↓ Pobierz'}
+                  </button>
+                  <button
+                    onClick={() => handleDeleteFile(cf)}
+                    disabled={downloadingFile === cf.id || deletingFile === cf.id}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 disabled:opacity-50 transition-colors"
+                  >
+                    {deletingFile === cf.id ? '…' : 'Usuń'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <form onSubmit={handleUpload} className="bg-gray-50 rounded-xl border border-dashed border-gray-300 p-4 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="field-label">Nazwa pliku</label>
+              <input
+                type="text"
+                value={uploadLabel}
+                onChange={e => setUploadLabel(e.target.value)}
+                placeholder="np. Prośba, Wniosek"
+                className="field-input"
+              />
+            </div>
+            <div>
+              <label className="field-label">Plik</label>
+              <input
+                type="file"
+                onChange={e => setUploadFile(e.target.files[0] || null)}
+                className="field-input text-sm"
+                required
+              />
+            </div>
+          </div>
+          {uploadError && <p className="text-red-600 text-xs">{uploadError}</p>}
+          <button
+            type="submit"
+            disabled={uploading || !uploadFile}
+            className="text-sm font-semibold px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 transition-colors"
+          >
+            {uploading ? 'Przesyłanie…' : '+ Dodaj plik'}
+          </button>
+        </form>
+      </div>
     </div>
   )
 }

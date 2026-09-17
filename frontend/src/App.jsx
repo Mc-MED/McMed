@@ -1,4 +1,30 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { useEffect } from 'react'
+
+const TITLES = {
+  '/login':               'McMed – Logowanie',
+  '/zapisz-sie':          'McMed – Zapisz się na kurs',
+  '/zaloguj-sie':         'McMed – Logowanie',
+  '/konto':               'McMed – Moje konto',
+  '/zapomnialem-hasla':   'McMed – Przypomnij hasło',
+  '/admin/courses':       'McMed – Kursy',
+  '/admin/courses/create':'McMed – Nowy kurs',
+  '/admin/participants':  'McMed – Uczestnicy',
+  '/admin/instructors':   'McMed – Instruktorzy',
+  '/admin/links':         'McMed – Linki',
+  '/admin/materials':     'McMed – Materiały',
+}
+
+function TitleManager() {
+  const { pathname } = useLocation()
+  useEffect(() => {
+    const match = Object.keys(TITLES).find(path =>
+      pathname === path || (path !== '/' && pathname.startsWith(path + '/'))
+    )
+    document.title = match ? TITLES[match] : 'McMed'
+  }, [pathname])
+  return null
+}
 import AdminLayout from './layouts/AdminLayout'
 import CourseList from './pages/admin/CourseList'
 import CourseCreate from './pages/admin/CourseCreate'
@@ -19,6 +45,7 @@ import ResetPassword from './pages/participant/ResetPassword'
 export default function App() {
   return (
     <BrowserRouter>
+      <TitleManager />
       <Routes>
         <Route path="/login" element={<Login />} />
 

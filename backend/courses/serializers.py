@@ -74,7 +74,7 @@ class AdminCourseSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Course
         fields = [
-            'id', 'name', 'course_type', 'course_type_display',
+            'id', 'course_number', 'name', 'course_type', 'course_type_display',
             'city', 'max_participants', 'price', 'is_active', 'created_at',
             'course_days', 'start_date', 'end_date',
             'exam_date', 'exam_time', 'exam_location', 'whatsapp_link',
@@ -83,6 +83,7 @@ class AdminCourseSerializer(serializers.ModelSerializer):
             'psychologist',
             'committee_chair', 'committee_member1', 'committee_member2',
             'spots_left',
+            'consents_sent', 'consents_received',
         ]
         read_only_fields = ['id', 'start_date', 'end_date']
 
@@ -119,7 +120,7 @@ class EnrollmentSerializer(serializers.ModelSerializer):
             'email', 'phone',
             'zip_code', 'city', 'street', 'house_number', 'apartment_number',
             'cert_number', 'cert_date',
-            'photo_consent', 'deposit_paid', 'created_at',
+            'photo_consent', 'payment_status', 'exam_rko', 'exam_zad1', 'exam_zad2', 'created_at',
             'is_deleted', 'deleted_at', 'deletion_reason', 'deletion_reason_display',
         ]
         read_only_fields = ['id', 'course_name', 'exam_date', 'created_at', 'is_deleted', 'deleted_at', 'deletion_reason', 'deletion_reason_display']
@@ -160,7 +161,7 @@ class AdminEnrollmentCreateSerializer(serializers.ModelSerializer):
             'email', 'phone',
             'zip_code', 'city', 'street', 'house_number', 'apartment_number',
             'cert_number', 'cert_date',
-            'photo_consent', 'deposit_paid', 'created_at',
+            'photo_consent', 'payment_status', 'exam_rko', 'exam_zad1', 'exam_zad2', 'created_at',
             'is_deleted', 'deleted_at', 'deletion_reason', 'deletion_reason_display',
         ]
         read_only_fields = ['id', 'course_name', 'exam_date', 'created_at', 'is_deleted', 'deleted_at', 'deletion_reason', 'deletion_reason_display']
@@ -238,5 +239,5 @@ class MyEnrollmentSerializer(serializers.ModelSerializer):
             'id', 'course', 'course_name', 'course_type', 'course_type_display',
             'course_city', 'start_date', 'end_date', 'exam_date', 'exam_location',
             'price', 'course_days', 'whatsapp_link',
-            'first_name', 'last_name', 'deposit_paid', 'photo_consent', 'created_at',
+            'first_name', 'last_name', 'payment_status', 'photo_consent', 'created_at',
         ]

@@ -15,7 +15,7 @@ from docxtpl import DocxTemplate
 import openpyxl
 
 from courses.models import Course, Enrollment, Instructor
-from .models import Topic, TopicFile, TopicFileProgress, QuizProgress
+from .models import Topic, TopicFile, TopicFileProgress, QuizProgress, CourseFile
 
 TEMPLATES_DIR = Path(__file__).parent / 'templates'
 
@@ -631,3 +631,62 @@ def participant_topic_file(request, file_id):
     response = FileResponse(f, content_type='application/pdf')
     response['Content-Disposition'] = f'inline; filename="{safe_title}.pdf"'
     return response
+
+
+# ─── Pliki kursu (upload przez admina) ───────────────────────────────
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAdminUser])
+def course_file_list(request, course_id):
+    try:
+        course = Course.objects.get(pk=course_id)
+    except Course.DoesNotExist:
+        return Response({'detail': 'Kurs nie istnieje.'}, status=404)
+
+    if request.method == 'GET':
+        files = course.uploaded_files.all()
+        return Response([_course_file_dict(f) for f in files])
+
+    f = request.FILES.get('file')
+    if not f:
+        return Response({'detail': 'Wymagany plik.'}, status=400)
+    label = request.data.get('label', '').strip() or f.name
+    cf = CourseFile.objects.create(course=course, label=label, file=f)
+    return Response(_course_file_dict(cf), status=201)
+
+
+@api_view(['GET', 'DELETE'])
+@permission_classes([IsAdminUser])
+def course_file_detail(request, file_id):
+    try:
+        cf = CourseFile.objects.get(pk=file_id)
+    except CourseFile.DoesNotExist:
+        return Response({'detail': 'Plik nie istnieje.'}, status=404)
+
+    if request.method == 'DELETE':
+        cf.file.delete(save=False)
+        cf.delete()
+        return Response(status=204)
+
+    try:
+        f = cf.file.open('rb')
+    except (FileNotFoundError, OSError):
+        return Response({'detail': 'Plik nie istnieje na serwerze.'}, status=404)
+
+    import mimetypes
+    mime, _ = mimetypes.guess_type(cf.file.name)
+    mime = mime or 'application/octet-stream'
+    safe_label = cf.label.replace(' ', '_')
+    ext = os.path.splitext(cf.file.name)[1]
+    response = FileResponse(f, content_type=mime)
+    response['Content-Disposition'] = f'attachment; filename="{safe_label}{ext}"'
+    return response
+
+
+def _course_file_dict(cf):
+    return {
+        'id':          cf.id,
+        'label':       cf.label,
+        'filename':    os.path.basename(cf.file.name),
+        'uploaded_at': cf.uploaded_at.isoformat(),
+    }

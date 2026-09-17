@@ -4,6 +4,7 @@ import { adminCreateCourse, adminFetchInstructors } from '../../api/admin'
 
 const EMPTY = {
   created_at: new Date().toISOString().slice(0, 10),
+  course_number: '',
   name: '',
   course_type: 'kpp',
   city: '',
@@ -140,7 +141,12 @@ export default function CourseCreate() {
 
         {/* ── Informacje ogólne ── */}
         <Section title="Informacje ogólne">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="field-label">Nr kursu</label>
+              <input type="text" name="course_number" value={form.course_number}
+                onChange={handleChange} className="field-input" placeholder="np. 01, 14" />
+            </div>
             <div>
               <label className="field-label">Data utworzenia</label>
               <input type="date" name="created_at" value={form.created_at}

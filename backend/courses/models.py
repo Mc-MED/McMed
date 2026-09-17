@@ -67,6 +67,7 @@ class Course(models.Model):
     ]
 
     # Podstawowe
+    course_number    = models.CharField(max_length=20, blank=True, default='')
     name             = models.CharField(max_length=200)
     course_type      = models.CharField(max_length=10, choices=TYPE_CHOICES, default=TYPE_KPP)
     city             = models.CharField(max_length=100, blank=True)
@@ -87,6 +88,10 @@ class Course(models.Model):
 
     # Komunikacja
     whatsapp_link = models.CharField(max_length=500, blank=True)
+
+    # Zgody do instytucji
+    consents_sent     = models.BooleanField(default=False)
+    consents_received = models.BooleanField(default=False)
 
     # Organizacja
     entity_director   = models.CharField(max_length=200, blank=True)
@@ -148,7 +153,14 @@ class Enrollment(models.Model):
     cert_number      = models.CharField(max_length=100, blank=True, default='')
     cert_date        = models.DateField(null=True, blank=True)
     photo_consent    = models.BooleanField(default=False)
-    deposit_paid     = models.BooleanField(default=False)
+    exam_rko         = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    exam_zad1        = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    exam_zad2        = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    payment_status   = models.CharField(
+        max_length=10,
+        choices=[('none', 'Brak'), ('deposit', 'Zaliczka'), ('paid', 'Opłacony')],
+        default='none',
+    )
     created_at       = models.DateTimeField(auto_now_add=True)
 
     # Soft-delete
