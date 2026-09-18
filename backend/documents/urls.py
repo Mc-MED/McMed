@@ -20,4 +20,10 @@ urlpatterns = [
     path('progress/', views.participant_progress, name='participant-progress'),
     path('quiz-progress/', views.quiz_progress, name='quiz-progress'),
     path('topic-files/<int:file_id>/progress/', views.participant_toggle_progress, name='participant-toggle-progress'),
+    # Pytania zaliczeniowe
+    path('admin/topics/<int:topic_id>/questions/', views.admin_topic_questions, name='admin-topic-questions'),
+    path('admin/questions/<int:question_id>/', views.admin_topic_question_detail, name='admin-topic-question-detail'),
+    path('topics/<int:topic_id>/quiz/', views.participant_topic_quiz, name='participant-topic-quiz'),
+    path('topics/<int:topic_id>/quiz/submit/', views.participant_submit_quiz, name='participant-submit-quiz'),
+    path('topic-quiz-results/', views.participant_quiz_results, name='participant-quiz-results'),
 ]

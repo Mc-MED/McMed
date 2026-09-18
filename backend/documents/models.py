@@ -3,8 +3,9 @@ from django.db import models
 
 
 class Topic(models.Model):
-    title = models.CharField(max_length=200)
-    order = models.PositiveIntegerField(default=0)
+    title        = models.CharField(max_length=200)
+    order        = models.PositiveIntegerField(default=0)
+    quiz_enabled = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['order', 'id']
@@ -57,3 +58,37 @@ class QuizProgress(models.Model):
 
     class Meta:
         unique_together = ('user', 'category_id')
+
+
+class TopicQuestion(models.Model):
+    topic = models.ForeignKey(Topic, related_name='questions', on_delete=models.CASCADE)
+    text  = models.TextField()
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['order', 'id']
+
+    def __str__(self):
+        return self.text[:60]
+
+
+class TopicAnswerChoice(models.Model):
+    question   = models.ForeignKey(TopicQuestion, related_name='choices', on_delete=models.CASCADE)
+    text       = models.CharField(max_length=500)
+    is_correct = models.BooleanField(default=False)
+    order      = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['order', 'id']
+
+
+class TopicQuizAttempt(models.Model):
+    user         = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='quiz_attempts')
+    topic        = models.ForeignKey(Topic, on_delete=models.CASCADE, related_name='attempts')
+    score        = models.PositiveIntegerField()
+    total        = models.PositiveIntegerField()
+    passed       = models.BooleanField()
+    attempted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-attempted_at']

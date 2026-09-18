@@ -37,6 +37,11 @@ export async function adminCreateTopic(title) {
   return data
 }
 
+export async function adminToggleTopicQuiz(id, enabled) {
+  const { data } = await adminAxios.patch(`/api/documents/admin/topics/${id}/`, { quiz_enabled: enabled })
+  return data
+}
+
 export async function adminUpdateTopic(id, payload) {
   const { data } = await adminAxios.patch(`/api/documents/admin/topics/${id}/`, payload)
   return data
@@ -79,6 +84,39 @@ export async function fetchProgress() {
 
 export async function toggleFileProgress(fileId) {
   const { data } = await participantAxios.post(`/api/documents/topic-files/${fileId}/progress/`)
+  return data
+}
+
+// ─── Pytania zaliczeniowe (admin) ─────────────────────────────────────
+
+export async function adminCreateTopicQuestion(topicId, data) {
+  const { data: res } = await adminAxios.post(`/api/documents/admin/topics/${topicId}/questions/`, data)
+  return res
+}
+
+export async function adminDeleteTopicQuestion(questionId) {
+  return adminAxios.delete(`/api/documents/admin/questions/${questionId}/`)
+}
+
+export async function adminUpdateTopicQuestion(questionId, data) {
+  const { data: res } = await adminAxios.patch(`/api/documents/admin/questions/${questionId}/`, data)
+  return res
+}
+
+// ─── Pytania zaliczeniowe (uczestnik) ─────────────────────────────────
+
+export async function fetchTopicQuiz(topicId) {
+  const { data } = await participantAxios.get(`/api/documents/topics/${topicId}/quiz/`)
+  return data
+}
+
+export async function submitTopicQuiz(topicId, answers) {
+  const { data } = await participantAxios.post(`/api/documents/topics/${topicId}/quiz/submit/`, { answers })
+  return data
+}
+
+export async function fetchTopicQuizResults() {
+  const { data } = await participantAxios.get('/api/documents/topic-quiz-results/')
   return data
 }
 

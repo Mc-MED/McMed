@@ -1,10 +1,217 @@
 import { useEffect, useRef, useState } from 'react'
-import { adminGetTopics, adminCreateTopic, adminUpdateTopic, adminDeleteTopic, adminUploadTopicFile, adminDeleteTopicFile } from '../../api/documents'
+import { adminGetTopics, adminCreateTopic, adminUpdateTopic, adminDeleteTopic, adminUploadTopicFile, adminDeleteTopicFile, adminCreateTopicQuestion, adminDeleteTopicQuestion, adminUpdateTopicQuestion, adminToggleTopicQuiz } from '../../api/documents'
 
 function formatDate(iso) {
   if (!iso) return '—'
   const d = new Date(iso)
   return d.toLocaleString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+const LETTERS = ['A', 'B', 'C', 'D']
+
+function emptyChoices() {
+  return [
+    { text: '', is_correct: true },
+    { text: '', is_correct: false },
+    { text: '', is_correct: false },
+    { text: '', is_correct: false },
+  ]
+}
+
+function QuizEditor({ topic, onUpdated }) {
+  const questions = topic.questions || []
+  const [open, setOpen]             = useState(false)
+  const [adding, setAdding]         = useState(false)
+  const [saving, setSaving]         = useState(false)
+  const [editingId, setEditingId]   = useState(null)
+  const [deletingId, setDeletingId] = useState(null)
+  const [confirmId, setConfirmId]   = useState(null)
+  const [err, setErr]               = useState('')
+
+  const [form, setForm] = useState({ text: '', choices: emptyChoices() })
+
+  function resetForm() {
+    setForm({ text: '', choices: emptyChoices() })
+    setAdding(false)
+    setEditingId(null)
+    setErr('')
+  }
+
+  function startEdit(q) {
+    setForm({
+      text: q.text,
+      choices: q.choices.map(c => ({ text: c.text, is_correct: c.is_correct })),
+    })
+    setEditingId(q.id)
+    setAdding(false)
+  }
+
+  function setChoiceText(i, val) {
+    setForm(f => {
+      const choices = [...f.choices]
+      choices[i] = { ...choices[i], text: val }
+      return { ...f, choices }
+    })
+  }
+
+  function setCorrect(i) {
+    setForm(f => ({
+      ...f,
+      choices: f.choices.map((c, idx) => ({ ...c, is_correct: idx === i })),
+    }))
+  }
+
+  async function handleSave() {
+    const text = form.text.trim()
+    if (!text) { setErr('Wpisz treść pytania.'); return }
+    const choices = form.choices.filter(c => c.text.trim())
+    if (choices.length < 2) { setErr('Wypełnij co najmniej 2 odpowiedzi.'); return }
+    if (!choices.some(c => c.is_correct)) { setErr('Zaznacz poprawną odpowiedź.'); return }
+    setSaving(true)
+    setErr('')
+    try {
+      if (editingId) {
+        const updated = await adminUpdateTopicQuestion(editingId, { text, choices })
+        onUpdated({ ...topic, questions: questions.map(q => q.id === editingId ? updated : q) })
+      } else {
+        const created = await adminCreateTopicQuestion(topic.id, { text, choices })
+        onUpdated({ ...topic, questions: [...questions, created] })
+      }
+      resetForm()
+    } catch (e) {
+      const msg = e.response?.data?.detail || 'Błąd zapisu.'
+      setErr(msg)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDelete(id) {
+    setDeletingId(id)
+    try {
+      await adminDeleteTopicQuestion(id)
+      onUpdated({ ...topic, questions: questions.filter(q => q.id !== id) })
+    } finally {
+      setDeletingId(null)
+      setConfirmId(null)
+    }
+  }
+
+  const showForm = adding || editingId !== null
+
+  return (
+    <div className="border-t border-gray-100 px-5 py-4">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-2 mb-3 text-left"
+      >
+        <span className="text-gray-400 text-sm leading-none">{open ? '▾' : '▸'}</span>
+        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex-1">
+          Pytania zaliczeniowe ({questions.length}/5)
+        </span>
+        {!open && questions.length > 0 && (
+          <span className="text-xs text-gray-400">{questions.length} {questions.length === 1 ? 'pytanie' : questions.length < 5 ? 'pytania' : 'pytań'}</span>
+        )}
+      </button>
+
+      {open && !showForm && questions.length < 5 && (
+        <div className="flex justify-end mb-3">
+          <button
+            onClick={() => { setAdding(true); setEditingId(null); setForm({ text: '', choices: emptyChoices() }) }}
+            className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors"
+          >
+            + Dodaj pytanie
+          </button>
+        </div>
+      )}
+
+      {open && questions.length === 0 && !showForm && (
+        <p className="text-sm text-gray-400 text-center py-2">Brak pytań. Dodaj do 5 pytań zaliczeniowych.</p>
+      )}
+
+      {open && questions.map((q, qi) => (
+        <div key={q.id} className="mb-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
+          {editingId === q.id ? null : (
+            <>
+              <div className="flex items-start gap-2">
+                <span className="text-xs font-bold text-gray-400 mt-0.5 shrink-0">{qi + 1}.</span>
+                <span className="flex-1 text-sm font-medium text-gray-800">{q.text}</span>
+                {confirmId === q.id ? (
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs text-gray-500">Usunąć?</span>
+                    <button onClick={() => handleDelete(q.id)} disabled={deletingId === q.id}
+                      className="text-xs font-semibold px-2 py-1 rounded-md bg-red-600 text-white disabled:opacity-60">
+                      {deletingId === q.id ? '…' : 'Tak'}
+                    </button>
+                    <button onClick={() => setConfirmId(null)} className="text-xs text-gray-400 hover:text-gray-700">Nie</button>
+                  </div>
+                ) : (
+                  <div className="flex gap-1.5 shrink-0">
+                    <button onClick={() => startEdit(q)} className="text-xs px-2 py-1 rounded-md bg-gray-200 text-gray-600 hover:bg-gray-300">Edytuj</button>
+                    <button onClick={() => setConfirmId(q.id)} className="text-xs px-2 py-1 rounded-md bg-red-50 text-red-600 hover:bg-red-100">Usuń</button>
+                  </div>
+                )}
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-1.5">
+                {q.choices.map((c, ci) => (
+                  <div key={c.id} className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-lg ${c.is_correct ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-gray-500'}`}>
+                    <span className="font-bold shrink-0">{LETTERS[ci]}.</span>
+                    <span>{c.text}</span>
+                    {c.is_correct && <span className="ml-auto">✓</span>}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      ))}
+
+      {open && showForm && (
+        <div className="mt-2 p-4 rounded-xl border border-red-200 bg-red-50/40">
+          <p className="text-xs font-semibold text-gray-600 mb-2">{editingId ? 'Edytuj pytanie' : 'Nowe pytanie'}</p>
+          <textarea
+            value={form.text}
+            onChange={e => setForm(f => ({ ...f, text: e.target.value }))}
+            placeholder="Treść pytania…"
+            rows={2}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 mb-3 resize-none bg-white"
+          />
+          <div className="space-y-2 mb-3">
+            {form.choices.map((c, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name={`correct-${topic.id}-${editingId ?? 'new'}`}
+                  checked={c.is_correct}
+                  onChange={() => setCorrect(i)}
+                  className="accent-emerald-600 shrink-0"
+                  title="Poprawna odpowiedź"
+                />
+                <span className="text-xs font-bold text-gray-400 w-4 shrink-0">{LETTERS[i]}.</span>
+                <input
+                  value={c.text}
+                  onChange={e => setChoiceText(i, e.target.value)}
+                  placeholder={`Odpowiedź ${LETTERS[i]}…`}
+                  className="flex-1 border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 bg-white"
+                />
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-gray-400 mb-3">Zaznacz kółko przy poprawnej odpowiedzi.</p>
+          {err && <p className="text-xs text-red-600 mb-2">{err}</p>}
+          <div className="flex gap-2">
+            <button onClick={handleSave} disabled={saving}
+              className="text-xs font-semibold px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white disabled:opacity-60 transition-colors">
+              {saving ? '…' : 'Zapisz'}
+            </button>
+            <button onClick={resetForm} className="text-xs font-semibold px-4 py-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">
+              Anuluj
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 function TopicRow({ topic, onUpdated, onDeleted }) {
@@ -18,7 +225,19 @@ function TopicRow({ topic, onUpdated, onDeleted }) {
   const [uploadMsg, setUploadMsg]       = useState(null)
   const [deletingFileId, setDeletingFileId] = useState(null)
   const [confirmDeleteFile, setConfirmDeleteFile] = useState(null)
+  const [togglingQuiz, setTogglingQuiz] = useState(false)
   const fileRef = useRef()
+
+  async function handleToggleQuiz(e) {
+    e.stopPropagation()
+    setTogglingQuiz(true)
+    try {
+      const updated = await adminToggleTopicQuiz(topic.id, !topic.quiz_enabled)
+      onUpdated(updated)
+    } finally {
+      setTogglingQuiz(false)
+    }
+  }
 
   async function saveTitle() {
     if (!newTitle.trim() || newTitle === topic.title) { setEditingTitle(false); return }
@@ -105,6 +324,18 @@ function TopicRow({ topic, onUpdated, onDeleted }) {
         )}
 
         <span className="text-xs text-gray-400 shrink-0">{topic.files.length} {topic.files.length === 1 ? 'plik' : topic.files.length < 5 ? 'pliki' : 'plików'}</span>
+        {(topic.questions?.length > 0) && (
+          <label
+            onClick={e => e.stopPropagation()}
+            className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border cursor-pointer transition-colors shrink-0 ${
+              topic.quiz_enabled ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-gray-50 border-gray-200 text-gray-400'
+            } ${togglingQuiz ? 'opacity-50 pointer-events-none' : ''}`}
+            title="Zaliczenie działu widoczne dla uczestników"
+          >
+            <input type="checkbox" checked={!!topic.quiz_enabled} onChange={handleToggleQuiz} className="accent-emerald-600" />
+            Zaliczenie
+          </label>
+        )}
 
         {editingTitle ? (
           <div className="flex gap-2 shrink-0">
@@ -169,6 +400,10 @@ function TopicRow({ topic, onUpdated, onDeleted }) {
             )}
           </div>
         </div>
+      )}
+
+      {expanded && (
+        <QuizEditor topic={topic} onUpdated={onUpdated} />
       )}
     </div>
   )

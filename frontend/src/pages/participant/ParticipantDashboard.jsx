@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { fetchMyEnrollments, cancelMyEnrollment } from '../../api/participant'
 import { fetchCourses } from '../../api/courses'
-import { fetchTopics, fetchTopicFileBlob, fetchProgress, toggleFileProgress } from '../../api/documents'
+import { fetchTopics, fetchTopicFileBlob, fetchProgress, toggleFileProgress, fetchTopicQuiz, submitTopicQuiz, fetchTopicQuizResults } from '../../api/documents'
 import PdfViewer from '../../components/PdfViewer'
 import QuizPanel from './QuizPanel'
 
@@ -254,6 +254,14 @@ export default function ParticipantDashboard() {
   const fileUrlRef = useRef(null)
   const [completed, setCompleted]       = useState(new Set())
   const [togglingId, setTogglingId]     = useState(null)
+  const [quizResults, setQuizResults]   = useState({}) // topicId → {score,total,passed}
+  const [activeQuizId, setActiveQuizId] = useState(null) // topic id z otwartym quizem
+  const [quizQuestions, setQuizQuestions] = useState([])
+  const [quizLoading, setQuizLoading]   = useState(false)
+  const [quizAnswers, setQuizAnswers]   = useState({}) // questionId → choiceId
+  const [quizResult, setQuizResult]     = useState(null) // {score,total,passed,results}
+  const [quizSubmitting, setQuizSubmitting] = useState(false)
+  const [showPassedAnswers, setShowPassedAnswers] = useState(null) // topic id
 
   const navigate = useNavigate()
 
@@ -274,10 +282,13 @@ export default function ParticipantDashboard() {
     if (activeCard === 'materials') {
       if (!topicsFetched) {
         setTopicsLoading(true)
-        Promise.all([fetchTopics(), fetchProgress()])
-          .then(([topicsData, progressIds]) => {
+        Promise.all([fetchTopics(), fetchProgress(), fetchTopicQuizResults()])
+          .then(([topicsData, progressIds, resultsData]) => {
             setTopics(topicsData)
             setCompleted(new Set(progressIds))
+            const map = {}
+            resultsData.forEach(r => { map[r.topic_id] = r })
+            setQuizResults(map)
             setTopicsFetched(true)
           })
           .catch(() => {})
@@ -336,6 +347,42 @@ export default function ParticipantDashboard() {
       // ignoruj błąd
     } finally {
       setTogglingId(null)
+    }
+  }
+
+  async function openQuiz(topicId) {
+    setActiveQuizId(topicId)
+    setQuizResult(null)
+    setQuizAnswers({})
+    setQuizLoading(true)
+    try {
+      const questions = await fetchTopicQuiz(topicId)
+      setQuizQuestions(questions)
+    } catch {
+      setQuizQuestions([])
+    } finally {
+      setQuizLoading(false)
+    }
+  }
+
+  async function handleSubmitQuiz(topicId) {
+    setQuizSubmitting(true)
+    try {
+      const result = await submitTopicQuiz(topicId, quizAnswers)
+      setQuizResult(result)
+      if (result.passed) {
+        setQuizResults(prev => ({ ...prev, [topicId]: result }))
+      } else {
+        setQuizResults(prev => {
+          const best = prev[topicId]
+          if (!best || result.score > best.score) return { ...prev, [topicId]: result }
+          return prev
+        })
+      }
+    } catch {
+      // ignoruj
+    } finally {
+      setQuizSubmitting(false)
     }
   }
 
@@ -520,6 +567,157 @@ export default function ParticipantDashboard() {
                         </div>
                         )
                       })}
+
+                      {/* Sekcja quizu */}
+                      {topic.quiz_enabled && topic.question_count > 0 && (
+                        <div className="border-t border-gray-100 pt-3 mt-1">
+                          {quizResults[topic.id]?.passed ? (
+                            <div>
+                              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200">
+                                <span className="text-emerald-600 text-base">✓</span>
+                                <span className="text-sm font-semibold text-emerald-700">Dział zaliczony</span>
+                                <span className="text-xs text-emerald-500 ml-auto">
+                                  {quizResults[topic.id].score}/{quizResults[topic.id].total}
+                                  {quizResults[topic.id].attempted_at && (
+                                    <span className="ml-2">
+                                      {new Date(quizResults[topic.id].attempted_at).toLocaleString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                  )}
+                                </span>
+                                <button
+                                  onClick={() => {
+                                    if (showPassedAnswers === topic.id) {
+                                      setShowPassedAnswers(null)
+                                    } else {
+                                      setShowPassedAnswers(topic.id)
+                                      openQuiz(topic.id)
+                                    }
+                                  }}
+                                  className="shrink-0 text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors ml-2"
+                                >
+                                  {showPassedAnswers === topic.id ? 'Ukryj' : 'Odpowiedzi'}
+                                </button>
+                              </div>
+                              {showPassedAnswers === topic.id && (
+                                quizLoading && activeQuizId === topic.id ? (
+                                  <div className="text-center text-gray-400 text-sm py-3">Ładowanie…</div>
+                                ) : (
+                                  <div className="mt-2 space-y-3">
+                                    {quizQuestions.map((q, qi) => (
+                                      <div key={q.id} className="p-3 rounded-xl border border-gray-100 bg-gray-50">
+                                        <p className="text-sm font-medium text-gray-800 mb-2">{qi + 1}. {q.text}</p>
+                                        <div className="space-y-1">
+                                          {q.choices.map(c => (
+                                            <div key={c.id} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm ${c.is_correct ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-gray-500'}`}>
+                                              {c.is_correct ? <span className="shrink-0">✓</span> : <span className="shrink-0 w-3" />}
+                                              {c.text}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )
+                              )}
+                            </div>
+                          ) : activeQuizId === topic.id ? (
+                            quizLoading ? (
+                              <div className="text-center text-gray-400 text-sm py-3">Ładowanie pytań…</div>
+                            ) : quizResult ? (
+                              <div className={`p-4 rounded-xl border ${quizResult.passed ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+                                <p className={`font-bold text-base mb-1 ${quizResult.passed ? 'text-emerald-700' : 'text-red-700'}`}>
+                                  {quizResult.passed ? '✓ Zaliczone!' : '✗ Niezaliczone'}
+                                </p>
+                                <p className="text-sm text-gray-600 mb-1">Wynik: {quizResult.score}/{quizResult.total}</p>
+                                {quizResult.attempted_at && (
+                                  <p className="text-xs text-gray-400 mb-3">
+                                    {new Date(quizResult.attempted_at).toLocaleString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                  </p>
+                                )}
+                                <div className="space-y-2 mb-3">
+                                  {quizQuestions.map((q, qi) => {
+                                    const res = quizResult.results.find(r => r.question_id === q.id)
+                                    return (
+                                      <div key={q.id} className={`p-2 rounded-lg text-xs ${res?.correct ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+                                        <span className="font-semibold">{qi + 1}. {q.text}</span>
+                                        <div className="mt-1 space-y-1">
+                                          {q.choices.map(c => {
+                                            const isChosen = quizAnswers[q.id] === c.id
+                                            const isCorrect = res?.correct_choice_id === c.id
+                                            return (
+                                              <div key={c.id} className={`flex items-center gap-1.5 ${isCorrect ? 'font-semibold' : ''} ${isChosen && !isCorrect ? 'line-through opacity-60' : ''}`}>
+                                                <span>{isCorrect ? '✓' : isChosen ? '✗' : '·'}</span>
+                                                <span>{c.text}</span>
+                                              </div>
+                                            )
+                                          })}
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                                {!quizResult.passed && (
+                                  <button
+                                    onClick={() => { setQuizResult(null); setQuizAnswers({}) }}
+                                    className="text-xs font-semibold px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors"
+                                  >
+                                    Spróbuj ponownie
+                                  </button>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="p-3 rounded-xl border border-gray-200 bg-gray-50">
+                                <p className="text-xs font-semibold text-gray-600 mb-3">Zaliczenie działu — {quizQuestions.length} pytań</p>
+                                <div className="space-y-4 mb-4">
+                                  {quizQuestions.map((q, qi) => (
+                                    <div key={q.id}>
+                                      <p className="text-sm font-medium text-gray-800 mb-2">{qi + 1}. {q.text}</p>
+                                      <div className="space-y-1.5">
+                                        {q.choices.map(c => (
+                                          <label key={c.id} className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
+                                            quizAnswers[q.id] === c.id ? 'bg-red-50 border-red-300' : 'bg-white border-gray-200 hover:bg-gray-50'
+                                          }`}>
+                                            <input
+                                              type="radio"
+                                              name={`quiz-${topic.id}-${q.id}`}
+                                              checked={quizAnswers[q.id] === c.id}
+                                              onChange={() => setQuizAnswers(prev => ({ ...prev, [q.id]: c.id }))}
+                                              className="accent-red-600 shrink-0"
+                                            />
+                                            <span className="text-sm text-gray-700">{c.text}</span>
+                                          </label>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => handleSubmitQuiz(topic.id)}
+                                    disabled={quizSubmitting || quizQuestions.some(q => !quizAnswers[q.id])}
+                                    className="text-xs font-semibold px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 transition-colors"
+                                  >
+                                    {quizSubmitting ? 'Sprawdzam…' : 'Sprawdź odpowiedzi'}
+                                  </button>
+                                  <button
+                                    onClick={() => { setActiveQuizId(null); setQuizResult(null); setQuizAnswers({}) }}
+                                    className="text-xs font-semibold px-4 py-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+                                  >
+                                    Anuluj
+                                  </button>
+                                </div>
+                              </div>
+                            )
+                          ) : (
+                            <button
+                              onClick={() => openQuiz(topic.id)}
+                              className="w-full text-sm font-semibold px-4 py-2.5 rounded-xl border border-red-200 text-red-700 bg-red-50 hover:bg-red-100 transition-colors"
+                            >
+                              Zaliczyć dział ({topic.question_count} {topic.question_count === 1 ? 'pytanie' : topic.question_count < 5 ? 'pytania' : 'pytań'})
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

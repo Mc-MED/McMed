@@ -15,7 +15,7 @@ from docxtpl import DocxTemplate
 import openpyxl
 
 from courses.models import Course, Enrollment, Instructor
-from .models import Topic, TopicFile, TopicFileProgress, QuizProgress, CourseFile
+from .models import Topic, TopicFile, TopicFileProgress, QuizProgress, CourseFile, TopicQuestion, TopicAnswerChoice, TopicQuizAttempt
 
 TEMPLATES_DIR = Path(__file__).parent / 'templates'
 
@@ -43,7 +43,7 @@ def _instructor_dict(inst):
 _EMPTY_INST = {'full_name': '', 'name_only': '', 'title': '', 'profession': '', 'specs': '', 'years': ''}
 
 
-_STREET_PREFIX = re.compile(r'\s+(?:ul\.|al\.|pl\.|os\.|sk\.|rynek)\b', re.IGNORECASE)
+_STREET_PREFIX = re.compile(r'\s+(?:ul\.|al\.|pl\.|os\.|sk\.|rynek)\s+', re.IGNORECASE)
 
 def _extract_city(exam_location):
     if not exam_location:
@@ -102,6 +102,7 @@ def _build_context(course):
 
     return {
         'created_at':        course.created_at.strftime('%d.%m.%Y'),
+        'c_n':               course.course_number or '',
         'name':              course.name,
         'course_type':       course.course_type,
         'city':              course.city,
@@ -285,12 +286,23 @@ def _build_certificate_context(enrollment):
     def fmt(date):
         return date.strftime('%d.%m.%Y') if date else ''
 
+    if course:
+        ids = list(
+            course.enrollments.filter(is_deleted=False)
+            .order_by('created_at')
+            .values_list('id', flat=True)
+        )
+        lp = str(ids.index(enrollment.id) + 1).zfill(2) if enrollment.id in ids else ''
+    else:
+        lp = ''
+
     address_parts = [enrollment.street, enrollment.house_number]
     if enrollment.apartment_number:
         address_parts[-1] += f'/{enrollment.apartment_number}'
     full_address = f'{" ".join(address_parts)}, {enrollment.zip_code} {enrollment.city}'
 
     ctx.update({
+        'lp': lp,
         'p_first_name':       enrollment.first_name,
         'p_last_name':        enrollment.last_name,
         'p_full_name':        f'{enrollment.first_name} {enrollment.last_name}',
@@ -464,11 +476,25 @@ def download_certificates_zip(request, course_id):
 
 # ─── Tematy i pliki (admin) ───────────────────────────────────────────
 
-def _topic_to_dict(topic):
+def _serialize_question(q):
     return {
-        'id':    topic.id,
-        'title': topic.title,
-        'order': topic.order,
+        'id':      q.id,
+        'text':    q.text,
+        'order':   q.order,
+        'choices': [
+            {'id': c.id, 'text': c.text, 'is_correct': c.is_correct, 'order': c.order}
+            for c in q.choices.all()
+        ],
+    }
+
+
+def _topic_to_dict(topic, include_questions=False):
+    d = {
+        'id':             topic.id,
+        'title':          topic.title,
+        'order':          topic.order,
+        'quiz_enabled':   topic.quiz_enabled,
+        'question_count': topic.questions.count() if not include_questions else None,
         'files': [
             {
                 'id':          tf.id,
@@ -479,14 +505,18 @@ def _topic_to_dict(topic):
             for tf in topic.files.all()
         ],
     }
+    if include_questions:
+        d['question_count'] = len(topic.questions.all())
+        d['questions'] = [_serialize_question(q) for q in topic.questions.all()]
+    return d
 
 
 @api_view(['GET', 'POST'])
 @permission_classes([IsAdminUser])
 def admin_topics(request):
     if request.method == 'GET':
-        topics = Topic.objects.prefetch_related('files').all()
-        return Response([_topic_to_dict(t) for t in topics])
+        topics = Topic.objects.prefetch_related('files', 'questions__choices').all()
+        return Response([_topic_to_dict(t, include_questions=True) for t in topics])
 
     title = request.data.get('title', '').strip()
     if not title:
@@ -500,7 +530,7 @@ def admin_topics(request):
 @permission_classes([IsAdminUser])
 def admin_topic_detail(request, topic_id):
     try:
-        topic = Topic.objects.prefetch_related('files').get(pk=topic_id)
+        topic = Topic.objects.prefetch_related('files', 'questions__choices').get(pk=topic_id)
     except Topic.DoesNotExist:
         return Response({'detail': 'Dział nie istnieje.'}, status=404)
 
@@ -514,8 +544,10 @@ def admin_topic_detail(request, topic_id):
         topic.title = request.data['title'].strip() or topic.title
     if 'order' in request.data:
         topic.order = int(request.data['order'])
+    if 'quiz_enabled' in request.data:
+        topic.quiz_enabled = bool(request.data['quiz_enabled'])
     topic.save()
-    return Response(_topic_to_dict(topic))
+    return Response(_topic_to_dict(topic, include_questions=True))
 
 
 @api_view(['POST'])
@@ -690,3 +722,141 @@ def _course_file_dict(cf):
         'filename':    os.path.basename(cf.file.name),
         'uploaded_at': cf.uploaded_at.isoformat(),
     }
+
+
+# ─── Pytania zaliczeniowe (admin) ────────────────────────────────────
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAdminUser])
+def admin_topic_questions(request, topic_id):
+    try:
+        topic = Topic.objects.get(pk=topic_id)
+    except Topic.DoesNotExist:
+        return Response({'detail': 'Dział nie istnieje.'}, status=404)
+
+    if request.method == 'GET':
+        questions = topic.questions.prefetch_related('choices').all()
+        return Response([_serialize_question(q) for q in questions])
+
+    if topic.questions.count() >= 5:
+        return Response({'detail': 'Maksymalna liczba pytań (5) osiągnięta.'}, status=400)
+
+    text = request.data.get('text', '').strip()
+    if not text:
+        return Response({'detail': 'Treść pytania jest wymagana.'}, status=400)
+    choices_data = request.data.get('choices', [])
+    if len(choices_data) < 2:
+        return Response({'detail': 'Wymagane co najmniej 2 odpowiedzi.'}, status=400)
+    if not any(c.get('is_correct') for c in choices_data):
+        return Response({'detail': 'Zaznacz poprawną odpowiedź.'}, status=400)
+
+    order = topic.questions.count()
+    q = TopicQuestion.objects.create(topic=topic, text=text, order=order)
+    for i, c in enumerate(choices_data):
+        TopicAnswerChoice.objects.create(question=q, text=c.get('text', '').strip(), is_correct=bool(c.get('is_correct')), order=i)
+    return Response(_serialize_question(q), status=201)
+
+
+@api_view(['PATCH', 'DELETE'])
+@permission_classes([IsAdminUser])
+def admin_topic_question_detail(request, question_id):
+    try:
+        q = TopicQuestion.objects.prefetch_related('choices').get(pk=question_id)
+    except TopicQuestion.DoesNotExist:
+        return Response({'detail': 'Pytanie nie istnieje.'}, status=404)
+
+    if request.method == 'DELETE':
+        q.delete()
+        return Response(status=204)
+
+    if 'text' in request.data:
+        q.text = request.data['text'].strip() or q.text
+        q.save()
+    if 'choices' in request.data:
+        choices_data = request.data['choices']
+        if not any(c.get('is_correct') for c in choices_data):
+            return Response({'detail': 'Zaznacz poprawną odpowiedź.'}, status=400)
+        q.choices.all().delete()
+        for i, c in enumerate(choices_data):
+            TopicAnswerChoice.objects.create(question=q, text=c.get('text', '').strip(), is_correct=bool(c.get('is_correct')), order=i)
+    return Response(_serialize_question(q))
+
+
+# ─── Pytania zaliczeniowe (uczestnik) ────────────────────────────────
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def participant_topic_quiz(request, topic_id):
+    try:
+        topic = Topic.objects.prefetch_related('questions__choices').get(pk=topic_id)
+    except Topic.DoesNotExist:
+        return Response({'detail': 'Dział nie istnieje.'}, status=404)
+
+    data = []
+    has_passed = TopicQuizAttempt.objects.filter(user=request.user, topic=topic, passed=True).exists()
+    for q in topic.questions.all():
+        data.append({
+            'id':      q.id,
+            'text':    q.text,
+            'choices': [
+                {'id': c.id, 'text': c.text, **(({'is_correct': c.is_correct}) if has_passed else {})}
+                for c in q.choices.all()
+            ],
+        })
+    return Response(data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def participant_submit_quiz(request, topic_id):
+    try:
+        topic = Topic.objects.prefetch_related('questions__choices').get(pk=topic_id)
+    except Topic.DoesNotExist:
+        return Response({'detail': 'Dział nie istnieje.'}, status=404)
+
+    questions = list(topic.questions.all())
+    if not questions:
+        return Response({'detail': 'Brak pytań w tym dziale.'}, status=400)
+
+    answers = request.data.get('answers', {})
+    score = 0
+    results = []
+    for q in questions:
+        chosen_id = answers.get(str(q.id))
+        correct = q.choices.filter(is_correct=True).first()
+        is_correct = False
+        if chosen_id:
+            try:
+                chosen = q.choices.get(pk=int(chosen_id))
+                is_correct = chosen.is_correct
+            except (TopicAnswerChoice.DoesNotExist, ValueError):
+                pass
+        if is_correct:
+            score += 1
+        results.append({
+            'question_id':      q.id,
+            'correct':          is_correct,
+            'correct_choice_id': correct.id if correct else None,
+        })
+
+    total = len(questions)
+    passed = score == total
+    attempt = TopicQuizAttempt.objects.create(user=request.user, topic=topic, score=score, total=total, passed=passed)
+    return Response({'score': score, 'total': total, 'passed': passed, 'results': results, 'attempted_at': attempt.attempted_at.isoformat()})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def participant_quiz_results(request):
+    attempts = TopicQuizAttempt.objects.filter(user=request.user).order_by('topic_id', '-passed', '-score', '-attempted_at')
+    best = {}
+    for a in attempts:
+        if a.topic_id not in best:
+            best[a.topic_id] = {
+                'topic_id':    a.topic_id,
+                'score':       a.score,
+                'total':       a.total,
+                'passed':      a.passed,
+                'attempted_at': a.attempted_at.isoformat(),
+            }
+    return Response(list(best.values()))

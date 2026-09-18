@@ -501,7 +501,8 @@ function AddParticipantModal({ courseId, courseType, onSave, onClose }) {
     setSaving(true)
     setError('')
     try {
-      const res = await adminCreateEnrollment(form)
+      const payload = { ...form, cert_date: form.cert_date || null, birth_date: form.birth_date || null }
+      const res = await adminCreateEnrollment(payload)
       onSave(res.data)
     } catch (err) {
       const data = err.response?.data
