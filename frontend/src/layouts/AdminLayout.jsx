@@ -14,7 +14,7 @@ export default function AdminLayout() {
   function handleLogout() {
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
-    navigate('/login')
+    navigate('/panel-42')
   }
 
   return (
@@ -44,13 +44,16 @@ export default function AdminLayout() {
             </NavLink>
           ))}
         </nav>
-        <div className="px-6 py-4 border-t border-gray-200 space-y-3">
-          <a href="/" className="text-xs text-gray-400 hover:text-red-600 transition-colors block">
+        <div className="px-6 py-4 border-t border-gray-200 space-y-2">
+          <a
+            href="/"
+            className="flex items-center w-full text-xs font-semibold text-orange-500 border-2 border-orange-400 px-3 py-1.5 rounded-lg transition-colors hover:text-orange-600 hover:border-orange-500 hover:bg-orange-50 active:bg-orange-100 active:scale-95"
+          >
             ← Wróć na stronę główną
           </a>
           <button
             onClick={handleLogout}
-            className="w-full text-left text-xs text-gray-400 hover:text-red-600 transition-colors"
+            className="flex items-center justify-center w-full text-xs font-semibold text-orange-500 border-2 border-orange-400 px-3 py-1.5 rounded-lg transition-colors hover:text-orange-600 hover:border-orange-500 hover:bg-orange-50 active:bg-orange-100 active:scale-95"
           >
             Wyloguj
           </button>

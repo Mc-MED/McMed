@@ -173,7 +173,7 @@ class Enrollment(models.Model):
     ])
 
     class Meta:
-        ordering = ['-created_at']
+        ordering = ['created_at']
 
     def __str__(self):
         return f'{self.last_name} {self.first_name} – {self.course}'

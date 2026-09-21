@@ -420,7 +420,7 @@ export default function ParticipantDashboard() {
         </a>
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-600 font-medium">{firstName}</span>
-          <button onClick={handleLogout} className="text-sm font-semibold text-gray-500 hover:text-red-600 border border-gray-200 hover:border-red-300 px-3 py-1.5 rounded-lg transition-colors">
+          <button onClick={handleLogout} className="text-sm font-semibold text-orange-500 hover:text-orange-600 border-2 border-orange-400 hover:border-orange-500 hover:bg-orange-50 px-3 py-1.5 rounded-lg transition-colors">
             Wyloguj
           </button>
         </div>

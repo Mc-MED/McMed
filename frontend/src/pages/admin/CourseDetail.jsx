@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { adminFetchCourse, adminUpdateCourse, adminDeleteCourse, adminFetchEnrollments, adminDeleteEnrollment, adminUpdateEnrollment, adminAnonymizeEnrollment, adminSoftDeleteEnrollment, adminFetchCourses, adminDownloadDocument, adminDownloadDocumentPdf, adminDownloadXlsx, adminDownloadAttendanceXlsx, adminFetchInstructors, adminSendEmail, adminSendSms, adminCreateEnrollment, adminDownloadCertificate, adminDownloadCertificatesZip } from '../../api/admin'
+import { adminFetchCourse, adminUpdateCourse, adminDeleteCourse, adminFetchEnrollments, adminDeleteEnrollment, adminUpdateEnrollment, adminAnonymizeEnrollment, adminSoftDeleteEnrollment, adminFetchCourses, adminDownloadDocument, adminDownloadDocumentPdf, adminDownloadXlsx, adminDownloadAttendanceXlsx, adminFetchInstructors, adminSendEmail, adminSendSms, adminCreateEnrollment, adminDownloadCertificate, adminDownloadCertificatesZip, adminDownloadZaliczeniaZip } from '../../api/admin'
 import DeletionReasonModal from '../../components/DeletionReasonModal'
 import { adminGetCourseFiles, adminUploadCourseFile, adminDownloadCourseFile, adminDeleteCourseFile } from '../../api/documents'
 import * as XLSX from 'xlsx'
@@ -1633,6 +1633,24 @@ function CourseManagementTab({ courseId, courseType }) {
   const [downloaded, setDownloaded]   = useState(new Set())
   const [error, setError]             = useState('')
 
+  async function handleDownloadZaliczeniaZip() {
+    const key = 'zaliczenia_zip'
+    setDownloading(key)
+    setError('')
+    try {
+      await adminDownloadZaliczeniaZip(courseId, 'zaliczenia_tematow_KPP')
+      setDownloaded(prev => new Set([...prev, key]))
+    } catch (err) {
+      const msg = err.response?.data?.detail
+      setError(msg || 'Nie udało się pobrać zaliczeń. Sprawdź czy szablon zaliczenia_tematow_KPP.docx istnieje.')
+    } finally {
+      setDownloading(null)
+    }
+  }
+
+  const isLoadingZaliczeniaZip = downloading === 'zaliczenia_zip'
+  const isDoneZaliczeniaZip    = downloaded.has('zaliczenia_zip')
+
   async function handleDownload(filename, label) {
     setDownloading(filename)
     setError('')
@@ -1742,6 +1760,24 @@ function CourseManagementTab({ courseId, courseType }) {
           {isLoadingCertZip ? 'Generowanie…' : isDoneCertZip ? '✓ Pobrane' : '↓ Pobierz certyfikaty (.zip)'}
         </button>
       </div>
+
+      {courseType === 'kpp' && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold text-gray-900">Zaliczenia tematów KPP</p>
+            <p className="text-xs text-gray-400 mt-0.5">Jeden plik .zip z dokumentem zaliczenia dla każdego uczestnika</p>
+          </div>
+          <button
+            onClick={handleDownloadZaliczeniaZip}
+            disabled={isLoadingZaliczeniaZip}
+            className={`flex items-center gap-1.5 text-sm font-semibold text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-60 ${
+              isDoneZaliczeniaZip ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700 active:bg-red-800'
+            }`}
+          >
+            {isLoadingZaliczeniaZip ? 'Generowanie…' : isDoneZaliczeniaZip ? '✓ Pobrane' : '↓ Pobierz zaliczenia (.zip)'}
+          </button>
+        </div>
+      )}
 
       {DOCUMENTS.map(({ filename, label, description }) => {
         const isDoneDocx    = downloaded.has(filename)

@@ -109,6 +109,20 @@
 
         .nav-cta:hover { background: var(--red-dark) !important; }
 
+        .nav-login {
+            border: 2px solid var(--red) !important;
+            color: var(--red) !important;
+            padding: 8px 18px;
+            border-radius: 7px;
+            font-weight: 600 !important;
+            transition: background 0.2s, color 0.2s !important;
+            background: transparent !important;
+        }
+
+        .nav-login:hover {
+            background: var(--red-light) !important;
+        }
+
         /* ─── HERO ───────────────────────────────────── */
         .hero {
             min-height: 100vh;
@@ -1203,6 +1217,7 @@
             .nav-links li:last-child { border-bottom: none; }
             .nav-links a            { display: block; padding: 0.85rem 0; color: var(--dark); font-size: 1rem; }
             .nav-links .nav-cta     { padding: 10px 22px; text-align: center; margin: 0.75rem 0; }
+            .nav-links .nav-login   { padding: 10px 22px; text-align: center; margin: 0.75rem 0; display: block; }
 
             /* layout */
             .section            { padding: 70px 1.5rem; }
@@ -1285,6 +1300,7 @@
             <li><a href="#kpp">Co to jest KPP</a></li>
             <li><a href="#recertyfikacja">Recertyfikacja</a></li>
             <li><a href="#galeria">Galeria</a></li>
+            <li><a href="https://app.mcmed.pl/zaloguj-sie" class="nav-login">Zaloguj się</a></li>
             <li><a href="#kursy" class="nav-cta">Zapisz się na kurs</a></li>
         </ul>
         <button class="nav-toggle" aria-label="Menu">

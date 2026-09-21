@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { useEffect } from 'react'
 
 const TITLES = {
-  '/login':               'McMed – Logowanie',
+  '/panel-42':            'McMed – Logowanie',
   '/zapisz-sie':          'McMed – Zapisz się na kurs',
   '/zaloguj-sie':         'McMed – Logowanie',
   '/konto':               'McMed – Moje konto',
@@ -47,7 +47,7 @@ export default function App() {
     <BrowserRouter>
       <TitleManager />
       <Routes>
-        <Route path="/login" element={<Login />} />
+        <Route path="/panel-42" element={<Login />} />
 
         {/* Strefa uczestnika */}
         <Route path="/zapisz-sie" element={<EnrollForm />} />

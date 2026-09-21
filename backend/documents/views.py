@@ -1,4 +1,5 @@
 import re
+import copy
 import datetime
 import subprocess
 import tempfile
@@ -21,9 +22,11 @@ TEMPLATES_DIR = Path(__file__).parent / 'templates'
 
 ALLOWED_TEMPLATES = {'oswiadczenie', 'sprzet', 'sale', 'wniosek', 'prosba', 'instruktorzy', 'prosba-recertyfikacja', 'informacja-kpp', 'sprawozdanie-egzamin-rec'}
 
+ALLOWED_ENROLLMENT_ZIP_TEMPLATES = {'zaliczenia_tematow_KPP'}
+
 ALLOWED_CERT_TEMPLATES = {'certyfikat'}
 
-ALLOWED_XLSX_TEMPLATES = {'program', 'obsluga-egzaminu-rec'}
+ALLOWED_XLSX_TEMPLATES = {'program', 'obsluga-egzaminu-rec', 'zestawienie-rec'}
 
 ALLOWED_ATTENDANCE_XLSX_TEMPLATES = {'obecnosc'}
 
@@ -154,6 +157,118 @@ def _xlsx_replace(ws, context):
             cell.value = val
 
 
+def _xlsx_fill_enrollment_rows(ws, enrollments, course, ctx):
+    """
+    Szuka wiersza z {{p_lp}}, kopiuje jego styl dla każdego uczestnika,
+    podmienia zmienne. Pozostałe wiersze – standardowy _xlsx_replace z ctx.
+    """
+    tpl_row_idx = None
+    for row in ws.iter_rows():
+        for cell in row:
+            if isinstance(cell.value, str) and '{{p_lp}}' in cell.value:
+                tpl_row_idx = cell.row
+                break
+        if tpl_row_idx is not None:
+            break
+
+    # Zastąp zmienne kursu we wszystkich wierszach poza wierszem-szablonem
+    for row in ws.iter_rows():
+        if row[0].row == tpl_row_idx:
+            continue
+        for cell in row:
+            if not isinstance(cell.value, str) or '{{' not in cell.value:
+                continue
+            val = cell.value
+            for key, replacement in ctx.items():
+                if not isinstance(replacement, (list, dict)):
+                    val = re.sub(r'\{\{\s*' + re.escape(key) + r'\s*\}\}', str(replacement), val)
+            cell.value = val
+
+    if tpl_row_idx is None or not enrollments:
+        return
+
+    # Zapamiętaj styl wiersza-szablonu
+    max_col = ws.max_column
+    tpl_snapshot = []
+    for col in range(1, max_col + 1):
+        c = ws.cell(tpl_row_idx, col)
+        tpl_snapshot.append({
+            'value':         c.value,
+            'font':          copy.copy(c.font),
+            'fill':          copy.copy(c.fill),
+            'border':        copy.copy(c.border),
+            'alignment':     copy.copy(c.alignment),
+            'number_format': c.number_format,
+        })
+
+    c_n   = course.course_number or ''
+    year  = str(datetime.date.today().year)[-2:]
+    exam_date = course.exam_date.strftime('%d.%m.%Y') if course.exam_date else ''
+
+    for lp, enr in enumerate(enrollments, 1):
+        row_idx = tpl_row_idx + lp - 1
+        row_ctx = {
+            'p_lp':               str(lp),
+            'p_first_name':       enr.first_name or '',
+            'p_last_name':        enr.last_name or '',
+            'p_cert_number':      enr.cert_number or '',
+            'p_cert_date':        enr.cert_date.strftime('%d.%m.%Y') if enr.cert_date else '',
+            'p_new_cert_number':  f'KPP/ER/{c_n}/{year}/{str(lp).zfill(2)}',
+            'p_new_cert_date':    exam_date,
+        }
+        for col_idx, snap in enumerate(tpl_snapshot, 1):
+            cell = ws.cell(row_idx, col_idx)
+            if isinstance(cell, openpyxl.cell.cell.MergedCell):
+                continue
+            cell.font          = copy.copy(snap['font'])
+            cell.fill          = copy.copy(snap['fill'])
+            cell.border        = copy.copy(snap['border'])
+            cell.alignment     = copy.copy(snap['alignment'])
+            cell.number_format = snap['number_format']
+            val = snap['value']
+            if isinstance(val, str):
+                for key, replacement in row_ctx.items():
+                    val = val.replace(f'{{{{{key}}}}}', str(replacement))
+            cell.value = val
+
+
+def _xlsx_fill_obsluga_egzaminu_rec(wb, enrollments, course, ctx):
+    """Wypełnia arkusz DANE danymi kursu i uczestników; Arkusz1 – szablon wierszy."""
+    ws_dane = wb['DANE ']
+
+    # Daty zjazdów w N2–N7, data egzaminu w N8 (kolumna N = 14)
+    days = ctx.get('course_days', [])
+    for i, day in enumerate(days[:6]):
+        ws_dane.cell(row=2 + i, column=14).value = day
+    ws_dane.cell(row=8, column=14).value = ctx.get('exam_date', '')
+
+    # Komisja egzaminacyjna (M = 13)
+    ws_dane.cell(row=10, column=13).value = ctx.get('committee_chair', '')
+    ws_dane.cell(row=11, column=13).value = ctx.get('committee_member1', '')
+    ws_dane.cell(row=12, column=13).value = ctx.get('committee_member2', '')
+
+    # Czyść stare dane uczestników (wiersze 3–29)
+    for r in range(3, 30):
+        for col in (1, 2, 3, 4, 8, 9, 10):
+            ws_dane.cell(row=r, column=col).value = None
+
+    # Wpisz uczestników
+    for i, enr in enumerate(enrollments, 1):
+        r = 2 + i
+        ws_dane.cell(row=r, column=1).value = str(i).zfill(2)
+        ws_dane.cell(row=r, column=2).value = enr.last_name or ''
+        ws_dane.cell(row=r, column=3).value = enr.first_name or ''
+        ws_dane.cell(row=r, column=4).value = enr.phone or ''
+        ws_dane.cell(row=r, column=8).value = enr.pesel or ''
+        ws_dane.cell(row=r, column=9).value = enr.cert_number or ''
+        ws_dane.cell(row=r, column=10).value = (
+            enr.cert_date.strftime('%d.%m.%Y') if enr.cert_date else ''
+        )
+
+    # Arkusz1 ma {{p_lp}} – wypełnij wiersze uczestników
+    _xlsx_fill_enrollment_rows(wb['Arkusz1'], enrollments, course, ctx)
+
+
 def _resolve_xlsx(doc_name, instructor_count):
     """Zwraca ścieżkę do pliku: szuka {name}.{n}.xlsx, fallback do {name}.xlsx."""
     variant = TEMPLATES_DIR / f'{doc_name}.{instructor_count}.xlsx'
@@ -183,8 +298,26 @@ def download_xlsx(request, course_id, doc_name):
 
     wb = openpyxl.load_workbook(tpl_path)
     ctx = _build_context(course)
+
+    if doc_name == 'zestawienie-rec':
+        enrollments = list(
+            course.enrollments.filter(deleted_at__isnull=True)
+            .order_by('last_name', 'first_name')
+        )
+        for ws in wb.worksheets:
+            _xlsx_fill_enrollment_rows(ws, enrollments, course, ctx)
+    elif doc_name == 'obsluga-egzaminu-rec':
+        enrollments = list(
+            course.enrollments.filter(deleted_at__isnull=True)
+            .order_by('created_at')
+        )
+        _xlsx_fill_obsluga_egzaminu_rec(wb, enrollments, course, ctx)
+    else:
+        for ws in wb.worksheets:
+            _xlsx_replace(ws, ctx)
+
     for ws in wb.worksheets:
-        _xlsx_replace(ws, ctx)
+        ws.page_setup.orientation = 'landscape'
 
     buf = BytesIO()
     wb.save(buf)
@@ -207,6 +340,68 @@ def _resolve_template(doc_name, instructor_count):
     if base.exists():
         return base
     return None
+
+
+def _build_zaliczenia_enrollment_context(enrollment):
+    """Kontekst per-uczestnik dla zaliczenia_tematow_KPP: t1_d … t15_d."""
+    ctx = _build_certificate_context(enrollment)
+
+    topics = list(Topic.objects.order_by('order', 'id'))
+    passed_dict = {}
+    if enrollment.user_id:
+        for attempt in (
+            TopicQuizAttempt.objects
+            .filter(user_id=enrollment.user_id, topic__in=topics, passed=True)
+            .order_by('topic_id', 'attempted_at')
+        ):
+            if attempt.topic_id not in passed_dict:
+                passed_dict[attempt.topic_id] = attempt.attempted_at.strftime('%d.%m.%Y')
+
+    for n, t in enumerate(topics, 1):
+        ctx[f't{n}_d'] = passed_dict.get(t.id, '')
+    for n in range(len(topics) + 1, 16):
+        ctx[f't{n}_d'] = ''
+
+    return ctx
+
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def download_zaliczenia_zip(request, course_id, doc_name):
+    if doc_name not in ALLOWED_ENROLLMENT_ZIP_TEMPLATES:
+        return Response({'detail': 'Nieznany dokument.'}, status=404)
+
+    try:
+        course = Course.objects.get(pk=course_id)
+    except Course.DoesNotExist:
+        return Response({'detail': 'Kurs nie istnieje.'}, status=404)
+
+    tpl_path = TEMPLATES_DIR / f'{doc_name}.docx'
+    if not tpl_path.exists():
+        return Response({'detail': 'Brak pliku szablonu.'}, status=404)
+
+    enrollments = list(
+        course.enrollments.filter(deleted_at__isnull=True)
+        .select_related('user', 'course')
+        .order_by('last_name', 'first_name')
+    )
+    if not enrollments:
+        return Response({'detail': 'Brak uczestników na tym kursie.'}, status=404)
+
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for enrollment in enrollments:
+            tpl = DocxTemplate(tpl_path)
+            tpl.render(_build_zaliczenia_enrollment_context(enrollment))
+            doc_buf = BytesIO()
+            tpl.save(doc_buf)
+            safe = f'{enrollment.last_name}_{enrollment.first_name}'.replace(' ', '_')
+            zf.writestr(f'zaliczenia_{safe}.docx', doc_buf.getvalue())
+
+    buf.seek(0)
+    response = HttpResponse(buf.read(), content_type='application/zip')
+    response['Content-Disposition'] = f'attachment; filename="zaliczenia_kurs_{course_id}.zip"'
+    return response
 
 
 @api_view(['GET'])
@@ -421,6 +616,9 @@ def download_xlsx_per_enrollment(request, course_id, doc_name):
         _xlsx_replace(ws, ctx)
 
     wb.remove(ws_tpl)
+
+    for ws in wb.worksheets:
+        ws.page_setup.orientation = 'landscape'
 
     buf = BytesIO()
     wb.save(buf)
