@@ -990,6 +990,9 @@ def participant_topic_quiz(request, topic_id):
     except Topic.DoesNotExist:
         return Response({'detail': 'Dział nie istnieje.'}, status=404)
 
+    if not topic.quiz_enabled:
+        return Response({'detail': 'Quiz nie jest dostępny.'}, status=403)
+
     data = []
     has_passed = TopicQuizAttempt.objects.filter(user=request.user, topic=topic, passed=True).exists()
     for q in topic.questions.all():
@@ -1011,6 +1014,9 @@ def participant_submit_quiz(request, topic_id):
         topic = Topic.objects.prefetch_related('questions__choices').get(pk=topic_id)
     except Topic.DoesNotExist:
         return Response({'detail': 'Dział nie istnieje.'}, status=404)
+
+    if not topic.quiz_enabled:
+        return Response({'detail': 'Quiz nie jest dostępny.'}, status=403)
 
     questions = list(topic.questions.all())
     if not questions:
