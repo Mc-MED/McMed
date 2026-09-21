@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { adminFetchEnrollments, adminFetchUnassignedEnrollments, adminFetchDeletedEnrollments, adminFetchCourses, adminDeleteEnrollment, adminUpdateEnrollment, adminAnonymizeEnrollment, adminSoftDeleteEnrollment, adminRestoreEnrollment } from '../../api/admin'
+import { adminFetchEnrollments, adminFetchUnassignedEnrollments, adminFetchDeletedEnrollments, adminFetchCourses, adminDeleteEnrollment, adminUpdateEnrollment, adminAnonymizeEnrollment, adminSoftDeleteEnrollment, adminRestoreEnrollment, adminSendPasswordReset } from '../../api/admin'
 import DeletionReasonModal from '../../components/DeletionReasonModal'
 
 function formatDate(iso) {
@@ -43,6 +43,7 @@ function EnrolledTable({ courseFilter, onSoftDeleted, refreshKey }) {
   const [confirmAnonId, setConfirmAnonId] = useState(null)
   const [anonBusyId, setAnonBusyId]       = useState(null)
   const [deletionModal, setDeletionModal] = useState(null)
+  const [resetState, setResetState]       = useState({})
 
   useEffect(() => {
     setLoading(true)
@@ -52,6 +53,17 @@ function EnrolledTable({ courseFilter, onSoftDeleted, refreshKey }) {
       .catch(() => setError('Nie udało się pobrać uczestników.'))
       .finally(() => setLoading(false))
   }, [courseFilter, refreshKey])
+
+  async function handlePasswordReset(id, email) {
+    setResetState(prev => ({ ...prev, [id]: 'loading' }))
+    try {
+      await adminSendPasswordReset(email)
+      setResetState(prev => ({ ...prev, [id]: 'sent' }))
+    } catch {
+      setResetState(prev => ({ ...prev, [id]: 'error' }))
+    }
+    setTimeout(() => setResetState(prev => { const n = { ...prev }; delete n[id]; return n }), 3000)
+  }
 
   async function handleSoftDelete(id, reason) {
     try {
@@ -175,6 +187,21 @@ function EnrolledTable({ courseFilter, onSoftDeleted, refreshKey }) {
                     >
                       Usuń dane wrażliwe
                     </button>}
+                    {e.email && (
+                      resetState[e.id] === 'sent' ? (
+                        <span className="text-xs font-semibold px-2.5 py-1 text-emerald-600">✓ Mail wysłany</span>
+                      ) : resetState[e.id] === 'error' ? (
+                        <span className="text-xs font-semibold px-2.5 py-1 text-red-600">✗ Błąd</span>
+                      ) : (
+                        <button
+                          onClick={() => handlePasswordReset(e.id, e.email)}
+                          disabled={resetState[e.id] === 'loading'}
+                          className="text-xs font-semibold px-2.5 py-1 rounded-md bg-sky-100 text-sky-700 hover:bg-sky-200 disabled:opacity-50 transition-colors whitespace-nowrap"
+                        >
+                          {resetState[e.id] === 'loading' ? '…' : 'Resetuj hasło'}
+                        </button>
+                      )
+                    )}
                   </div>
                 )}
               </td>
@@ -198,6 +225,7 @@ function ReserveTable({ courses, onSoftDeleted, refreshKey }) {
   const [confirmAnonId, setConfirmAnonId] = useState(null)
   const [anonBusyId, setAnonBusyId]       = useState(null)
   const [deletionModal, setDeletionModal] = useState(null)
+  const [resetState, setResetState]       = useState({})
 
   useEffect(() => {
     setLoading(true)
@@ -205,6 +233,17 @@ function ReserveTable({ courses, onSoftDeleted, refreshKey }) {
       .then(setReservations)
       .finally(() => setLoading(false))
   }, [refreshKey])
+
+  async function handlePasswordResetReserve(id, email) {
+    setResetState(prev => ({ ...prev, [id]: 'loading' }))
+    try {
+      await adminSendPasswordReset(email)
+      setResetState(prev => ({ ...prev, [id]: 'sent' }))
+    } catch {
+      setResetState(prev => ({ ...prev, [id]: 'error' }))
+    }
+    setTimeout(() => setResetState(prev => { const n = { ...prev }; delete n[id]; return n }), 3000)
+  }
 
   async function handleAssign(enrollmentId) {
     const courseId = selectedCourse[enrollmentId]
@@ -372,6 +411,21 @@ function ReserveTable({ courses, onSoftDeleted, refreshKey }) {
                         >
                           Usuń dane wrażliwe
                         </button>}
+                        {e.email && (
+                          resetState[e.id] === 'sent' ? (
+                            <span className="text-xs font-semibold px-2.5 py-1 text-emerald-600">✓ Mail wysłany</span>
+                          ) : resetState[e.id] === 'error' ? (
+                            <span className="text-xs font-semibold px-2.5 py-1 text-red-600">✗ Błąd</span>
+                          ) : (
+                            <button
+                              onClick={() => handlePasswordResetReserve(e.id, e.email)}
+                              disabled={resetState[e.id] === 'loading'}
+                              className="text-xs font-semibold px-2.5 py-1 rounded-md bg-sky-100 text-sky-700 hover:bg-sky-200 disabled:opacity-50 transition-colors whitespace-nowrap"
+                            >
+                              {resetState[e.id] === 'loading' ? '…' : 'Resetuj hasło'}
+                            </button>
+                          )
+                        )}
                       </div>
                     )}
                   </td>

@@ -56,6 +56,9 @@ export const adminUpdateInstructor = (id, data) =>
 export const adminDeleteInstructor = (id) =>
   adminAxios.delete(`/api/courses/instructors/${id}/`)
 
+export const adminSendPasswordReset = (email) =>
+  adminAxios.post('/api/users/password-reset/', { email })
+
 export const adminSendEmail = (enrollmentIds, subject, body) =>
   adminAxios.post('/api/courses/enrollments/send-email/', { enrollment_ids: enrollmentIds, subject, body })
 
@@ -130,6 +133,18 @@ export const adminDownloadCertificatesZip = async (courseId) => {
   const a = document.createElement('a')
   a.href = url
   a.download = `certyfikaty_kurs_${courseId}.zip`
+  a.click()
+  window.URL.revokeObjectURL(url)
+}
+
+export const adminDownloadZaliczeniaZip = async (courseId, docName) => {
+  const response = await adminAxios.get(`/api/documents/courses/${courseId}/zaliczenia-zip/${docName}/`, {
+    responseType: 'blob',
+  })
+  const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/zip' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `zaliczenia_kurs_${courseId}.zip`
   a.click()
   window.URL.revokeObjectURL(url)
 }
