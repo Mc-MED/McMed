@@ -4,7 +4,7 @@ from django.conf import settings
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .models import ActivationToken, PasswordResetToken
@@ -130,6 +130,7 @@ class PasswordResetRequestView(APIView):
 
 class PasswordResetConfirmView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes   = [PasswordResetRateThrottle]
 
     def post(self, request, token):
         password = request.data.get('password', '')
@@ -164,7 +165,7 @@ class PasswordResetConfirmView(APIView):
 
 
 class AdminGenerateResetLinkView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
 
     def post(self, request):
         email = (request.data.get('email') or '').strip().lower()

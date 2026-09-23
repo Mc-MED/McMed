@@ -760,6 +760,8 @@ def admin_topic_file_upload(request, topic_id):
     f = request.FILES.get('file')
     if not f or not f.name.lower().endswith('.pdf'):
         return Response({'detail': 'Wymagany plik PDF.'}, status=400)
+    if f.content_type not in ('application/pdf', 'application/octet-stream'):
+        return Response({'detail': 'Plik musi być w formacie PDF.'}, status=400)
     title = request.data.get('title', '').strip() or f.name
     max_order = topic.files.count()
     tf = TopicFile.objects.create(topic=topic, title=title, file=f, order=max_order)
