@@ -1,4 +1,5 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import NotFound from '../pages/NotFound'
 
 const NAV = [
   { to: '/admin/courses',      label: 'Kursy',            icon: '📋' },
@@ -10,12 +11,15 @@ const NAV = [
 
 export default function AdminLayout() {
   const navigate = useNavigate()
+  const isAuthenticated = !!localStorage.getItem('access_token')
 
   function handleLogout() {
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
     navigate('/panel-42')
   }
+
+  if (!isAuthenticated) return <NotFound />
 
   return (
     <div className="flex min-h-screen bg-gray-50">
