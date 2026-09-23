@@ -4,7 +4,7 @@ from django.conf import settings
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .models import ActivationToken, PasswordResetToken
@@ -161,3 +161,26 @@ class PasswordResetConfirmView(APIView):
         reset.save(update_fields=['is_used'])
 
         return Response({'message': 'Hasło zostało zmienione. Możesz się teraz zalogować.'})
+
+
+class AdminGenerateResetLinkView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        email = (request.data.get('email') or '').strip().lower()
+        if not email:
+            return Response({'error': 'Podaj adres email.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = User.objects.filter(email__iexact=email, is_active=True).first()
+        if not user:
+            return Response(
+                {'error': 'Nie znaleziono aktywnego konta z tym adresem email.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        PasswordResetToken.objects.filter(user=user, is_used=False).update(is_used=True)
+        token = PasswordResetToken.objects.create(user=user)
+        frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
+        reset_link = f'{frontend_url}/reset-hasla/{token.token}'
+
+        return Response({'reset_link': reset_link})

@@ -59,6 +59,9 @@ export const adminDeleteInstructor = (id) =>
 export const adminSendPasswordReset = (email) =>
   adminAxios.post('/api/users/password-reset/', { email })
 
+export const adminGenerateResetLink = (email) =>
+  adminAxios.post('/api/users/admin/generate-reset-link/', { email })
+
 export const adminSendEmail = (enrollmentIds, subject, body) =>
   adminAxios.post('/api/courses/enrollments/send-email/', { enrollment_ids: enrollmentIds, subject, body })
 

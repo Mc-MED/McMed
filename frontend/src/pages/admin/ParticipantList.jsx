@@ -1,6 +1,218 @@
 import { useEffect, useState } from 'react'
-import { adminFetchEnrollments, adminFetchUnassignedEnrollments, adminFetchDeletedEnrollments, adminFetchCourses, adminDeleteEnrollment, adminUpdateEnrollment, adminAnonymizeEnrollment, adminSoftDeleteEnrollment, adminRestoreEnrollment, adminSendPasswordReset } from '../../api/admin'
+import { adminFetchEnrollments, adminFetchUnassignedEnrollments, adminFetchDeletedEnrollments, adminFetchCourses, adminDeleteEnrollment, adminUpdateEnrollment, adminAnonymizeEnrollment, adminSoftDeleteEnrollment, adminRestoreEnrollment, adminSendPasswordReset, adminGenerateResetLink } from '../../api/admin'
 import DeletionReasonModal from '../../components/DeletionReasonModal'
+
+function ResetLinkModal({ link, onClose }) {
+  const [copied, setCopied] = useState(false)
+  function copy() {
+    navigator.clipboard.writeText(link).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6" onClick={e => e.stopPropagation()}>
+        <h2 className="text-base font-bold text-gray-900 mb-1">Link do resetu hasła</h2>
+        <p className="text-xs text-gray-500 mb-4">Skopiuj ten link i wyślij uczestnikowi ręcznie. Link jest jednorazowy i wygasa po 2&nbsp;h.</p>
+        <div className="flex gap-2 items-center bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 mb-4">
+          <span className="text-xs text-gray-700 break-all flex-1 select-all font-mono">{link}</span>
+          <button
+            onClick={copy}
+            className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white transition-colors"
+          >
+            {copied ? '✓ Skopiowano' : 'Kopiuj'}
+          </button>
+        </div>
+        <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-800 font-medium">Zamknij</button>
+      </div>
+    </div>
+  )
+}
+
+function ResetPasswordDropdown({ id, email, resetState, onSendEmail, onGenerateLink }) {
+  const [open, setOpen] = useState(false)
+  const state = resetState[id]
+
+  if (state === 'sent') return <span className="text-xs font-semibold px-2.5 py-1 text-emerald-600">✓ Mail wysłany</span>
+  if (state === 'error') return <span className="text-xs font-semibold px-2.5 py-1 text-red-600">✗ Błąd</span>
+  if (state === 'loading') return <span className="text-xs font-semibold px-2.5 py-1 text-sky-600">…</span>
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="text-xs font-semibold px-2.5 py-1 rounded-md bg-sky-100 text-sky-700 hover:bg-sky-200 transition-colors whitespace-nowrap"
+      >
+        Resetuj hasło ▾
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 mt-1 z-20 bg-white border border-gray-200 rounded-xl shadow-lg py-1 min-w-[140px]">
+            <button
+              onClick={() => { setOpen(false); onSendEmail() }}
+              className="w-full text-left text-xs px-3 py-2 hover:bg-gray-50 text-gray-700"
+            >
+              Wyślij maila
+            </button>
+            <button
+              onClick={() => { setOpen(false); onGenerateLink() }}
+              className="w-full text-left text-xs px-3 py-2 hover:bg-gray-50 text-gray-700"
+            >
+              Generuj link
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function EditEnrollmentModal({ enrollment, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    first_name:       enrollment.first_name || '',
+    last_name:        enrollment.last_name  || '',
+    pesel:            enrollment.pesel      || '',
+    birth_date:       enrollment.birth_date || '',
+    email:            enrollment.email      || '',
+    phone:            enrollment.phone      || '',
+    zip_code:         enrollment.zip_code   || '',
+    city:             enrollment.city       || '',
+    street:           enrollment.street     || '',
+    house_number:     enrollment.house_number     || '',
+    apartment_number: enrollment.apartment_number || '',
+    photo_consent:    enrollment.photo_consent    ?? false,
+    payment_status:   enrollment.payment_status   || 'none',
+  })
+  const [saving, setSaving] = useState(false)
+  const [errors, setErrors] = useState({})
+
+  function set(field, value) {
+    setForm(prev => ({ ...prev, [field]: value }))
+    setErrors(prev => { const n = { ...prev }; delete n[field]; return n })
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setSaving(true)
+    setErrors({})
+    try {
+      const payload = {
+        ...form,
+        birth_date: form.birth_date || null,
+      }
+      // nie wysyłaj pustego PESEL-u – walidator backendu wymaga 11 cyfr lub brak pola
+      if (!payload.pesel) delete payload.pesel
+      const res = await adminUpdateEnrollment(enrollment.id, payload)
+      onSaved(res.data)
+      onClose()
+    } catch (err) {
+      setErrors(err.response?.data || { __all__: 'Błąd zapisu.' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const field = (label, key, type = 'text', { extraClass = '', ...opts } = {}) => (
+    <div>
+      <label className="block text-xs font-semibold text-gray-500 mb-1">{label}</label>
+      <input
+        type={type}
+        value={form[key]}
+        onChange={e => set(key, e.target.value)}
+        className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400 ${errors[key] ? 'border-red-400 bg-red-50' : 'border-gray-200'} ${extraClass}`}
+        {...opts}
+      />
+      {errors[key] && <p className="text-xs text-red-600 mt-0.5">{errors[key]}</p>}
+    </div>
+  )
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl my-4" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100">
+          <h2 className="text-base font-bold text-gray-900">Edytuj dane uczestnika</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+        </div>
+        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
+          <div>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Dane osobowe</p>
+            <div className="grid grid-cols-2 gap-3">
+              {field('Imię', 'first_name')}
+              {field('Nazwisko', 'last_name')}
+              {enrollment.pesel
+                ? field('PESEL', 'pesel', 'text', { maxLength: 11, extraClass: 'font-mono' })
+                : <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">PESEL</label>
+                    <input disabled value="usunięto" className="w-full border border-gray-100 rounded-lg px-3 py-2 text-sm text-gray-300 italic bg-gray-50 cursor-not-allowed" />
+                  </div>
+              }
+              {field('Data urodzenia', 'birth_date', 'date')}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Kontakt</p>
+            <div className="grid grid-cols-2 gap-3">
+              {field('Email', 'email', 'email')}
+              {field('Telefon', 'phone', 'tel')}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Adres</p>
+            <div className="grid grid-cols-2 gap-3">
+              {field('Ulica', 'street')}
+              <div className="grid grid-cols-2 gap-2">
+                {field('Nr domu', 'house_number')}
+                {field('Nr mieszkania', 'apartment_number')}
+              </div>
+              {field('Kod pocztowy', 'zip_code', 'text', { maxLength: 6 })}
+              {field('Miasto', 'city')}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Pozostałe</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Status płatności</label>
+                <select
+                  value={form.payment_status}
+                  onChange={e => set('payment_status', e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
+                >
+                  <option value="none">Brak</option>
+                  <option value="deposit">Zaliczka</option>
+                  <option value="paid">Opłacony</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-2 pt-5">
+                <input
+                  id="photo_consent_edit"
+                  type="checkbox"
+                  checked={form.photo_consent}
+                  onChange={e => set('photo_consent', e.target.checked)}
+                  className="w-4 h-4 accent-sky-600"
+                />
+                <label htmlFor="photo_consent_edit" className="text-sm text-gray-700">Zgoda na zdjęcia</label>
+              </div>
+            </div>
+          </div>
+          {errors.__all__ && <p className="text-xs text-red-600">{errors.__all__}</p>}
+          <div className="flex gap-3 pt-1 border-t border-gray-100">
+            <button
+              type="submit"
+              disabled={saving}
+              className="bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white font-bold px-6 py-2.5 rounded-xl text-sm transition-colors"
+            >
+              {saving ? 'Zapisuję…' : 'Zapisz zmiany'}
+            </button>
+            <button type="button" onClick={onClose} className="text-gray-500 hover:text-gray-800 px-4 py-2.5 text-sm font-medium">Anuluj</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
 
 function formatDate(iso) {
   if (!iso) return '—'
@@ -44,6 +256,8 @@ function EnrolledTable({ courseFilter, onSoftDeleted, refreshKey }) {
   const [anonBusyId, setAnonBusyId]       = useState(null)
   const [deletionModal, setDeletionModal] = useState(null)
   const [resetState, setResetState]       = useState({})
+  const [linkModal, setLinkModal]         = useState(null)
+  const [editModal, setEditModal]         = useState(null)
 
   useEffect(() => {
     setLoading(true)
@@ -63,6 +277,18 @@ function EnrolledTable({ courseFilter, onSoftDeleted, refreshKey }) {
       setResetState(prev => ({ ...prev, [id]: 'error' }))
     }
     setTimeout(() => setResetState(prev => { const n = { ...prev }; delete n[id]; return n }), 3000)
+  }
+
+  async function handleGenerateLink(id, email) {
+    setResetState(prev => ({ ...prev, [id]: 'loading' }))
+    try {
+      const res = await adminGenerateResetLink(email)
+      setLinkModal(res.data.reset_link)
+      setResetState(prev => { const n = { ...prev }; delete n[id]; return n })
+    } catch {
+      setResetState(prev => ({ ...prev, [id]: 'error' }))
+      setTimeout(() => setResetState(prev => { const n = { ...prev }; delete n[id]; return n }), 3000)
+    }
   }
 
   async function handleSoftDelete(id, reason) {
@@ -95,6 +321,14 @@ function EnrolledTable({ courseFilter, onSoftDeleted, refreshKey }) {
 
   return (
     <>
+      {linkModal && <ResetLinkModal link={linkModal} onClose={() => setLinkModal(null)} />}
+      {editModal && (
+        <EditEnrollmentModal
+          enrollment={editModal}
+          onClose={() => setEditModal(null)}
+          onSaved={updated => setEnrollments(prev => prev.map(e => e.id === updated.id ? updated : e))}
+        />
+      )}
       {deletionModal && !deletionModal._noDeposit && (
         <DeletionReasonModal
           participantName={`${deletionModal.last_name} ${deletionModal.first_name}`}
@@ -176,6 +410,12 @@ function EnrolledTable({ courseFilter, onSoftDeleted, refreshKey }) {
                 ) : (
                   <div className="flex flex-col items-end gap-1.5">
                     <button
+                      onClick={() => setEditModal(e)}
+                      className="text-xs font-semibold px-2.5 py-1 rounded-md bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors whitespace-nowrap"
+                    >
+                      Edytuj dane
+                    </button>
+                    <button
                       onClick={() => e.payment_status !== 'none' ? setDeletionModal(e) : setDeletionModal({ ...e, _noDeposit: true })}
                       className="text-xs font-semibold px-2.5 py-1 rounded-md bg-red-100 text-red-600 hover:bg-red-200 transition-colors whitespace-nowrap"
                     >
@@ -188,19 +428,13 @@ function EnrolledTable({ courseFilter, onSoftDeleted, refreshKey }) {
                       Usuń dane wrażliwe
                     </button>}
                     {e.email && (
-                      resetState[e.id] === 'sent' ? (
-                        <span className="text-xs font-semibold px-2.5 py-1 text-emerald-600">✓ Mail wysłany</span>
-                      ) : resetState[e.id] === 'error' ? (
-                        <span className="text-xs font-semibold px-2.5 py-1 text-red-600">✗ Błąd</span>
-                      ) : (
-                        <button
-                          onClick={() => handlePasswordReset(e.id, e.email)}
-                          disabled={resetState[e.id] === 'loading'}
-                          className="text-xs font-semibold px-2.5 py-1 rounded-md bg-sky-100 text-sky-700 hover:bg-sky-200 disabled:opacity-50 transition-colors whitespace-nowrap"
-                        >
-                          {resetState[e.id] === 'loading' ? '…' : 'Resetuj hasło'}
-                        </button>
-                      )
+                      <ResetPasswordDropdown
+                        id={e.id}
+                        email={e.email}
+                        resetState={resetState}
+                        onSendEmail={() => handlePasswordReset(e.id, e.email)}
+                        onGenerateLink={() => handleGenerateLink(e.id, e.email)}
+                      />
                     )}
                   </div>
                 )}
@@ -226,6 +460,8 @@ function ReserveTable({ courses, onSoftDeleted, refreshKey }) {
   const [anonBusyId, setAnonBusyId]       = useState(null)
   const [deletionModal, setDeletionModal] = useState(null)
   const [resetState, setResetState]       = useState({})
+  const [linkModal, setLinkModal]         = useState(null)
+  const [editModal, setEditModal]         = useState(null)
 
   useEffect(() => {
     setLoading(true)
@@ -243,6 +479,18 @@ function ReserveTable({ courses, onSoftDeleted, refreshKey }) {
       setResetState(prev => ({ ...prev, [id]: 'error' }))
     }
     setTimeout(() => setResetState(prev => { const n = { ...prev }; delete n[id]; return n }), 3000)
+  }
+
+  async function handleGenerateLinkReserve(id, email) {
+    setResetState(prev => ({ ...prev, [id]: 'loading' }))
+    try {
+      const res = await adminGenerateResetLink(email)
+      setLinkModal(res.data.reset_link)
+      setResetState(prev => { const n = { ...prev }; delete n[id]; return n })
+    } catch {
+      setResetState(prev => ({ ...prev, [id]: 'error' }))
+      setTimeout(() => setResetState(prev => { const n = { ...prev }; delete n[id]; return n }), 3000)
+    }
   }
 
   async function handleAssign(enrollmentId) {
@@ -286,6 +534,14 @@ function ReserveTable({ courses, onSoftDeleted, refreshKey }) {
 
   return (
     <>
+      {linkModal && <ResetLinkModal link={linkModal} onClose={() => setLinkModal(null)} />}
+      {editModal && (
+        <EditEnrollmentModal
+          enrollment={editModal}
+          onClose={() => setEditModal(null)}
+          onSaved={updated => setReservations(prev => prev.map(e => e.id === updated.id ? updated : e))}
+        />
+      )}
       {deletionModal && !deletionModal._noDeposit && (
         <DeletionReasonModal
           participantName={`${deletionModal.last_name} ${deletionModal.first_name}`}
@@ -399,6 +655,12 @@ function ReserveTable({ courses, onSoftDeleted, refreshKey }) {
                             Przypisz do kursu
                           </button>
                           <button
+                            onClick={() => setEditModal(e)}
+                            className="text-xs font-semibold px-2.5 py-1 rounded-md bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors whitespace-nowrap"
+                          >
+                            Edytuj dane
+                          </button>
+                          <button
                             onClick={() => e.payment_status !== 'none' ? setDeletionModal(e) : setDeletionModal({ ...e, _noDeposit: true })}
                             className="text-xs font-semibold px-2.5 py-1 rounded-md bg-red-100 text-red-600 hover:bg-red-200 transition-colors whitespace-nowrap"
                           >
@@ -412,19 +674,13 @@ function ReserveTable({ courses, onSoftDeleted, refreshKey }) {
                           Usuń dane wrażliwe
                         </button>}
                         {e.email && (
-                          resetState[e.id] === 'sent' ? (
-                            <span className="text-xs font-semibold px-2.5 py-1 text-emerald-600">✓ Mail wysłany</span>
-                          ) : resetState[e.id] === 'error' ? (
-                            <span className="text-xs font-semibold px-2.5 py-1 text-red-600">✗ Błąd</span>
-                          ) : (
-                            <button
-                              onClick={() => handlePasswordResetReserve(e.id, e.email)}
-                              disabled={resetState[e.id] === 'loading'}
-                              className="text-xs font-semibold px-2.5 py-1 rounded-md bg-sky-100 text-sky-700 hover:bg-sky-200 disabled:opacity-50 transition-colors whitespace-nowrap"
-                            >
-                              {resetState[e.id] === 'loading' ? '…' : 'Resetuj hasło'}
-                            </button>
-                          )
+                          <ResetPasswordDropdown
+                            id={e.id}
+                            email={e.email}
+                            resetState={resetState}
+                            onSendEmail={() => handlePasswordResetReserve(e.id, e.email)}
+                            onGenerateLink={() => handleGenerateLinkReserve(e.id, e.email)}
+                          />
                         )}
                       </div>
                     )}

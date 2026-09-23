@@ -295,7 +295,9 @@ function EditEnrollmentModal({ enrollment, courseType, onSave, onClose }) {
     setSaving(true)
     setError('')
     try {
-      const res = await adminUpdateEnrollment(enrollment.id, form)
+      const payload = { ...form, birth_date: form.birth_date || null, cert_date: form.cert_date || null }
+      if (!payload.pesel) delete payload.pesel
+      const res = await adminUpdateEnrollment(enrollment.id, payload)
       onSave(res.data)
     } catch {
       setError('Błąd zapisu. Sprawdź dane.')
@@ -324,12 +326,15 @@ function EditEnrollmentModal({ enrollment, courseType, onSave, onClose }) {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="field-label">PESEL <span className="text-red-500">*</span></label>
-              <input name="pesel" value={form.pesel} onChange={set} className="field-input font-mono" maxLength={11} required />
+              <label className="field-label">PESEL {enrollment.pesel && <span className="text-red-500">*</span>}</label>
+              {enrollment.pesel
+                ? <input name="pesel" value={form.pesel} onChange={set} className="field-input font-mono" maxLength={11} required />
+                : <input disabled value="usunięto" className="field-input text-gray-300 italic bg-gray-50 cursor-not-allowed" />
+              }
             </div>
             <div>
-              <label className="field-label">Data urodzenia <span className="text-red-500">*</span></label>
-              <input type="date" name="birth_date" value={form.birth_date} onChange={set} className="field-input" required />
+              <label className="field-label">Data urodzenia {enrollment.birth_date && <span className="text-red-500">*</span>}</label>
+              <input type="date" name="birth_date" value={form.birth_date || ''} onChange={set} className="field-input" required={!!enrollment.birth_date} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">

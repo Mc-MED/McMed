@@ -126,7 +126,7 @@ class EnrollmentSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'course_name', 'exam_date', 'created_at', 'is_deleted', 'deleted_at', 'deletion_reason', 'deletion_reason_display']
 
     def validate_pesel(self, value):
-        if not value.isdigit() or len(value) != 11:
+        if value and (not value.isdigit() or len(value) != 11):
             raise serializers.ValidationError('PESEL musi składać się z 11 cyfr.')
         return value
 

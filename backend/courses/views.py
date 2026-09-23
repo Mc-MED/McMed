@@ -380,6 +380,7 @@ def send_email_to_enrollments(request):
 
     enrollments = Enrollment.objects.select_related('course').filter(
         id__in=enrollment_ids,
+        is_deleted=False,
     ).exclude(email='')
 
     sent = 0
@@ -423,6 +424,7 @@ def send_sms_to_enrollments(request):
 
     enrollments = Enrollment.objects.filter(
         id__in=enrollment_ids,
+        is_deleted=False,
     ).exclude(phone='')
 
     sent = 0

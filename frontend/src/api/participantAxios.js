@@ -31,7 +31,7 @@ participantAxios.interceptors.response.use(
         .catch(() => {
           localStorage.removeItem('participant_access_token')
           localStorage.removeItem('participant_refresh_token')
-          window.location.href = '/zaloguj'
+          window.location.href = '/zaloguj-sie'
           return Promise.reject(new Error('session_expired'))
         })
         .finally(() => { refreshing = null })

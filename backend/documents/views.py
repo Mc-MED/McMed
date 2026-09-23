@@ -58,7 +58,7 @@ def _extract_city(exam_location):
 
 
 def _build_context(course):
-    enrolled_count = course.enrollments.count()
+    enrolled_count = course.enrollments.filter(is_deleted=False).count()
 
     def fmt(date):
         return date.strftime('%d.%m.%Y') if date else ''
@@ -611,7 +611,8 @@ def download_xlsx_per_enrollment(request, course_id, doc_name):
     for lp, enrollment in enumerate(enrollments, start=1):
         ws = wb.copy_worksheet(ws_tpl)
         raw_title = f'{enrollment.last_name} {enrollment.first_name}'
-        ws.title = raw_title[:31]
+        safe_title = re.sub(r'[\/\?\*\[\]:\\\']', '_', raw_title)[:31]
+        ws.title = safe_title
         ctx = _build_enrollment_context(enrollment, course_ctx, lp)
         _xlsx_replace(ws, ctx)
 

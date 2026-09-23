@@ -47,7 +47,7 @@ const CANCEL_REASONS = [
 
 function CourseCard({ enrollment, onCancelled }) {
   const c = enrollment
-  const end = c.end_date ? new Date(c.end_date) : null
+  const end = c.end_date ? new Date(c.end_date + 'T00:00:00') : null
   const isPast = end && end < new Date()
 
   const [showCancel, setShowCancel]   = useState(false)
@@ -409,8 +409,8 @@ export default function ParticipantDashboard() {
     setEnrollments(prev => prev.filter(e => e.id !== id))
   }
 
-  const upcoming = enrollments.filter(e => !e.end_date || new Date(e.end_date) >= new Date())
-  const past     = enrollments.filter(e => e.end_date && new Date(e.end_date) < new Date())
+  const upcoming = enrollments.filter(e => !e.end_date || new Date(e.end_date + 'T00:00:00') >= new Date())
+  const past     = enrollments.filter(e => e.end_date && new Date(e.end_date + 'T00:00:00') < new Date())
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -420,7 +420,7 @@ export default function ParticipantDashboard() {
         </a>
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-600 font-medium">{firstName}</span>
-          <button onClick={handleLogout} className="text-sm font-semibold text-orange-500 hover:text-orange-600 border-2 border-orange-400 hover:border-orange-500 hover:bg-orange-50 px-3 py-1.5 rounded-lg transition-colors">
+          <button onClick={handleLogout} className="text-sm font-semibold text-orange-500 hover:text-orange-600 border-2 border-orange-400 hover:border-orange-500 hover:bg-orange-50 active:bg-orange-100 active:scale-95 px-3 py-1.5 rounded-lg transition-colors">
             Wyloguj
           </button>
         </div>
@@ -463,7 +463,7 @@ export default function ParticipantDashboard() {
         </div>
 
         {enrollments
-          .filter(e => e.whatsapp_link && /^https?:\/\//i.test(e.whatsapp_link) && (!e.end_date || new Date(e.end_date) >= new Date()))
+          .filter(e => e.whatsapp_link && /^https?:\/\//i.test(e.whatsapp_link) && (!e.end_date || new Date(e.end_date + 'T00:00:00') >= new Date()))
           .map(e => (
             <a
               key={e.id}
