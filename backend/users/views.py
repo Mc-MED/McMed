@@ -71,37 +71,54 @@ class ResendActivationView(APIView):
             # Nie ujawniamy czy email istnieje
             return Response({'message': 'Jeśli konto istnieje, link został wysłany.'})
 
-
-        ActivationToken.objects.filter(user=user, is_used=False).update(is_used=True)
-        token = ActivationToken.objects.create(user=user)
-
-        frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
-        activation_link = f'{frontend_url}/aktywuj/{token.token}'
-
-        enrollment = user.enrollments.select_related('course').order_by('-created_at').first()
-        if enrollment and enrollment.course:
-            course = enrollment.course
-            def fmt(d):
-                return d.strftime('%d.%m.%Y') if d else '–'
-            course_info = {
-                'Kurs':    course.name,
-                'Termin':  f'{fmt(course.start_date)} – {fmt(course.end_date)}',
-                'Miejsce': course.city,
-            }
-            first_name = enrollment.first_name
-        else:
-            course_info = None
-            first_name = user.first_name or email
-
-        send_activation_email(
-            to_email=email,
-            first_name=first_name,
-            activation_link=activation_link,
-            course_info=course_info,
-            resend=True,
-        )
+        send_new_activation_email(user, email)
 
         return Response({'message': 'Link aktywacyjny został wysłany ponownie.'})
+
+
+def _frontend_url():
+    return getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
+
+
+def new_activation_link(user):
+    """Unieważnia poprzednie tokeny aktywacyjne i zwraca nowy link (ważny 72 h)."""
+    ActivationToken.objects.filter(user=user, is_used=False).update(is_used=True)
+    token = ActivationToken.objects.create(user=user)
+    return f'{_frontend_url()}/aktywuj/{token.token}'
+
+
+def new_reset_link(user):
+    """Unieważnia poprzednie tokeny resetu hasła i zwraca nowy link (ważny 2 h)."""
+    PasswordResetToken.objects.filter(user=user, is_used=False).update(is_used=True)
+    token = PasswordResetToken.objects.create(user=user)
+    return f'{_frontend_url()}/reset-hasla/{token.token}'
+
+
+def send_new_activation_email(user, email):
+    activation_link = new_activation_link(user)
+
+    enrollment = user.enrollments.select_related('course').order_by('-created_at').first()
+    if enrollment and enrollment.course:
+        course = enrollment.course
+        def fmt(d):
+            return d.strftime('%d.%m.%Y') if d else '–'
+        course_info = {
+            'Kurs':    course.name,
+            'Termin':  f'{fmt(course.start_date)} – {fmt(course.end_date)}',
+            'Miejsce': course.city,
+        }
+        first_name = enrollment.first_name
+    else:
+        course_info = None
+        first_name = user.first_name or email
+
+    send_activation_email(
+        to_email=email,
+        first_name=first_name,
+        activation_link=activation_link,
+        course_info=course_info,
+        resend=True,
+    )
 
 
 class PasswordResetRequestView(APIView):
@@ -115,14 +132,10 @@ class PasswordResetRequestView(APIView):
 
         user = User.objects.filter(email__iexact=email, is_active=True).first()
         if user:
-            PasswordResetToken.objects.filter(user=user, is_used=False).update(is_used=True)
-            token = PasswordResetToken.objects.create(user=user)
-            frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
-            reset_link = f'{frontend_url}/reset-hasla/{token.token}'
             send_password_reset_email(
                 to_email=email,
                 first_name=user.first_name or email,
-                reset_link=reset_link,
+                reset_link=new_reset_link(user),
             )
 
         return Response({'message': 'Jeśli konto istnieje, link do resetowania hasła został wysłany.'})
@@ -172,16 +185,51 @@ class AdminGenerateResetLinkView(APIView):
         if not email:
             return Response({'error': 'Podaj adres email.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        user = User.objects.filter(email__iexact=email, is_active=True).first()
+        user = _admin_find_user(email)
         if not user:
             return Response(
-                {'error': 'Nie znaleziono aktywnego konta z tym adresem email.'},
+                {'error': 'Nie znaleziono konta z tym adresem email.'},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        PasswordResetToken.objects.filter(user=user, is_used=False).update(is_used=True)
-        token = PasswordResetToken.objects.create(user=user)
-        frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
-        reset_link = f'{frontend_url}/reset-hasla/{token.token}'
+        # Nieaktywne konto → link aktywacyjny, aktywne → link do resetu hasła
+        if not user.is_active:
+            return Response({'type': 'activation', 'link': new_activation_link(user)})
+        return Response({'type': 'reset', 'link': new_reset_link(user)})
 
-        return Response({'reset_link': reset_link})
+
+class AdminSendAccessEmailView(APIView):
+    """Nieaktywne konto → wysyła nowy link aktywacyjny, aktywne → link do resetu hasła."""
+    permission_classes = [IsAdminUser]
+
+    def post(self, request):
+        email = (request.data.get('email') or '').strip().lower()
+        if not email:
+            return Response({'error': 'Podaj adres email.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = _admin_find_user(email)
+        if not user:
+            return Response(
+                {'error': 'Nie znaleziono konta z tym adresem email.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if not user.is_active:
+            send_new_activation_email(user, email)
+            return Response({'type': 'activation'})
+
+        send_password_reset_email(
+            to_email=email,
+            first_name=user.first_name or email,
+            reset_link=new_reset_link(user),
+        )
+        return Response({'type': 'reset'})
+
+
+def _admin_find_user(email):
+    # Przy duplikatach preferuj aktywne konto, potem najnowsze
+    return (
+        User.objects.filter(email__iexact=email)
+        .order_by('-is_active', '-date_joined')
+        .first()
+    )

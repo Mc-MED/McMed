@@ -57,7 +57,7 @@ export const adminDeleteInstructor = (id) =>
   adminAxios.delete(`/api/courses/instructors/${id}/`)
 
 export const adminSendPasswordReset = (email) =>
-  adminAxios.post('/api/users/password-reset/', { email })
+  adminAxios.post('/api/users/admin/send-access-email/', { email })
 
 export const adminGenerateResetLink = (email) =>
   adminAxios.post('/api/users/admin/generate-reset-link/', { email })

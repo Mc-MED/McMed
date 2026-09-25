@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { adminFetchEnrollments, adminFetchUnassignedEnrollments, adminFetchDeletedEnrollments, adminFetchCourses, adminDeleteEnrollment, adminUpdateEnrollment, adminAnonymizeEnrollment, adminSoftDeleteEnrollment, adminRestoreEnrollment, adminSendPasswordReset, adminGenerateResetLink } from '../../api/admin'
 import DeletionReasonModal from '../../components/DeletionReasonModal'
 
-function ResetLinkModal({ link, onClose }) {
+function ResetLinkModal({ link, type, onClose }) {
+  const isActivation = type === 'activation'
   const [copied, setCopied] = useState(false)
   function copy() {
     navigator.clipboard.writeText(link).then(() => {
@@ -13,8 +14,17 @@ function ResetLinkModal({ link, onClose }) {
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6" onClick={e => e.stopPropagation()}>
-        <h2 className="text-base font-bold text-gray-900 mb-1">Link do resetu hasła</h2>
-        <p className="text-xs text-gray-500 mb-4">Skopiuj ten link i wyślij uczestnikowi ręcznie. Link jest jednorazowy i wygasa po 2&nbsp;h.</p>
+        <h2 className="text-base font-bold text-gray-900 mb-1">
+          {isActivation ? 'Link aktywacyjny' : 'Link do resetu hasła'}
+        </h2>
+        {isActivation && (
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2">
+            Konto uczestnika nie zostało jeszcze aktywowane – wygenerowano nowy link aktywacyjny.
+          </p>
+        )}
+        <p className="text-xs text-gray-500 mb-4">
+          Skopiuj ten link i wyślij uczestnikowi ręcznie. Link jest jednorazowy i wygasa po {isActivation ? '72' : '2'}&nbsp;h.
+        </p>
         <div className="flex gap-2 items-center bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 mb-4">
           <span className="text-xs text-gray-700 break-all flex-1 select-all font-mono">{link}</span>
           <button
@@ -34,7 +44,8 @@ function ResetPasswordDropdown({ id, email, resetState, onSendEmail, onGenerateL
   const [open, setOpen] = useState(false)
   const state = resetState[id]
 
-  if (state === 'sent') return <span className="text-xs font-semibold px-2.5 py-1 text-emerald-600">✓ Mail wysłany</span>
+  if (state === 'sent-reset') return <span className="text-xs font-semibold px-2.5 py-1 text-emerald-600">✓ Wysłano reset hasła</span>
+  if (state === 'sent-activation') return <span className="text-xs font-semibold px-2.5 py-1 text-emerald-600">✓ Wysłano link aktywacyjny</span>
   if (state === 'error') return <span className="text-xs font-semibold px-2.5 py-1 text-red-600">✗ Błąd</span>
   if (state === 'loading') return <span className="text-xs font-semibold px-2.5 py-1 text-sky-600">…</span>
 
@@ -271,8 +282,8 @@ function EnrolledTable({ courseFilter, onSoftDeleted, refreshKey }) {
   async function handlePasswordReset(id, email) {
     setResetState(prev => ({ ...prev, [id]: 'loading' }))
     try {
-      await adminSendPasswordReset(email)
-      setResetState(prev => ({ ...prev, [id]: 'sent' }))
+      const res = await adminSendPasswordReset(email)
+      setResetState(prev => ({ ...prev, [id]: `sent-${res.data.type}` }))
     } catch {
       setResetState(prev => ({ ...prev, [id]: 'error' }))
     }
@@ -283,7 +294,7 @@ function EnrolledTable({ courseFilter, onSoftDeleted, refreshKey }) {
     setResetState(prev => ({ ...prev, [id]: 'loading' }))
     try {
       const res = await adminGenerateResetLink(email)
-      setLinkModal(res.data.reset_link)
+      setLinkModal(res.data)
       setResetState(prev => { const n = { ...prev }; delete n[id]; return n })
     } catch {
       setResetState(prev => ({ ...prev, [id]: 'error' }))
@@ -321,7 +332,7 @@ function EnrolledTable({ courseFilter, onSoftDeleted, refreshKey }) {
 
   return (
     <>
-      {linkModal && <ResetLinkModal link={linkModal} onClose={() => setLinkModal(null)} />}
+      {linkModal && <ResetLinkModal link={linkModal.link} type={linkModal.type} onClose={() => setLinkModal(null)} />}
       {editModal && (
         <EditEnrollmentModal
           enrollment={editModal}
@@ -473,8 +484,8 @@ function ReserveTable({ courses, onSoftDeleted, refreshKey }) {
   async function handlePasswordResetReserve(id, email) {
     setResetState(prev => ({ ...prev, [id]: 'loading' }))
     try {
-      await adminSendPasswordReset(email)
-      setResetState(prev => ({ ...prev, [id]: 'sent' }))
+      const res = await adminSendPasswordReset(email)
+      setResetState(prev => ({ ...prev, [id]: `sent-${res.data.type}` }))
     } catch {
       setResetState(prev => ({ ...prev, [id]: 'error' }))
     }
@@ -485,7 +496,7 @@ function ReserveTable({ courses, onSoftDeleted, refreshKey }) {
     setResetState(prev => ({ ...prev, [id]: 'loading' }))
     try {
       const res = await adminGenerateResetLink(email)
-      setLinkModal(res.data.reset_link)
+      setLinkModal(res.data)
       setResetState(prev => { const n = { ...prev }; delete n[id]; return n })
     } catch {
       setResetState(prev => ({ ...prev, [id]: 'error' }))
@@ -534,7 +545,7 @@ function ReserveTable({ courses, onSoftDeleted, refreshKey }) {
 
   return (
     <>
-      {linkModal && <ResetLinkModal link={linkModal} onClose={() => setLinkModal(null)} />}
+      {linkModal && <ResetLinkModal link={linkModal.link} type={linkModal.type} onClose={() => setLinkModal(null)} />}
       {editModal && (
         <EditEnrollmentModal
           enrollment={editModal}

@@ -2,7 +2,7 @@ from django.urls import path
 from .views import (
     ActivateAccountView, ResendActivationView,
     PasswordResetRequestView, PasswordResetConfirmView,
-    AdminGenerateResetLinkView,
+    AdminGenerateResetLinkView, AdminSendAccessEmailView,
 )
 
 urlpatterns = [
@@ -11,4 +11,5 @@ urlpatterns = [
     path('password-reset/',               PasswordResetRequestView.as_view(),    name='password-reset-request'),
     path('password-reset/<uuid:token>/',  PasswordResetConfirmView.as_view(),    name='password-reset-confirm'),
     path('admin/generate-reset-link/',    AdminGenerateResetLinkView.as_view(),  name='admin-generate-reset-link'),
+    path('admin/send-access-email/',      AdminSendAccessEmailView.as_view(),    name='admin-send-access-email'),
 ]
