@@ -11,6 +11,7 @@ urlpatterns = [
     path('courses/<int:course_id>/xlsx/<str:doc_name>/', views.download_xlsx, name='document-download-xlsx'),
     path('courses/<int:course_id>/xlsx-per-enrollment/<str:doc_name>/', views.download_xlsx_per_enrollment, name='document-download-xlsx-per-enrollment'),
     path('enrollments/<int:enrollment_id>/<str:doc_name>/', views.download_certificate, name='certificate-download'),
+    path('my-certificate/<int:enrollment_id>/', views.participant_certificate, name='participant-certificate'),
     # Tematy i pliki
     path('admin/topics/', views.admin_topics, name='admin-topics'),
     path('admin/topics/<int:topic_id>/', views.admin_topic_detail, name='admin-topic-detail'),

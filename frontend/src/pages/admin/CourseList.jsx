@@ -140,6 +140,7 @@ export default function CourseList() {
                 <div className="flex flex-col gap-1 items-center" onClick={ev => ev.stopPropagation()}>
                   <ConsentToggle course={c} field="consents_sent"     label="Wysłane" />
                   <ConsentToggle course={c} field="consents_received" label="Zgody"   />
+                  <ConsentToggle course={c} field="room_booked"       label="Sala"    />
                 </div>
               </td>
               <td className="px-5 py-4">

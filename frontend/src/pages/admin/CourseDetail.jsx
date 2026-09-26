@@ -11,6 +11,30 @@ function formatDate(iso) {
   return `${d}.${m}.${y}`
 }
 
+// Data urodzenia z PESEL (miesiąc +20 dla 2000–2099, +40 dla 2100–, +80 dla 1800–)
+function peselBirthDate(pesel) {
+  if (!/^\d{11}$/.test(pesel || '')) return null
+  const yy = +pesel.slice(0, 2)
+  let mm   = +pesel.slice(2, 4)
+  const dd = +pesel.slice(4, 6)
+  const centuries = [[80, 1800], [60, 2200], [40, 2100], [20, 2000], [0, 1900]]
+  const [offset, century] = centuries.find(([o]) => mm > o)
+  mm -= offset
+  const date = new Date(century + yy, mm - 1, dd)
+  if (date.getMonth() !== mm - 1 || date.getDate() !== dd) return null
+  return date
+}
+
+// Czy w dniu refIso (lub dziś) osoba nie ukończyła 18 lat — co do dnia
+function isUnder18(pesel, refIso) {
+  const birth = peselBirthDate(pesel)
+  if (!birth) return false
+  const ref = refIso ? new Date(refIso + 'T00:00:00') : new Date()
+  ref.setHours(0, 0, 0, 0)
+  const eighteenth = new Date(birth.getFullYear() + 18, birth.getMonth(), birth.getDate())
+  return eighteenth > ref
+}
+
 function formatDateTime(iso) {
   if (!iso) return '—'
   const d = new Date(iso)
@@ -630,7 +654,9 @@ function AddParticipantModal({ courseId, courseType, onSave, onClose }) {
   )
 }
 
-function EnrollmentTable({ courseId, courseName, examDate, courseType }) {
+function EnrollmentTable({ courseId, courseName, examDate, startDate, courseType }) {
+  // Wiek liczymy na dzień rozpoczęcia kursu (recertyfikacja: dzień egzaminu)
+  const ageRefDate = courseType === 'recert' ? examDate : startDate
   const [enrollments, setEnrollments] = useState([])
   const [loading, setLoading]         = useState(true)
 
@@ -1031,7 +1057,12 @@ function EnrollmentTable({ courseId, courseName, examDate, courseType }) {
                 )}
                 <td className="px-4 py-4 text-gray-400 text-sm tabular-nums">{idx + 1}</td>
                 <td className="px-5 py-4 font-medium text-gray-900">{e.last_name} {e.first_name}</td>
-                <td className="px-5 py-4 text-gray-600 font-mono tracking-wide">{e.pesel || <span className="text-gray-300 italic">usunięto</span>}</td>
+                <td className="px-5 py-4 text-gray-600 font-mono tracking-wide whitespace-nowrap">
+                  {e.pesel || <span className="text-gray-300 italic">usunięto</span>}
+                  {isUnder18(e.pesel, ageRefDate) && (
+                    <span className="ml-1.5 font-sans font-bold text-red-600" title="Uczestnik nie ukończy 18 lat do dnia rozpoczęcia kursu">!</span>
+                  )}
+                </td>
                 <td className="px-5 py-4 text-gray-600 whitespace-nowrap">{e.birth_date ? formatDate(e.birth_date) : <span className="text-gray-300 italic">usunięto</span>}</td>
                 <td className="px-5 py-4 text-gray-600 whitespace-nowrap">{examDate ? formatDate(examDate) : <span className="text-gray-300 italic">—</span>}</td>
                 <td className="px-5 py-4 text-gray-600 text-xs leading-relaxed">
@@ -1118,6 +1149,22 @@ function EnrollmentTable({ courseId, courseName, examDate, courseType }) {
                             className="text-xs font-semibold px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-50 transition-colors"
                           >
                             {downloadingCert === e.id ? '…' : 'Certyfikat'}
+                          </button>
+                          <button
+                            onClick={async () => {
+                              const newVal = !e.certificate_visible
+                              setEnrollments(prev => prev.map(x => x.id === e.id ? { ...x, certificate_visible: newVal } : x))
+                              try { await adminUpdateEnrollment(e.id, { certificate_visible: newVal }) }
+                              catch { setEnrollments(prev => prev.map(x => x.id === e.id ? { ...x, certificate_visible: !newVal } : x)) }
+                            }}
+                            title={e.certificate_visible ? 'Uczestnik widzi certyfikat w swoim panelu — kliknij, aby ukryć' : 'Udostępnij certyfikat w panelu uczestnika'}
+                            className={`text-xs font-semibold px-2.5 py-1 rounded-md transition-colors ${
+                              e.certificate_visible
+                                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
+                          >
+                            {e.certificate_visible ? '✓ Certyfikat widoczny' : 'Pokaż certyfikat'}
                           </button>
                         </div>
                         <div className="flex gap-1.5">
@@ -1231,8 +1278,8 @@ export default function CourseDetail() {
       </div>
 
       {tab === 'dane' && <div className="max-w-4xl"><CourseForm initial={course} onSaved={setCourse} /></div>}
-      {tab === 'uczestnicy' && <EnrollmentTable courseId={id} courseName={course.name} examDate={course.exam_date} courseType={course.course_type} />}
-      {tab === 'egzamin' && <div className="max-w-5xl"><ExamTab courseId={id} /></div>}
+      {tab === 'uczestnicy' && <EnrollmentTable courseId={id} courseName={course.name} examDate={course.exam_date} startDate={course.start_date} courseType={course.course_type} />}
+      {tab === 'egzamin' && <div className="max-w-5xl"><ExamTab courseId={id} course={course} /></div>}
       {tab === 'dokumenty' && <div className="max-w-4xl"><DocumentsTab courseId={id} courseType={course.course_type} /></div>}
       {tab === 'obsluga' && <div className="max-w-4xl"><CourseManagementTab courseId={id} courseType={course.course_type} /></div>}
     </div>
@@ -1259,11 +1306,43 @@ const XLSX_DOCUMENTS = [
   { filename: 'program', label: 'Program zajęć', description: '' },
 ]
 
-function ExamTab({ courseId }) {
+const EXAM_SCORE_OPTIONS  = ['3', '3.5', '4', '4.5', '5']
+const THEORY_GRADE_OPTIONS = ['2', '3', '3.5', '4', '4.5', '5']
+const THEORY_MAX_POINTS   = 30
+
+const EXAM_SUBTABS = [
+  { id: 'teoretyczny', label: 'Teoretyczny' },
+  { id: 'praktyczny',  label: 'Praktyczny' },
+  { id: 'zbiorczy',    label: 'Zbiorczy' },
+]
+
+function examColumns(subtab, course) {
+  if (subtab === 'teoretyczny') return [
+    { field: 'exam_theory_attempt1', label: 'I podejście',    type: 'points' },
+    { field: 'exam_theory_attempt2', label: 'II podejście',   type: 'points' },
+    { field: 'exam_theory_grade',    label: 'Ocena końcowa',  type: 'select', options: THEORY_GRADE_OPTIONS },
+  ]
+  if (subtab === 'praktyczny') return [
+    { field: 'exam_rko',  label: 'RKO',   type: 'select', options: EXAM_SCORE_OPTIONS },
+    { field: 'exam_zad1', label: 'ZAD 1', type: 'select', options: EXAM_SCORE_OPTIONS },
+    { field: 'exam_zad2', label: 'ZAD 2', type: 'select', options: EXAM_SCORE_OPTIONS },
+  ]
+  return [
+    { field: 'exam_committee_chair',   label: '1. Przewodniczący komisji', person: course?.committee_chair,   type: 'select', options: EXAM_SCORE_OPTIONS },
+    { field: 'exam_committee_member1', label: '2. Członek komisji',        person: course?.committee_member1, type: 'select', options: EXAM_SCORE_OPTIONS },
+    { field: 'exam_committee_member2', label: '3. Członek komisji',        person: course?.committee_member2, type: 'select', options: EXAM_SCORE_OPTIONS },
+  ]
+}
+
+const ALL_EXAM_FIELDS = EXAM_SUBTABS.flatMap(t => examColumns(t.id).map(c => c.field))
+
+function ExamTab({ courseId, course }) {
+  const [subtab, setSubtab]           = useState('teoretyczny')
   const [enrollments, setEnrollments] = useState([])
   const [loading, setLoading]         = useState(true)
-  const [scores, setScores]           = useState({})   // { [enrollmentId]: { rko, zad1, zad2 } }
+  const [scores, setScores]           = useState({})   // { [enrollmentId]: { [apiField]: '4.5' } }
   const [saving, setSaving]           = useState({})   // { [enrollmentId-field]: true }
+  const [filling, setFilling]         = useState(false)
 
   useEffect(() => {
     adminFetchEnrollments(courseId)
@@ -1272,60 +1351,133 @@ function ExamTab({ courseId }) {
         setEnrollments(active)
         const init = {}
         active.forEach(e => {
-          init[e.id] = {
-            rko:  e.exam_rko  != null ? String(e.exam_rko)  : '',
-            zad1: e.exam_zad1 != null ? String(e.exam_zad1) : '',
-            zad2: e.exam_zad2 != null ? String(e.exam_zad2) : '',
-          }
+          init[e.id] = {}
+          ALL_EXAM_FIELDS.forEach(f => {
+            init[e.id][f] = e[f] != null ? String(parseFloat(e[f])) : ''
+          })
         })
         setScores(init)
       })
       .finally(() => setLoading(false))
   }, [courseId])
 
+  const columns = examColumns(subtab, course)
+  const showAvg = subtab !== 'teoretyczny'
+
   function avg(id) {
     const s = scores[id] || {}
-    const vals = [s.rko, s.zad1, s.zad2]
-      .map(v => parseFloat(v))
-      .filter(v => !isNaN(v))
+    const vals = columns.map(c => parseFloat(s[c.field])).filter(v => !isNaN(v))
     if (!vals.length) return ''
     const raw = vals.reduce((a, b) => a + b, 0) / vals.length
     const rounded = Math.round(raw * 2) / 2
     return rounded % 1 === 0 ? String(rounded) : rounded.toFixed(1)
   }
 
-  function handleChange(enrollmentId, field, value) {
+  function setScore(enrollmentId, field, value) {
     setScores(prev => ({ ...prev, [enrollmentId]: { ...prev[enrollmentId], [field]: value } }))
   }
 
-  async function handleBlur(enrollmentId, field, value) {
+  async function save(enrollmentId, field, value, prevValue) {
     const key = `${enrollmentId}-${field}`
-    const apiField = `exam_${field}`
-    const parsed = value === '' ? null : parseFloat(value)
-    if (value !== '' && isNaN(parsed)) return
     setSaving(prev => ({ ...prev, [key]: true }))
     try {
-      await adminUpdateEnrollment(enrollmentId, { [apiField]: parsed })
+      await adminUpdateEnrollment(enrollmentId, { [field]: value === '' ? null : parseFloat(value) })
+    } catch {
+      setScore(enrollmentId, field, prevValue)
     } finally {
       setSaving(prev => ({ ...prev, [key]: false }))
     }
   }
 
-  const ScoreInput = ({ enrollmentId, field }) => {
+  function handleSelect(enrollmentId, field, value) {
+    const prevValue = scores[enrollmentId]?.[field] ?? ''
+    setScore(enrollmentId, field, value)
+    save(enrollmentId, field, value, prevValue)
+  }
+
+  // Punkty z testu: zapis po opuszczeniu pola, tylko liczby całkowite 0–30
+  const [pointsBefore, setPointsBefore] = useState({})
+  function handlePointsBlur(enrollmentId, field, value) {
     const key = `${enrollmentId}-${field}`
-    const val = scores[enrollmentId]?.[field] ?? ''
+    const prevValue = pointsBefore[key] ?? ''
+    if (value === prevValue) return
+    const n = Number(value)
+    if (value !== '' && (!Number.isInteger(n) || n < 0 || n > THEORY_MAX_POINTS)) {
+      setScore(enrollmentId, field, prevValue)
+      return
+    }
+    save(enrollmentId, field, value, prevValue)
+  }
+
+  async function handleFillRandom() {
+    const label = EXAM_SUBTABS.find(t => t.id === subtab).label.toLowerCase()
+    if (!confirm(`Wypełnić losowo egzamin ${label} wszystkich uczestników? Obecne wyniki w tej zakładce zostaną nadpisane.`)) return
+    const pickFrom = arr => arr[Math.floor(Math.random() * arr.length)]
+    const randomValue = col => {
+      if (col.type === 'points') {
+        // II podejście tylko gdy pierwsze się nie udało — przy losowaniu zostawiamy puste
+        return col.field === 'exam_theory_attempt2' ? '' : String(Math.floor(Math.random() * (THEORY_MAX_POINTS + 1)))
+      }
+      return pickFrom(col.options)
+    }
+    const prevScores = scores
+    const next = { ...scores }
+    enrollments.forEach(e => {
+      next[e.id] = { ...next[e.id] }
+      columns.forEach(c => { next[e.id][c.field] = randomValue(c) })
+    })
+    setScores(next)
+    setFilling(true)
+    try {
+      await Promise.all(enrollments.map(e => adminUpdateEnrollment(e.id, Object.fromEntries(
+        columns.map(c => [c.field, next[e.id][c.field] === '' ? null : parseFloat(next[e.id][c.field])])
+      ))))
+    } catch {
+      setScores(prevScores)
+      alert('Nie udało się zapisać wszystkich wyników. Odśwież stronę i sprawdź wyniki.')
+    } finally {
+      setFilling(false)
+    }
+  }
+
+  const inputClass = key => `w-20 text-center text-sm border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-400 transition-colors ${
+    saving[key] ? 'border-yellow-400 bg-yellow-50' : 'border-gray-200 bg-white'
+  }`
+
+  // Zwykła funkcja (nie komponent), żeby pole punktów nie traciło fokusu przy każdym re-renderze
+  function renderCell(enrollmentId, col) {
+    const key = `${enrollmentId}-${col.field}`
+    const val = scores[enrollmentId]?.[col.field] ?? ''
+    if (col.type === 'points') {
+      return (
+        <div className="inline-flex items-center gap-1">
+          <input
+            type="number"
+            min="0"
+            max={THEORY_MAX_POINTS}
+            step="1"
+            value={val}
+            onFocus={() => setPointsBefore(prev => ({ ...prev, [key]: val }))}
+            onChange={e => setScore(enrollmentId, col.field, e.target.value)}
+            onBlur={e => handlePointsBlur(enrollmentId, col.field, e.target.value)}
+            className={inputClass(key)}
+          />
+          <span className="text-xs text-gray-400">/{THEORY_MAX_POINTS}</span>
+        </div>
+      )
+    }
+    // Stara ocena spoza skali (sprzed zmiany) — pokazujemy ją, żeby nie zniknęła z widoku
+    const options = val !== '' && !col.options.includes(val) ? [val, ...col.options] : col.options
     return (
-      <input
-        type="number"
-        step="0.01"
-        min="0"
+      <select
         value={val}
-        onChange={e => handleChange(enrollmentId, field, e.target.value)}
-        onBlur={e => handleBlur(enrollmentId, field, e.target.value)}
-        className={`w-20 text-center text-sm border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-400 transition-colors ${
-          saving[key] ? 'border-yellow-400 bg-yellow-50' : 'border-gray-200 bg-white'
-        }`}
-      />
+        onChange={e => handleSelect(enrollmentId, col.field, e.target.value)}
+        disabled={saving[key]}
+        className={inputClass(key)}
+      >
+        <option value="">—</option>
+        {options.map(o => <option key={o} value={o}>{o.replace('.', ',')}</option>)}
+      </select>
     )
   }
 
@@ -1334,49 +1486,78 @@ function ExamTab({ courseId }) {
 
   return (
     <div className="mt-6">
+      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+        <div className="inline-flex bg-gray-100 rounded-lg p-1">
+          {EXAM_SUBTABS.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setSubtab(t.id)}
+              className={`text-sm font-semibold px-4 py-1.5 rounded-md transition-colors ${
+                subtab === t.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={handleFillRandom}
+          disabled={filling}
+          className="text-sm font-semibold px-4 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+        >
+          {filling ? 'Zapisywanie…' : 'Wypełnij losowo'}
+        </button>
+      </div>
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100 bg-gray-50 text-left">
               <th className="px-5 py-3.5 font-semibold text-gray-600 w-12">Lp.</th>
               <th className="px-5 py-3.5 font-semibold text-gray-600">Imię i nazwisko</th>
-              <th className="px-5 py-3.5 font-semibold text-gray-600 text-center">RKO</th>
-              <th className="px-5 py-3.5 font-semibold text-gray-600 text-center">ZAD 1</th>
-              <th className="px-5 py-3.5 font-semibold text-gray-600 text-center">ZAD 2</th>
-              <th className="px-5 py-3.5 font-semibold text-gray-600 text-center">Średnia</th>
+              {columns.map(c => (
+                <th key={c.field} className="px-5 py-3.5 font-semibold text-gray-600 text-center align-top">
+                  {c.label}
+                  {subtab === 'zbiorczy' && (
+                    <div className={`text-xs font-normal mt-0.5 ${c.person ? 'text-gray-500' : 'text-gray-300 italic'}`}>
+                      {c.person || 'nie wybrano'}
+                    </div>
+                  )}
+                </th>
+              ))}
+              {showAvg && <th className="px-5 py-3.5 font-semibold text-gray-600 text-center align-top">Średnia</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {enrollments.map((e, i) => {
-              const average = avg(e.id)
+              const average = showAvg ? avg(e.id) : ''
               return (
                 <tr key={e.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-5 py-3 text-gray-400 font-medium">{i + 1}</td>
+                  <td className="px-5 py-3 text-gray-400 font-medium">{String(i + 1).padStart(2, '0')}</td>
                   <td className="px-5 py-3 font-medium text-gray-900">
                     {e.last_name} {e.first_name}
                   </td>
-                  <td className="px-5 py-3 text-center">
-                    <ScoreInput enrollmentId={e.id} field="rko" />
-                  </td>
-                  <td className="px-5 py-3 text-center">
-                    <ScoreInput enrollmentId={e.id} field="zad1" />
-                  </td>
-                  <td className="px-5 py-3 text-center">
-                    <ScoreInput enrollmentId={e.id} field="zad2" />
-                  </td>
-                  <td className="px-5 py-3 text-center">
-                    {average
-                      ? <span className={`font-bold text-sm ${parseFloat(average) >= 3 ? 'text-emerald-600' : 'text-red-600'}`}>{average}</span>
-                      : <span className="text-gray-300">—</span>
-                    }
-                  </td>
+                  {columns.map(c => (
+                    <td key={c.field} className="px-5 py-3 text-center">{renderCell(e.id, c)}</td>
+                  ))}
+                  {showAvg && (
+                    <td className="px-5 py-3 text-center">
+                      {average
+                        ? <span className={`font-bold text-sm ${parseFloat(average) >= 3 ? 'text-emerald-600' : 'text-red-600'}`}>{average}</span>
+                        : <span className="text-gray-300">—</span>
+                      }
+                    </td>
+                  )}
                 </tr>
               )
             })}
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-gray-400 mt-3">Oceny zapisywane automatycznie po opuszczeniu pola.</p>
+      <p className="text-xs text-gray-400 mt-3">
+        {subtab === 'teoretyczny'
+          ? 'Punkty zapisywane po opuszczeniu pola, ocena końcowa od razu po wybraniu. Oceny: 2; 3; 3,5; 4; 4,5; 5.'
+          : 'Oceny zapisywane automatycznie po wybraniu.'}
+      </p>
     </div>
   )
 }

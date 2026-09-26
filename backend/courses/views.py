@@ -9,7 +9,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 
 from .models import Course, Enrollment, Instructor
-from .serializers import CourseSerializer, AdminCourseSerializer, EnrollmentSerializer, AdminEnrollmentCreateSerializer, InstructorSerializer, MyEnrollmentSerializer
+from .serializers import CourseSerializer, AdminCourseSerializer, EnrollmentSerializer, PublicEnrollmentSerializer, AdminEnrollmentCreateSerializer, InstructorSerializer, MyEnrollmentSerializer
 from users.emails import send_activation_email, send_course_email
 
 User = get_user_model()
@@ -31,7 +31,7 @@ class PublicCourseListView(generics.ListAPIView):
 
 class PublicEnrollView(generics.CreateAPIView):
     permission_classes = [AllowAny]
-    serializer_class   = EnrollmentSerializer
+    serializer_class   = PublicEnrollmentSerializer
 
     def create(self, request, *args, **kwargs):
         password = request.data.get('password', '')

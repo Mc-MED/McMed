@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { fetchMyEnrollments, cancelMyEnrollment } from '../../api/participant'
+import { fetchMyEnrollments, cancelMyEnrollment, downloadMyCertificate } from '../../api/participant'
 import { fetchCourses } from '../../api/courses'
 import { fetchTopics, fetchTopicFileBlob, fetchProgress, toggleFileProgress, fetchTopicQuiz, submitTopicQuiz, fetchTopicQuizResults } from '../../api/documents'
 import PdfViewer from '../../components/PdfViewer'
@@ -242,6 +242,8 @@ export default function ParticipantDashboard() {
   const [recertFetched, setRecertFetched] = useState(false)
   const [pdfUrl, setPdfUrl] = useState(null)
   const [pdfError, setPdfError] = useState('')
+  const [downloadingCertId, setDownloadingCertId] = useState(null)
+  const [certError, setCertError] = useState('')
 
   // działy i pliki
   const [topics, setTopics]             = useState([])
@@ -409,6 +411,20 @@ export default function ParticipantDashboard() {
     setEnrollments(prev => prev.filter(e => e.id !== id))
   }
 
+  const certEnrollments = enrollments.filter(e => e.certificate_visible)
+
+  async function handleDownloadCertificate(id) {
+    setDownloadingCertId(id)
+    setCertError('')
+    try {
+      await downloadMyCertificate(id)
+    } catch {
+      setCertError('Nie udało się pobrać certyfikatu. Spróbuj ponownie później.')
+    } finally {
+      setDownloadingCertId(null)
+    }
+  }
+
   const upcoming = enrollments.filter(e => !e.end_date || new Date(e.end_date + 'T00:00:00') >= new Date())
   const past     = enrollments.filter(e => e.end_date && new Date(e.end_date + 'T00:00:00') < new Date())
 
@@ -459,7 +475,14 @@ export default function ParticipantDashboard() {
             active={activeCard === 'questions'}
             onClick={() => setActiveCard(activeCard === 'questions' ? null : 'questions')}
           />
-          <NavCard icon="🏅" title="Certyfikaty" description="Wyniki egzaminów i zaświadczenia" soon />
+          <NavCard
+            icon="🏅"
+            title="Certyfikaty"
+            description="Wyniki egzaminów i zaświadczenia"
+            soon={!certEnrollments.length}
+            active={activeCard === 'certs'}
+            onClick={() => setActiveCard(activeCard === 'certs' ? null : 'certs')}
+          />
         </div>
 
         {enrollments
@@ -634,6 +657,9 @@ export default function ParticipantDashboard() {
                                     {new Date(quizResult.attempted_at).toLocaleString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                   </p>
                                 )}
+                                {!quizResult.passed && (
+                                  <p className="text-xs text-gray-600 mb-3">Popraw pytania oznaczone na czerwono i spróbuj ponownie.</p>
+                                )}
                                 <div className="space-y-2 mb-3">
                                   {quizQuestions.map((q, qi) => {
                                     const res = quizResult.results.find(r => r.question_id === q.id)
@@ -643,7 +669,8 @@ export default function ParticipantDashboard() {
                                         <div className="mt-1 space-y-1">
                                           {q.choices.map(c => {
                                             const isChosen = quizAnswers[q.id] === c.id
-                                            const isCorrect = res?.correct_choice_id === c.id
+                                            // correct_choice_id przychodzi tylko przy zaliczonym teście
+                                            const isCorrect = res?.correct_choice_id === c.id || (isChosen && res?.correct)
                                             return (
                                               <div key={c.id} className={`flex items-center gap-1.5 ${isCorrect ? 'font-semibold' : ''} ${isChosen && !isCorrect ? 'line-through opacity-60' : ''}`}>
                                                 <span>{isCorrect ? '✓' : isChosen ? '✗' : '·'}</span>
@@ -728,6 +755,28 @@ export default function ParticipantDashboard() {
         )}
 
         {activeCard === 'questions' && <QuizPanel />}
+
+        {activeCard === 'certs' && (
+          <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-3">
+            <h2 className="font-extrabold text-gray-900 text-base mb-1">Twoje certyfikaty</h2>
+            {certEnrollments.map(e => (
+              <div key={e.id} className="flex items-center justify-between gap-4 p-4 rounded-xl border border-gray-100 bg-gray-50">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">{e.course_name}</p>
+                  <p className="text-xs text-gray-500">{e.course_type_display}{e.course_city ? ` · ${e.course_city}` : ''}</p>
+                </div>
+                <button
+                  onClick={() => handleDownloadCertificate(e.id)}
+                  disabled={downloadingCertId === e.id}
+                  className="shrink-0 text-sm font-semibold px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 transition-colors"
+                >
+                  {downloadingCertId === e.id ? 'Generowanie…' : '↓ Pobierz certyfikat'}
+                </button>
+              </div>
+            ))}
+            {certError && <p className="text-sm text-red-600">{certError}</p>}
+          </div>
+        )}
 
         {activeCard === 'recert' && (
           recertLoading ? (

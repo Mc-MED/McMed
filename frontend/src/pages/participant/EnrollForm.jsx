@@ -23,7 +23,6 @@ const EMPTY = {
   photo_consent: false,
   data_consent: false,
   schedule_consent: false,
-  materials_consent: false,
   cert_validity_consent: false,
   employment_consent: false,
 }
@@ -102,7 +101,7 @@ export default function EnrollForm() {
     const { name, value, type, checked } = e.target
     setForm(f => ({ ...f, [name]: type === 'checkbox' ? checked : value }))
     if (name === 'course') {
-      setErrors(er => ({ ...er, course: '', cert_validity_consent: '', employment_consent: '', schedule_consent: '', materials_consent: '' }))
+      setErrors(er => ({ ...er, course: '', cert_validity_consent: '', employment_consent: '', schedule_consent: '' }))
     } else {
       setErrors(er => ({ ...er, [name]: '' }))
     }
@@ -123,7 +122,6 @@ export default function EnrollForm() {
     if (!form.street.trim())     e.street     = 'Podaj ulicę.'
     if (!form.house_number.trim()) e.house_number = 'Podaj numer domu.'
     if (!form.schedule_consent)    e.schedule_consent  = 'Potwierdzenie zapoznania się z harmonogramem jest wymagane.'
-    if (!form.materials_consent)   e.materials_consent = 'Potwierdzenie odbioru materiałów jest wymagane.'
     if (!form.data_consent)        e.data_consent = 'Zgoda na przetwarzanie danych jest wymagana.'
     if (form.password.length < 8)  e.password = 'Hasło musi mieć min. 8 znaków.'
     if (form.password !== form.confirm_password) e.confirm_password = 'Hasła nie są zgodne.'
@@ -261,7 +259,6 @@ export default function EnrollForm() {
 
     const errs = {}
     if (!form.schedule_consent)  errs.schedule_consent  = 'Potwierdzenie zapoznania się z harmonogramem jest wymagane.'
-    if (!form.materials_consent) errs.materials_consent = 'Potwierdzenie odbioru materiałów jest wymagane.'
     const courseMeta = courses.find(c => String(c.id) === String(quickCourse))
     if (courseMeta?.course_type === 'recert') {
       if (!form.cert_number.trim()) errs.cert_number = 'Podaj numer certyfikatu.'
@@ -299,7 +296,6 @@ export default function EnrollForm() {
     if (!form.street.trim())          errs.street       = 'Podaj ulicę.'
     if (!form.house_number.trim())    errs.house_number = 'Podaj numer domu.'
     if (!form.schedule_consent)       errs.schedule_consent  = 'Potwierdzenie zapoznania się z harmonogramem jest wymagane.'
-    if (!form.materials_consent)      errs.materials_consent = 'Potwierdzenie odbioru materiałów jest wymagane.'
     if (!hasPreviousEnrollment && !form.data_consent) {
       errs.data_consent = 'Zgoda na przetwarzanie danych jest wymagana.'
     }
@@ -406,13 +402,8 @@ export default function EnrollForm() {
                 label="1. Zapoznałem/am się z harmonogramem zajęć, programem nauczania zgodnymi z Ustawą z dnia 8 września 2006 r. o Państwowym Ratownictwie Medycznym (Dz. U. z dnia 20 październik 2006r. Nr 191, póz. 1410) oraz Obwieszczeniem Ministra Zdrowia z dnia 24 lutego 2021 r. w sprawie ogłoszenia jednolitego tekstu rozporządzenia Ministra Zdrowia w sprawie kursu w zakresie kwalifikowanej pierwszej pomocy (tj. Dz.U. 2021 poz. 411). *"
               />
               <ConsentCheckbox
-                name="materials_consent" checked={form.materials_consent} onChange={handleChange}
-                error={errors.materials_consent}
-                label="2. Potwierdzam odbiór materiałów dydaktycznych otrzymanych drogą mailową. *"
-              />
-              <ConsentCheckbox
                 name="photo_consent" checked={form.photo_consent} onChange={handleChange}
-                label="3. Wyrażam zgodę na nieodpłatną i nieograniczoną czasowo i miejscowo publikację i rozpowszechnianie mojego wizerunku (na zdjęciach wykonanych podczas kursu KPP) przez Administratora Danych Osobowych, którym jest Firma Mc Med, dla celów marketingowych (w tym promocyjnych i reklamowych) związanych z działalnością Administratora danych osobowych."
+                label="2. Wyrażam zgodę na nieodpłatną i nieograniczoną czasowo i miejscowo publikację i rozpowszechnianie mojego wizerunku (na zdjęciach wykonanych podczas kursu KPP) przez Administratora Danych Osobowych, którym jest Firma Mc Med, dla celów marketingowych (w tym promocyjnych i reklamowych) związanych z działalnością Administratora danych osobowych."
               />
             </div>
             {selectedCourse?.course_type === 'recert' && (
@@ -586,20 +577,24 @@ export default function EnrollForm() {
               label="1. Zapoznałem/am się z harmonogramem zajęć, programem nauczania zgodnymi z Ustawą z dnia 8 września 2006 r. o Państwowym Ratownictwie Medycznym (Dz. U. z dnia 20 październik 2006r. Nr 191, póz. 1410) oraz Obwieszczeniem Ministra Zdrowia z dnia 24 lutego 2021 r. w sprawie ogłoszenia jednolitego tekstu rozporządzenia Ministra Zdrowia w sprawie kursu w zakresie kwalifikowanej pierwszej pomocy (tj. Dz.U. 2021 poz. 411). *"
             />
             <ConsentCheckbox
-              name="materials_consent" checked={form.materials_consent} onChange={handleChange}
-              error={errors.materials_consent}
-              label="2. Potwierdzam odbiór materiałów dydaktycznych otrzymanych drogą mailową. *"
-            />
-            <ConsentCheckbox
               name="photo_consent" checked={form.photo_consent} onChange={handleChange}
-              label="3. Wyrażam zgodę na nieodpłatną i nieograniczoną czasowo i miejscowo publikację i rozpowszechnianie mojego wizerunku (na zdjęciach wykonanych podczas kursu KPP) przez Administratora Danych Osobowych, którym jest Firma Mc Med, dla celów marketingowych (w tym promocyjnych i reklamowych) związanych z działalnością Administratora danych osobowych."
+              label="2. Wyrażam zgodę na nieodpłatną i nieograniczoną czasowo i miejscowo publikację i rozpowszechnianie mojego wizerunku (na zdjęciach wykonanych podczas kursu KPP) przez Administratora Danych Osobowych, którym jest Firma Mc Med, dla celów marketingowych (w tym promocyjnych i reklamowych) związanych z działalnością Administratora danych osobowych."
             />
             {/* Zgoda RODO: niezalogowani + zalogowani bez historii (pierwsze zapisy) */}
             {(!isLoggedIn || !hasPreviousEnrollment) && (
               <ConsentCheckbox
                 name="data_consent" checked={form.data_consent} onChange={handleChange}
                 error={errors.data_consent}
-                label="4. Na podstawie art. 6 ust. 1 lit. a wyrażam zgodę na przetwarzanie danych osobowych w świetle Rozporządzenia Parlamentu Europejskiego i Rady (UE) 2016/679 z dnia 27 kwietnia 2016 r. w sprawie ochrony osób fizycznych w związku z przetwarzaniem danych osobowych i w sprawie swobodnego przepływu takich danych oraz uchylenia dyrektywy 95/46/WE (ogólne rozporządzenie o ochronie danych – RODO, Dz. U. UE. L. 2016.119.1 z dnia 4 maja 2016 r.) zawartych w przedstawionych przeze mnie dokumentach dla potrzeb niezbędnych do celów związanych z procedurą przeprowadzenia kursu kwalifikowanej pierwszej pomocy. Firma Mc Med posiada obowiązek przechowywania dokumentacji związanej z kursem KPP przez okres 5 lat. Po tym okresie wszelkie dane osobowe oraz dokumentacja kursu zostanie zniszczona zgodnie z należytą starannością by nie dopuścić do wycieku danych osobowych. Administrator danych osobowych zastrzega sobie możliwość usunięcia danych osobowych na pisemny wniosek ich właściciela lub obligatoryjnie w okresie 5 lat od dnia egzaminu. *"
+                label={
+                  <span className="block space-y-2">
+                    <span className="block font-medium">3. Zapoznałem/am się z poniższą informacją:</span>
+                    <span className="block">Dane osobowe uczestnika są przetwarzane przez McMed w zakresie niezbędnym do organizacji, przeprowadzenia i udokumentowania kursu w zakresie kwalifikowanej pierwszej pomocy oraz egzaminu końcowego lub egzaminu recertyfikacyjnego.</span>
+                    <span className="block">Podstawę przetwarzania danych stanowi w szczególności art. 6 ust. 1 lit. c Rozporządzenia Parlamentu Europejskiego i Rady (UE) 2016/679 (RODO), tj. przetwarzanie niezbędne do wypełnienia obowiązku prawnego ciążącego na administratorze, wynikającego z przepisów regulujących organizację i dokumentowanie kursów w zakresie kwalifikowanej pierwszej pomocy.</span>
+                    <span className="block">Zgodnie z § 10a rozporządzenia Ministra Zdrowia z dnia 19 marca 2007 r. w sprawie kursu w zakresie kwalifikowanej pierwszej pomocy, protokół z egzaminu oraz wymagana dokumentacja kursu są przechowywane przez podmiot prowadzący kurs przez okres 5 lat, licząc od końca roku kalendarzowego, w którym został przeprowadzony egzamin.</span>
+                    <span className="block">Po upływie wymaganego okresu przechowywania dokumentacja zawierająca dane osobowe zostanie usunięta lub zniszczona w sposób zapewniający ochronę danych przed nieuprawnionym dostępem, ujawnieniem lub wykorzystaniem.</span>
+                    <span className="block">Osobie, której dane dotyczą, przysługują prawa określone w RODO, z uwzględnieniem ograniczeń wynikających z obowiązujących przepisów prawa. Żądanie usunięcia danych nie może zostać zrealizowane w zakresie, w jakim dalsze ich przetwarzanie jest niezbędne do wykonania obowiązku prawnego ciążącego na administratorze. *</span>
+                  </span>
+                }
               />
             )}
           </div>

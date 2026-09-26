@@ -92,6 +92,7 @@ class Course(models.Model):
     # Zgody do instytucji
     consents_sent     = models.BooleanField(default=False)
     consents_received = models.BooleanField(default=False)
+    room_booked       = models.BooleanField(default=False)
 
     # Organizacja
     entity_director   = models.CharField(max_length=200, blank=True)
@@ -156,6 +157,15 @@ class Enrollment(models.Model):
     exam_rko         = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     exam_zad1        = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     exam_zad2        = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    # Egzamin teoretyczny: punkty z testu (/30) w dwóch podejściach + ocena końcowa
+    exam_theory_attempt1 = models.PositiveSmallIntegerField(null=True, blank=True)
+    exam_theory_attempt2 = models.PositiveSmallIntegerField(null=True, blank=True)
+    exam_theory_grade    = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
+    # Ocena zbiorcza: ocena od każdego członka komisji
+    exam_committee_chair   = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
+    exam_committee_member1 = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
+    exam_committee_member2 = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
+    certificate_visible = models.BooleanField(default=False)
     payment_status   = models.CharField(
         max_length=10,
         choices=[('none', 'Brak'), ('deposit', 'Zaliczka'), ('paid', 'Opłacony')],

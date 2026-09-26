@@ -552,6 +552,49 @@ def download_certificate(request, enrollment_id, doc_name):
     return response
 
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def participant_certificate(request, enrollment_id):
+    try:
+        enrollment = Enrollment.objects.select_related('course').get(
+            pk=enrollment_id, user=request.user, is_deleted=False, certificate_visible=True,
+        )
+    except Enrollment.DoesNotExist:
+        return Response({'detail': 'Certyfikat nie jest dostępny.'}, status=404)
+
+    is_recert = enrollment.course and enrollment.course.course_type == 'recert'
+    tpl_path = TEMPLATES_DIR / ('certyfikat.r.docx' if is_recert else 'certyfikat.docx')
+    if not tpl_path.exists():
+        tpl_path = TEMPLATES_DIR / 'certyfikat.docx'
+    if not tpl_path.exists():
+        return Response({'detail': 'Brak pliku szablonu certyfikatu.'}, status=404)
+
+    tpl = DocxTemplate(tpl_path)
+    tpl.render(_build_certificate_context(enrollment))
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        docx_path = os.path.join(tmpdir, 'certyfikat.docx')
+        pdf_path  = os.path.join(tmpdir, 'certyfikat.pdf')
+        tpl.save(docx_path)
+        try:
+            result = subprocess.run(
+                ['libreoffice', '--headless', '--convert-to', 'pdf', '--outdir', tmpdir, docx_path],
+                capture_output=True, timeout=30,
+            )
+            ok = result.returncode == 0 and os.path.exists(pdf_path)
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            ok = False
+        if not ok:
+            return Response({'detail': 'Nie udało się wygenerować certyfikatu. Skontaktuj się z organizatorem.'}, status=500)
+
+        with open(pdf_path, 'rb') as f:
+            pdf_bytes = f.read()
+
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    response['Content-Disposition'] = 'attachment; filename="certyfikat.pdf"'
+    return response
+
+
 def _build_enrollment_context(enrollment, course_ctx, lp):
     def fmt(date):
         return date.strftime('%d.%m.%Y') if date else ''
@@ -1048,6 +1091,10 @@ def participant_submit_quiz(request, topic_id):
 
     total = len(questions)
     passed = score == total
+    # Poprawne odpowiedzi ujawniamy dopiero po zaliczeniu — przy niezaliczonym uczestnik próbuje ponownie
+    if not passed:
+        for r in results:
+            r.pop('correct_choice_id')
     attempt = TopicQuizAttempt.objects.create(user=request.user, topic=topic, score=score, total=total, passed=passed)
     return Response({'score': score, 'total': total, 'passed': passed, 'results': results, 'attempted_at': attempt.attempted_at.isoformat()})
 

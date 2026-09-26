@@ -11,3 +11,15 @@ export const enrollMe = (courseId, extraData = {}) =>
 
 export const cancelMyEnrollment = (id, reason) =>
   participantAxios.post(`/api/courses/my-enrollments/${id}/cancel/`, { reason })
+
+export const downloadMyCertificate = async (enrollmentId) => {
+  const response = await participantAxios.get(`/api/documents/my-certificate/${enrollmentId}/`, {
+    responseType: 'blob',
+  })
+  const url = URL.createObjectURL(response.data)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'certyfikat.pdf'
+  a.click()
+  URL.revokeObjectURL(url)
+}

@@ -83,7 +83,7 @@ class AdminCourseSerializer(serializers.ModelSerializer):
             'psychologist',
             'committee_chair', 'committee_member1', 'committee_member2',
             'spots_left',
-            'consents_sent', 'consents_received',
+            'consents_sent', 'consents_received', 'room_booked',
         ]
         read_only_fields = ['id', 'start_date', 'end_date']
 
@@ -98,7 +98,53 @@ class AdminCourseSerializer(serializers.ModelSerializer):
         return value
 
 
-class EnrollmentSerializer(serializers.ModelSerializer):
+EXAM_SCORE_VALUES = {3, 3.5, 4, 4.5, 5}
+THEORY_GRADE_VALUES = {2, 3, 3.5, 4, 4.5, 5}
+THEORY_MAX_POINTS = 30
+
+
+class ExamScoreValidationMixin:
+    def _validate_exam_score(self, value):
+        if value is not None and float(value) not in EXAM_SCORE_VALUES:
+            raise serializers.ValidationError('Ocena musi być jedną z wartości: 3, 3.5, 4, 4.5, 5.')
+        return value
+
+    def validate_exam_rko(self, value):
+        return self._validate_exam_score(value)
+
+    def validate_exam_zad1(self, value):
+        return self._validate_exam_score(value)
+
+    def validate_exam_zad2(self, value):
+        return self._validate_exam_score(value)
+
+    def validate_exam_committee_chair(self, value):
+        return self._validate_exam_score(value)
+
+    def validate_exam_committee_member1(self, value):
+        return self._validate_exam_score(value)
+
+    def validate_exam_committee_member2(self, value):
+        return self._validate_exam_score(value)
+
+    def _validate_theory_points(self, value):
+        if value is not None and value > THEORY_MAX_POINTS:
+            raise serializers.ValidationError(f'Liczba punktów musi być z zakresu 0–{THEORY_MAX_POINTS}.')
+        return value
+
+    def validate_exam_theory_attempt1(self, value):
+        return self._validate_theory_points(value)
+
+    def validate_exam_theory_attempt2(self, value):
+        return self._validate_theory_points(value)
+
+    def validate_exam_theory_grade(self, value):
+        if value is not None and float(value) not in THEORY_GRADE_VALUES:
+            raise serializers.ValidationError('Ocena musi być jedną z wartości: 2, 3, 3.5, 4, 4.5, 5.')
+        return value
+
+
+class EnrollmentSerializer(ExamScoreValidationMixin, serializers.ModelSerializer):
     course_name            = serializers.SerializerMethodField()
     exam_date              = serializers.SerializerMethodField()
     deletion_reason_display = serializers.SerializerMethodField()
@@ -120,7 +166,10 @@ class EnrollmentSerializer(serializers.ModelSerializer):
             'email', 'phone',
             'zip_code', 'city', 'street', 'house_number', 'apartment_number',
             'cert_number', 'cert_date',
-            'photo_consent', 'payment_status', 'exam_rko', 'exam_zad1', 'exam_zad2', 'created_at',
+            'photo_consent', 'payment_status', 'exam_rko', 'exam_zad1', 'exam_zad2',
+            'exam_theory_attempt1', 'exam_theory_attempt2', 'exam_theory_grade',
+            'exam_committee_chair', 'exam_committee_member1', 'exam_committee_member2',
+            'certificate_visible', 'created_at',
             'is_deleted', 'deleted_at', 'deletion_reason', 'deletion_reason_display',
         ]
         read_only_fields = ['id', 'course_name', 'exam_date', 'created_at', 'is_deleted', 'deleted_at', 'deletion_reason', 'deletion_reason_display']
@@ -139,7 +188,23 @@ class EnrollmentSerializer(serializers.ModelSerializer):
         return data
 
 
-class AdminEnrollmentCreateSerializer(serializers.ModelSerializer):
+class PublicEnrollmentSerializer(EnrollmentSerializer):
+    """Publiczny zapis na kurs — tylko pola z formularza. Płatność, oceny i soft-delete ustawia wyłącznie admin."""
+    course = serializers.PrimaryKeyRelatedField(queryset=Course.objects.filter(is_active=True))
+
+    class Meta(EnrollmentSerializer.Meta):
+        fields = [
+            'id', 'course',
+            'first_name', 'last_name', 'pesel', 'birth_date',
+            'email', 'phone',
+            'zip_code', 'city', 'street', 'house_number', 'apartment_number',
+            'cert_number', 'cert_date',
+            'photo_consent',
+        ]
+        read_only_fields = ['id']
+
+
+class AdminEnrollmentCreateSerializer(ExamScoreValidationMixin, serializers.ModelSerializer):
     course_name             = serializers.SerializerMethodField()
     exam_date               = serializers.SerializerMethodField()
     deletion_reason_display = serializers.SerializerMethodField()
@@ -161,7 +226,10 @@ class AdminEnrollmentCreateSerializer(serializers.ModelSerializer):
             'email', 'phone',
             'zip_code', 'city', 'street', 'house_number', 'apartment_number',
             'cert_number', 'cert_date',
-            'photo_consent', 'payment_status', 'exam_rko', 'exam_zad1', 'exam_zad2', 'created_at',
+            'photo_consent', 'payment_status', 'exam_rko', 'exam_zad1', 'exam_zad2',
+            'exam_theory_attempt1', 'exam_theory_attempt2', 'exam_theory_grade',
+            'exam_committee_chair', 'exam_committee_member1', 'exam_committee_member2',
+            'certificate_visible', 'created_at',
             'is_deleted', 'deleted_at', 'deletion_reason', 'deletion_reason_display',
         ]
         read_only_fields = ['id', 'course_name', 'exam_date', 'created_at', 'is_deleted', 'deleted_at', 'deletion_reason', 'deletion_reason_display']
@@ -239,5 +307,5 @@ class MyEnrollmentSerializer(serializers.ModelSerializer):
             'id', 'course', 'course_name', 'course_type', 'course_type_display',
             'course_city', 'start_date', 'end_date', 'exam_date', 'exam_location',
             'price', 'course_days', 'whatsapp_link',
-            'first_name', 'last_name', 'payment_status', 'photo_consent', 'created_at',
+            'first_name', 'last_name', 'payment_status', 'photo_consent', 'certificate_visible', 'created_at',
         ]
