@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import axios from 'axios'
 
@@ -7,7 +7,12 @@ export default function ActivateAccount() {
   const [state, setState] = useState('loading') // loading | success | error
   const [message, setMessage] = useState('')
 
+  // StrictMode w dev odpala efekt dwa razy – aktywujemy tylko raz
+  const requested = useRef(false)
+
   useEffect(() => {
+    if (requested.current) return
+    requested.current = true
     axios.get(`/api/users/activate/${token}/`)
       .then(() => setState('success'))
       .catch(err => {

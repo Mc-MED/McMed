@@ -18,7 +18,7 @@ export default function ParticipantLogin() {
     setError('')
     setLoading(true)
     try {
-      const { data } = await axios.post('/api/auth/token/', { username: email, password })
+      const { data } = await axios.post('/api/auth/token/', { username: email.trim().toLowerCase(), password })
       localStorage.setItem('participant_access_token', data.access)
       localStorage.setItem('participant_refresh_token', data.refresh)
       navigate(redirectTo)

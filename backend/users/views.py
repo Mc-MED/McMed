@@ -41,13 +41,18 @@ class ActivateAccountView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        user = activation.user
+
+        # Ponowne kliknięcie / skaner poczty / podwójny request – konto już aktywne
+        if user.is_active:
+            return Response({'message': 'Konto jest już aktywne. Możesz się zalogować.'})
+
         if not activation.is_valid:
             return Response(
                 {'error': 'Link aktywacyjny wygasł lub został już użyty.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        user = activation.user
         user.is_active = True
         user.save(update_fields=['is_active'])
 
