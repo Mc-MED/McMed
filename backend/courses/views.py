@@ -20,13 +20,8 @@ class PublicCourseListView(generics.ListAPIView):
     serializer_class   = CourseSerializer
 
     def get_queryset(self):
-        today = timezone.now().date()
-        return Course.objects.filter(is_active=True).filter(
-            Q(course_type=Course.TYPE_RECERT, exam_date__gt=today)
-            | Q(course_type=Course.TYPE_RECERT, exam_date__isnull=True)
-            | Q(course_type=Course.TYPE_KPP, start_date__gt=today)
-            | Q(course_type=Course.TYPE_KPP, start_date__isnull=True)
-        )
+        Course.hide_started()
+        return Course.objects.filter(is_active=True, is_visible=True)
 
 
 class PublicEnrollView(generics.CreateAPIView):
@@ -132,6 +127,10 @@ class AdminCourseListView(generics.ListAPIView):
     serializer_class   = AdminCourseSerializer
     queryset           = Course.objects.all()
 
+    def get_queryset(self):
+        Course.hide_started()
+        return super().get_queryset()
+
 
 class AdminCourseCreateView(generics.CreateAPIView):
     permission_classes = [IsAdminUser]
@@ -142,6 +141,10 @@ class AdminCourseDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAdminUser]
     serializer_class   = AdminCourseSerializer
     queryset           = Course.objects.all()
+
+    def get_queryset(self):
+        Course.hide_started()
+        return super().get_queryset()
     http_method_names  = ['get', 'patch', 'delete']
 
 

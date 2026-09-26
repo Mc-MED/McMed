@@ -84,6 +84,7 @@ class AdminCourseSerializer(serializers.ModelSerializer):
             'committee_chair', 'committee_member1', 'committee_member2',
             'spots_left',
             'consents_sent', 'consents_received', 'room_booked',
+            'is_visible',
         ]
         read_only_fields = ['id', 'start_date', 'end_date']
 

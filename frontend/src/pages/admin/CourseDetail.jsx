@@ -141,6 +141,13 @@ function CourseForm({ initial, onSaved }) {
             </select>
           </div>
         </div>
+        <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
+          <input type="checkbox" name="is_visible" checked={!!form.is_visible} onChange={handleChange} className="mt-0.5 accent-red-600" />
+          <span>
+            <span className="font-medium">Widoczny na liście kursów</span>
+            <span className="block text-xs text-gray-400">Odznacza się automatycznie w pierwszym dniu kursu. Zaznacz, aby kurs znów pojawił się na stronie.</span>
+          </span>
+        </label>
         <Field label="Tytuł kursu" name="name" value={form.name} onChange={handleChange} error={errors.name} />
         <div className="grid grid-cols-2 gap-4">
           <Field label="Adres kursu" name="city" value={form.city} onChange={handleChange} error={errors.city} placeholder="np. 30-001 Kraków, ul. Medyczna 5" />

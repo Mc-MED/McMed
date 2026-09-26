@@ -76,6 +76,11 @@ class Course(models.Model):
     is_active        = models.BooleanField(default=True)
     created_at       = models.DateField(default=datetime.date.today)
 
+    # Widoczność na publicznej liście – odznacza się sama w pierwszym dniu kursu
+    # (recertyfikacja: w dniu egzaminu), admin może ją potem ręcznie przywrócić
+    is_visible             = models.BooleanField(default=True)
+    visibility_auto_hidden = models.BooleanField(default=False)
+
     # Terminy – 6 wybranych dat
     course_days = models.JSONField(default=list)
     start_date  = models.DateField(null=True, blank=True)
@@ -116,7 +121,22 @@ class Course(models.Model):
             days = sorted(d for d in self.course_days if d)
             self.start_date = days[0]  if days else None
             self.end_date   = days[-1] if days else None
+        # Termin przesunięty w przyszłość → kurs znów ukryje się sam w dniu startu
+        first_day = self.exam_date if self.course_type == self.TYPE_RECERT else self.start_date
+        if isinstance(first_day, str):  # start_date bierze się z course_days (JSON)
+            first_day = datetime.date.fromisoformat(first_day)
+        if first_day is None or first_day > timezone.now().date():
+            self.visibility_auto_hidden = False
         super().save(*args, **kwargs)
+
+    @classmethod
+    def hide_started(cls):
+        """Jednorazowo odznacza „widoczny” kursom, które się rozpoczęły."""
+        today = timezone.now().date()
+        cls.objects.filter(visibility_auto_hidden=False).filter(
+            models.Q(course_type=cls.TYPE_RECERT, exam_date__lte=today)
+            | models.Q(course_type=cls.TYPE_KPP, start_date__lte=today)
+        ).update(is_visible=False, visibility_auto_hidden=True)
 
     def __str__(self):
         return f'{self.name} ({self.start_date})'

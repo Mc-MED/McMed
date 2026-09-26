@@ -144,11 +144,14 @@ export default function CourseList() {
                 </div>
               </td>
               <td className="px-5 py-4">
-                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-                  c.is_active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'
-                }`}>
-                  {c.is_active ? 'Aktywny' : 'Nieaktywny'}
-                </span>
+                <div className="flex flex-col gap-1.5 items-start">
+                  <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+                    c.is_active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    {c.is_active ? 'Aktywny' : 'Nieaktywny'}
+                  </span>
+                  <ConsentToggle course={c} field="is_visible" label="Widoczny" />
+                </div>
               </td>
             </tr>
           ))}
