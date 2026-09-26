@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.conf import settings
+from django.db.models import Q
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -186,16 +187,9 @@ class AdminGenerateResetLinkView(APIView):
     permission_classes = [IsAdminUser]
 
     def post(self, request):
-        email = (request.data.get('email') or '').strip().lower()
-        if not email:
-            return Response({'error': 'Podaj adres email.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        user = _admin_find_user(email)
-        if not user:
-            return Response(
-                {'error': 'Nie znaleziono konta z tym adresem email.'},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+        user, email, error = _admin_resolve(request)
+        if error:
+            return error
 
         # Nieaktywne konto → link aktywacyjny, aktywne → link do resetu hasła
         if not user.is_active:
@@ -208,16 +202,9 @@ class AdminSendAccessEmailView(APIView):
     permission_classes = [IsAdminUser]
 
     def post(self, request):
-        email = (request.data.get('email') or '').strip().lower()
-        if not email:
-            return Response({'error': 'Podaj adres email.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        user = _admin_find_user(email)
-        if not user:
-            return Response(
-                {'error': 'Nie znaleziono konta z tym adresem email.'},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+        user, email, error = _admin_resolve(request)
+        if error:
+            return error
 
         if not user.is_active:
             send_new_activation_email(user, email)
@@ -238,3 +225,63 @@ def _admin_find_user(email):
         .order_by('-is_active', '-date_joined')
         .first()
     )
+
+
+class EmailTakenError(Exception):
+    pass
+
+
+def sync_account_email(user, email):
+    """Ustawia email i login konta na podany adres (login = email małymi literami).
+
+    Rzuca EmailTakenError, jeśli adres należy już do innego konta.
+    """
+    email = (email or '').strip()
+    if not email or (user.email == email and user.username == email.lower()):
+        return
+    taken = (
+        User.objects.exclude(pk=user.pk)
+        .filter(Q(email__iexact=email) | Q(username=email.lower()))
+        .exists()
+    )
+    if taken:
+        raise EmailTakenError
+    user.email = email
+    user.username = email.lower()
+    user.save(update_fields=['email', 'username'])
+
+
+EMAIL_TAKEN_MSG = 'Ten adres email jest już przypisany do innego konta.'
+
+
+def _admin_resolve(request):
+    """Zwraca (user, email, error_response) na podstawie enrollment_id lub email."""
+    from courses.models import Enrollment
+
+    enrollment_id = request.data.get('enrollment_id')
+    if enrollment_id:
+        enrollment = Enrollment.objects.select_related('user').filter(pk=enrollment_id).first()
+        if not enrollment:
+            return None, None, Response({'error': 'Nie znaleziono zapisu.'}, status=status.HTTP_404_NOT_FOUND)
+        if not enrollment.user:
+            return None, None, Response(
+                {'error': 'Ten uczestnik nie ma konta w systemie.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        # Email w zapisie mógł zostać poprawiony przez admina – wyrównaj konto
+        try:
+            sync_account_email(enrollment.user, enrollment.email)
+        except EmailTakenError:
+            return None, None, Response({'error': EMAIL_TAKEN_MSG}, status=status.HTTP_409_CONFLICT)
+        return enrollment.user, enrollment.user.email, None
+
+    email = (request.data.get('email') or '').strip().lower()
+    if not email:
+        return None, None, Response({'error': 'Podaj adres email.'}, status=status.HTTP_400_BAD_REQUEST)
+    user = _admin_find_user(email)
+    if not user:
+        return None, None, Response(
+            {'error': 'Nie znaleziono konta z tym adresem email.'},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    return user, email, None

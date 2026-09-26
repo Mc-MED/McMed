@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { adminFetchEnrollments, adminFetchUnassignedEnrollments, adminFetchDeletedEnrollments, adminFetchCourses, adminDeleteEnrollment, adminUpdateEnrollment, adminAnonymizeEnrollment, adminSoftDeleteEnrollment, adminRestoreEnrollment, adminSendPasswordReset, adminGenerateResetLink } from '../../api/admin'
 import DeletionReasonModal from '../../components/DeletionReasonModal'
 
@@ -41,40 +42,65 @@ function ResetLinkModal({ link, type, onClose }) {
 }
 
 function ResetPasswordDropdown({ id, email, resetState, onSendEmail, onGenerateLink }) {
-  const [open, setOpen] = useState(false)
+  // Menu renderowane w portalu z position: fixed – tabela ma overflow-x-auto,
+  // który ucinał menu przy ostatnich wierszach
+  const [menuPos, setMenuPos] = useState(null)
+  const open = menuPos !== null
   const state = resetState[id]
+
+  useEffect(() => {
+    if (!open) return
+    const close = () => setMenuPos(null)
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    return () => {
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
+    }
+  }, [open])
+
+  function toggle(e) {
+    if (open) return setMenuPos(null)
+    const r = e.currentTarget.getBoundingClientRect()
+    const right = window.innerWidth - r.right
+    // Za mało miejsca pod przyciskiem → otwórz w górę
+    setMenuPos(window.innerHeight - r.bottom < 100
+      ? { right, bottom: window.innerHeight - r.top + 4 }
+      : { right, top: r.bottom + 4 })
+  }
 
   if (state === 'sent-reset') return <span className="text-xs font-semibold px-2.5 py-1 text-emerald-600">✓ Wysłano reset hasła</span>
   if (state === 'sent-activation') return <span className="text-xs font-semibold px-2.5 py-1 text-emerald-600">✓ Wysłano link aktywacyjny</span>
-  if (state === 'error') return <span className="text-xs font-semibold px-2.5 py-1 text-red-600">✗ Błąd</span>
+  if (state?.error) return <span className="text-xs font-semibold px-2.5 py-1 text-red-600 max-w-[220px]">✗ {state.error}</span>
   if (state === 'loading') return <span className="text-xs font-semibold px-2.5 py-1 text-sky-600">…</span>
 
   return (
     <div className="relative">
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={toggle}
         className="text-xs font-semibold px-2.5 py-1 rounded-md bg-sky-100 text-sky-700 hover:bg-sky-200 transition-colors whitespace-nowrap"
       >
         Resetuj hasło ▾
       </button>
-      {open && (
+      {open && createPortal(
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 mt-1 z-20 bg-white border border-gray-200 rounded-xl shadow-lg py-1 min-w-[140px]">
+          <div className="fixed inset-0 z-40" onClick={() => setMenuPos(null)} />
+          <div style={menuPos} className="fixed z-50 bg-white border border-gray-200 rounded-xl shadow-lg py-1 min-w-[140px]">
             <button
-              onClick={() => { setOpen(false); onSendEmail() }}
+              onClick={() => { setMenuPos(null); onSendEmail() }}
               className="w-full text-left text-xs px-3 py-2 hover:bg-gray-50 text-gray-700"
             >
               Wyślij maila
             </button>
             <button
-              onClick={() => { setOpen(false); onGenerateLink() }}
+              onClick={() => { setMenuPos(null); onGenerateLink() }}
               className="w-full text-left text-xs px-3 py-2 hover:bg-gray-50 text-gray-700"
             >
               Generuj link
             </button>
           </div>
-        </>
+        </>,
+        document.body
       )}
     </div>
   )
@@ -282,23 +308,24 @@ function EnrolledTable({ courseFilter, onSoftDeleted, refreshKey }) {
   async function handlePasswordReset(id, email) {
     setResetState(prev => ({ ...prev, [id]: 'loading' }))
     try {
-      const res = await adminSendPasswordReset(email)
+      const res = await adminSendPasswordReset(id)
       setResetState(prev => ({ ...prev, [id]: `sent-${res.data.type}` }))
-    } catch {
-      setResetState(prev => ({ ...prev, [id]: 'error' }))
+      setTimeout(() => setResetState(prev => { const n = { ...prev }; delete n[id]; return n }), 3000)
+    } catch (err) {
+      setResetState(prev => ({ ...prev, [id]: { error: err.response?.data?.error || 'Błąd' } }))
+      setTimeout(() => setResetState(prev => { const n = { ...prev }; delete n[id]; return n }), 6000)
     }
-    setTimeout(() => setResetState(prev => { const n = { ...prev }; delete n[id]; return n }), 3000)
   }
 
   async function handleGenerateLink(id, email) {
     setResetState(prev => ({ ...prev, [id]: 'loading' }))
     try {
-      const res = await adminGenerateResetLink(email)
+      const res = await adminGenerateResetLink(id)
       setLinkModal(res.data)
       setResetState(prev => { const n = { ...prev }; delete n[id]; return n })
-    } catch {
-      setResetState(prev => ({ ...prev, [id]: 'error' }))
-      setTimeout(() => setResetState(prev => { const n = { ...prev }; delete n[id]; return n }), 3000)
+    } catch (err) {
+      setResetState(prev => ({ ...prev, [id]: { error: err.response?.data?.error || 'Błąd' } }))
+      setTimeout(() => setResetState(prev => { const n = { ...prev }; delete n[id]; return n }), 6000)
     }
   }
 
@@ -484,23 +511,24 @@ function ReserveTable({ courses, onSoftDeleted, refreshKey }) {
   async function handlePasswordResetReserve(id, email) {
     setResetState(prev => ({ ...prev, [id]: 'loading' }))
     try {
-      const res = await adminSendPasswordReset(email)
+      const res = await adminSendPasswordReset(id)
       setResetState(prev => ({ ...prev, [id]: `sent-${res.data.type}` }))
-    } catch {
-      setResetState(prev => ({ ...prev, [id]: 'error' }))
+      setTimeout(() => setResetState(prev => { const n = { ...prev }; delete n[id]; return n }), 3000)
+    } catch (err) {
+      setResetState(prev => ({ ...prev, [id]: { error: err.response?.data?.error || 'Błąd' } }))
+      setTimeout(() => setResetState(prev => { const n = { ...prev }; delete n[id]; return n }), 6000)
     }
-    setTimeout(() => setResetState(prev => { const n = { ...prev }; delete n[id]; return n }), 3000)
   }
 
   async function handleGenerateLinkReserve(id, email) {
     setResetState(prev => ({ ...prev, [id]: 'loading' }))
     try {
-      const res = await adminGenerateResetLink(email)
+      const res = await adminGenerateResetLink(id)
       setLinkModal(res.data)
       setResetState(prev => { const n = { ...prev }; delete n[id]; return n })
-    } catch {
-      setResetState(prev => ({ ...prev, [id]: 'error' }))
-      setTimeout(() => setResetState(prev => { const n = { ...prev }; delete n[id]; return n }), 3000)
+    } catch (err) {
+      setResetState(prev => ({ ...prev, [id]: { error: err.response?.data?.error || 'Błąd' } }))
+      setTimeout(() => setResetState(prev => { const n = { ...prev }; delete n[id]; return n }), 6000)
     }
   }
 

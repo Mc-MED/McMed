@@ -18,7 +18,9 @@ function peselBirthDate(pesel) {
   let mm   = +pesel.slice(2, 4)
   const dd = +pesel.slice(4, 6)
   const centuries = [[80, 1800], [60, 2200], [40, 2100], [20, 2000], [0, 1900]]
-  const [offset, century] = centuries.find(([o]) => mm > o)
+  const match = centuries.find(([o]) => mm > o)
+  if (!match) return null  // miesiąc 00 – nieprawidłowy PESEL
+  const [offset, century] = match
   mm -= offset
   const date = new Date(century + yy, mm - 1, dd)
   if (date.getMonth() !== mm - 1 || date.getDate() !== dd) return null
@@ -330,8 +332,9 @@ function EditEnrollmentModal({ enrollment, courseType, onSave, onClose }) {
       if (!payload.pesel) delete payload.pesel
       const res = await adminUpdateEnrollment(enrollment.id, payload)
       onSave(res.data)
-    } catch {
-      setError('Błąd zapisu. Sprawdź dane.')
+    } catch (err) {
+      const emailErr = err.response?.data?.email
+      setError(emailErr ? [].concat(emailErr).join(' ') : 'Błąd zapisu. Sprawdź dane.')
     } finally {
       setSaving(false)
     }

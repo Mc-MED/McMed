@@ -56,11 +56,11 @@ export const adminUpdateInstructor = (id, data) =>
 export const adminDeleteInstructor = (id) =>
   adminAxios.delete(`/api/courses/instructors/${id}/`)
 
-export const adminSendPasswordReset = (email) =>
-  adminAxios.post('/api/users/admin/send-access-email/', { email })
+export const adminSendPasswordReset = (enrollmentId) =>
+  adminAxios.post('/api/users/admin/send-access-email/', { enrollment_id: enrollmentId })
 
-export const adminGenerateResetLink = (email) =>
-  adminAxios.post('/api/users/admin/generate-reset-link/', { email })
+export const adminGenerateResetLink = (enrollmentId) =>
+  adminAxios.post('/api/users/admin/generate-reset-link/', { enrollment_id: enrollmentId })
 
 export const adminSendEmail = (enrollmentIds, subject, body) =>
   adminAxios.post('/api/courses/enrollments/send-email/', { enrollment_ids: enrollmentIds, subject, body })

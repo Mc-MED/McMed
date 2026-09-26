@@ -10,7 +10,9 @@ from rest_framework.response import Response
 
 from .models import Course, Enrollment, Instructor
 from .serializers import CourseSerializer, AdminCourseSerializer, EnrollmentSerializer, PublicEnrollmentSerializer, AdminEnrollmentCreateSerializer, InstructorSerializer, MyEnrollmentSerializer
+from rest_framework.exceptions import ValidationError
 from users.emails import send_activation_email, send_course_email
+from users.views import sync_account_email, EmailTakenError, EMAIL_TAKEN_MSG
 
 User = get_user_model()
 
@@ -178,6 +180,18 @@ class AdminEnrollmentDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class   = EnrollmentSerializer
     queryset           = Enrollment.objects.all()
     http_method_names  = ['get', 'patch', 'delete']
+
+    def perform_update(self, serializer):
+        # Poprawiony email w zapisie → ten sam email i login w koncie uczestnika
+        new_email = serializer.validated_data.get('email')
+        user = serializer.instance.user
+        with transaction.atomic():
+            if user and new_email and new_email != serializer.instance.email:
+                try:
+                    sync_account_email(user, new_email)
+                except EmailTakenError:
+                    raise ValidationError({'email': EMAIL_TAKEN_MSG})
+            serializer.save()
 
     def perform_destroy(self, instance):
         user = instance.user
