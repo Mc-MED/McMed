@@ -1,4 +1,4 @@
-// 277 pytań do egzaminu KPP
+// 280 pytań do egzaminu KPP
 const kppQuestions = [
   {
     nr: 1,
@@ -292,8 +292,20 @@ const kppQuestions = [
     nr: 25,
     q: `Po wyjściu z kąpieli, z łazienki, w której jest piecyk gazowy, osoba zgłasza nudności oraz zawroty głowy, zaczyna wymiotować. W tej sytuacji należy:`,
     options: {
+      A: `podejrzewać, że za długo przebywała w gorącej kąpieli i polecić jej odpoczynek w pokoju.`,
+      B: `podejrzewać, że zjadła „coś" co jej zaszkodziło.`,
+      C: `podejrzewać zatrucie gazami spalinowymi w łazience (CO).`,
+      D: `podejrzewać, że piła alkohol w łazience podczas kąpieli.`,
+      E: `zabrać ją na spacer by się „przewietrzyła".`,
+    },
+    correct: `C`,
+  },
+  {
+    nr: 26,
+    q: `Pulsoksymetria jako metoda pomiarowa jest metodą:`,
+    options: {
       A: `nieinwazyjną przezskórnego oznaczania wysycenia krwi tlenem.`,
-      B: `nieinwazyjną przezskórnego oznaczania wysycenia krwi CO 2 .`,
+      B: `nieinwazyjną przezskórnego oznaczania wysycenia krwi CO2.`,
       C: `inwazyjną żylnego oznaczania wysycenia krwi tlenem.`,
       D: `która pozwala na jednoczesną ocenę tętna.`,
       E: `prawdziwe są odpowiedzi A i D.`,
@@ -1564,7 +1576,7 @@ const kppQuestions = [
     nr: 132,
     q: `Ratownik wykonuje resuscytacje krążeniowo-oddechową (RKO) u półrocznego dziecka z zatrzymaniem czynności serca. Którą technikę ucisków klatki piersiowej powinien zastosować? 1) uciskanie klatki piersiowej jedną dłonią z częstotliwością około 100 uciśnięć/minutę. 2) uciskanie klatki piersiowej dwoma palcami jednej ręki tak, by ugiąć dolną połowę mostka na głębokość około 4 cm. 3) uciskanie górnego odcinka mostka dwoma palcami; 4) uciskanie klatki piersiowej 15 razy, a następnie wykonanie 3 wolnych wdechów; 5) uciskanie klatki piersiowej z częstotliwością około 100-120 razy/minutę. Prawidłowa odpowiedź to:`,
     options: {
-      A: `. 1,5.`,
+      A: `1,5.`,
       B: `2,5.`,
       C: `3,4.`,
       D: `1,3.`,
@@ -2368,6 +2380,18 @@ const kppQuestions = [
     nr: 199,
     q: `Podczas prowadzenia resuscytacji krążeniowo-oddechowej u osoby dorosłej stosunek uciśnięć klatki piersiowej do wentylacji płuc powinien wynosić:`,
     options: {
+      A: `15:2.`,
+      B: `20:2.`,
+      C: `30:1.`,
+      D: `30:2.`,
+      E: `30:3.`,
+    },
+    correct: `D`,
+  },
+  {
+    nr: 200,
+    q: `Podczas prowadzenia resuscytacji krążeniowo-oddechowej noworodka, u którego zaraz po urodzeniu (świeżorodek) nie stwierdzono oznak życia, stosunek uciśnięć klatki piersiowej do wentylacji płuc powinien wynosić:`,
+    options: {
       A: `3:1.`,
       B: `5:1.`,
       C: `15:2.`,
@@ -2451,6 +2475,18 @@ const kppQuestions = [
   {
     nr: 207,
     q: `Ratownik udziela pomocy dorosłej osobie, która jest nieprzytomna, oddycha płytko, wolno i nieregularnie. W pewnym momencie doszło do zatrzymania oddechu, tętno na tętnicy szyjnej jest wyczuwalne. Z jaką częstotliwością należy prowadzić wentylację zastępczą za pomocą worka samorozprężalnego i maski twarzowej?`,
+    options: {
+      A: `6 oddechów/minutę.`,
+      B: `8 oddechów/minutę.`,
+      C: `10 oddechów/minutę.`,
+      D: `12 oddechów/minutę.`,
+      E: `20 oddechów/minutę.`,
+    },
+    correct: `C`,
+  },
+  {
+    nr: 208,
+    q: `Wskaż prawidłowe postępowanie w przypadku 2-letniego dziecka, które podczas jedzenia zakrztusiło się pokarmem i pomimo prób usunięcia ciała obcego nie może nabrać powietrza, straciło przytomność i upadło na ziemię:`,
     options: {
       A: `wykonanie 5 uciśnięć nadbrzusza.`,
       B: `wykonanie 5 uciśnięć nadbrzusza oraz 5 oddechów ratowniczych.`,

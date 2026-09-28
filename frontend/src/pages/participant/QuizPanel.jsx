@@ -385,7 +385,7 @@ export default function QuizPanel() {
         <div className="bg-white rounded-2xl border border-gray-200 p-5 flex items-center justify-between">
           <div>
             <h2 className="font-extrabold text-gray-900 text-base">Pytania egzaminacyjne KPP</h2>
-            <p className="text-xs text-gray-400 mt-0.5">277 pytań · wybierz kategorię aby ćwiczyć</p>
+            <p className="text-xs text-gray-400 mt-0.5">{kppQuestions.length} pytań · wybierz kategorię aby ćwiczyć</p>
           </div>
           <div className="text-right">
             <div className="text-2xl font-black text-red-600">
@@ -412,7 +412,7 @@ export default function QuizPanel() {
             <span className="text-3xl">🎯</span>
             <div>
               <div className="font-bold text-gray-900 text-sm">Wszystkie pytania</div>
-              <div className="text-xs text-gray-500">Nauka lub egzamin z pełnej puli 277 pytań</div>
+              <div className="text-xs text-gray-500">Nauka lub egzamin z pełnej puli {kppQuestions.length} pytań</div>
             </div>
           </button>
         </div>
