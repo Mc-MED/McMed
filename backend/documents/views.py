@@ -9,6 +9,7 @@ from io import BytesIO
 from pathlib import Path
 
 from django.http import HttpResponse, FileResponse
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
@@ -845,11 +846,28 @@ def admin_topic_file_detail(request, file_id):
 
 # ─── Tematy i pliki (uczestnik) ───────────────────────────────────────
 
+def _has_ongoing_course(user):
+    """Czy uczestnik jest zapisany na kurs, który trwa: od pierwszego dnia zajęć do dnia egzaminu włącznie.
+
+    Recertyfikacja bez dni zajęć zaczyna się w dniu egzaminu; kurs bez daty egzaminu kończy się ostatnim dniem zajęć.
+    """
+    today = timezone.localdate()
+    started = Q(course__start_date__lte=today) | Q(course__start_date__isnull=True, course__exam_date__lte=today)
+    not_ended = Q(course__exam_date__gte=today) | Q(course__exam_date__isnull=True, course__end_date__gte=today)
+    return Enrollment.objects.filter(user=user, deleted_at__isnull=True).filter(started, not_ended).exists()
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def participant_topics(request):
     topics = Topic.objects.prefetch_related('files').all()
-    return Response([_topic_to_dict(t) for t in topics])
+    quiz_available = _has_ongoing_course(request.user)
+    data = []
+    for t in topics:
+        d = _topic_to_dict(t)
+        d['quiz_enabled'] = t.quiz_enabled and quiz_available
+        data.append(d)
+    return Response(data)
 
 
 @api_view(['GET'])
@@ -1042,7 +1060,7 @@ def participant_topic_quiz(request, topic_id):
     except Topic.DoesNotExist:
         return Response({'detail': 'Dział nie istnieje.'}, status=404)
 
-    if not topic.quiz_enabled:
+    if not topic.quiz_enabled or not _has_ongoing_course(request.user):
         return Response({'detail': 'Quiz nie jest dostępny.'}, status=403)
 
     data = []
@@ -1067,7 +1085,7 @@ def participant_submit_quiz(request, topic_id):
     except Topic.DoesNotExist:
         return Response({'detail': 'Dział nie istnieje.'}, status=404)
 
-    if not topic.quiz_enabled:
+    if not topic.quiz_enabled or not _has_ongoing_course(request.user):
         return Response({'detail': 'Quiz nie jest dostępny.'}, status=403)
 
     questions = list(topic.questions.all())
