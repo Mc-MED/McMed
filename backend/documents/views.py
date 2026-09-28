@@ -9,6 +9,7 @@ from io import BytesIO
 from pathlib import Path
 
 from django.http import HttpResponse, FileResponse
+from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
@@ -343,8 +344,13 @@ def _resolve_template(doc_name, instructor_count):
 
 
 def _build_zaliczenia_enrollment_context(enrollment):
-    """Kontekst per-uczestnik dla zaliczenia_tematow_KPP: t1_d … t15_d."""
+    """Kontekst per-uczestnik dla zaliczenia_tematow_KPP: t1_d … t15_d.
+
+    Temat niezaliczony w aplikacji uczestnik zalicza na egzaminie — wtedy wstawiamy datę egzaminu.
+    """
     ctx = _build_certificate_context(enrollment)
+    course = enrollment.course
+    exam_date = course.exam_date.strftime('%d.%m.%Y') if course and course.exam_date else ''
 
     topics = list(Topic.objects.order_by('order', 'id'))
     passed_dict = {}
@@ -355,10 +361,10 @@ def _build_zaliczenia_enrollment_context(enrollment):
             .order_by('topic_id', 'attempted_at')
         ):
             if attempt.topic_id not in passed_dict:
-                passed_dict[attempt.topic_id] = attempt.attempted_at.strftime('%d.%m.%Y')
+                passed_dict[attempt.topic_id] = timezone.localtime(attempt.attempted_at).strftime('%d.%m.%Y')
 
     for n, t in enumerate(topics, 1):
-        ctx[f't{n}_d'] = passed_dict.get(t.id, '')
+        ctx[f't{n}_d'] = passed_dict.get(t.id, exam_date)
     for n in range(len(topics) + 1, 16):
         ctx[f't{n}_d'] = ''
 
