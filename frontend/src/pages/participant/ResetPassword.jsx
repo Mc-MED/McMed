@@ -1,9 +1,11 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 
 export default function ResetPassword() {
   const { token } = useParams()
+  // Zaproszenie do panelu prowadzącego — po ustawieniu hasła logowanie na /prowadzacy
+  const isInstructor = useSearchParams()[0].get('panel') === 'prowadzacy'
   const [password, setPassword]     = useState('')
   const [confirm, setConfirm]       = useState('')
   const [errors, setErrors]         = useState({})
@@ -46,12 +48,12 @@ export default function ResetPassword() {
           <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-5">
             <span className="text-2xl">✓</span>
           </div>
-          <h2 className="text-xl font-extrabold text-gray-900 mb-3">Hasło zmienione</h2>
+          <h2 className="text-xl font-extrabold text-gray-900 mb-3">{isInstructor ? 'Hasło ustawione' : 'Hasło zmienione'}</h2>
           <p className="text-sm text-gray-500 leading-relaxed mb-6">
-            Twoje hasło zostało pomyślnie zmienione. Możesz się teraz zalogować.
+            {isInstructor ? 'Hasło zostało ustawione' : 'Twoje hasło zostało pomyślnie zmienione'}. Możesz się teraz zalogować.
           </p>
           <a
-            href="/zaloguj-sie"
+            href={isInstructor ? '/prowadzacy' : '/zaloguj-sie'}
             className="inline-block bg-red-600 hover:bg-red-700 text-white font-semibold text-sm px-6 py-2.5 rounded-lg transition-colors"
           >
             Zaloguj się
@@ -70,12 +72,16 @@ export default function ResetPassword() {
           </div>
           <h2 className="text-xl font-extrabold text-gray-900 mb-3">Link wygasł</h2>
           <p className="text-sm text-gray-500 leading-relaxed mb-6">{serverError}</p>
-          <a
-            href="/zapomnialem-hasla"
-            className="inline-block bg-red-600 hover:bg-red-700 text-white font-semibold text-sm px-6 py-2.5 rounded-lg transition-colors"
-          >
-            Wyślij nowy link
-          </a>
+          {isInstructor ? (
+            <p className="text-sm text-gray-500">Poproś administratora o wysłanie nowego linku.</p>
+          ) : (
+            <a
+              href="/zapomnialem-hasla"
+              className="inline-block bg-red-600 hover:bg-red-700 text-white font-semibold text-sm px-6 py-2.5 rounded-lg transition-colors"
+            >
+              Wyślij nowy link
+            </a>
+          )}
         </div>
       </div>
     )
@@ -89,7 +95,7 @@ export default function ResetPassword() {
           <a href="/" className="text-2xl font-extrabold text-gray-900 tracking-tight hover:text-red-600 transition-colors">
             Mc Med
           </a>
-          <p className="text-sm text-gray-400 mt-1">Nowe hasło</p>
+          <p className="text-sm text-gray-400 mt-1">{isInstructor ? 'Ustaw hasło do panelu prowadzącego' : 'Nowe hasło'}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">

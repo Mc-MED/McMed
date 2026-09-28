@@ -1346,8 +1346,16 @@ function examColumns(subtab, course) {
 
 const ALL_EXAM_FIELDS = EXAM_SUBTABS.flatMap(t => examColumns(t.id).map(c => c.field))
 
-function ExamTab({ courseId, course }) {
-  const [subtab, setSubtab]           = useState('teoretyczny')
+// Używany też w panelu prowadzącego: własne API, edycja tylko wybranych pól, bez losowania
+export function ExamTab({
+  courseId, course,
+  fetchEnrollments = adminFetchEnrollments,
+  updateEnrollment = adminUpdateEnrollment,
+  editableFields = null,
+  showFillRandom = true,
+  initialSubtab = 'teoretyczny',
+}) {
+  const [subtab, setSubtab]           = useState(initialSubtab)
   const [enrollments, setEnrollments] = useState([])
   const [loading, setLoading]         = useState(true)
   const [scores, setScores]           = useState({})   // { [enrollmentId]: { [apiField]: '4.5' } }
@@ -1355,7 +1363,7 @@ function ExamTab({ courseId, course }) {
   const [filling, setFilling]         = useState(false)
 
   useEffect(() => {
-    adminFetchEnrollments(courseId)
+    fetchEnrollments(courseId)
       .then(data => {
         const active = data.filter(e => !e.is_deleted)
         setEnrollments(active)
@@ -1373,6 +1381,8 @@ function ExamTab({ courseId, course }) {
 
   const columns = examColumns(subtab, course)
   const showAvg = subtab !== 'teoretyczny'
+  const isEditable = field => !editableFields || editableFields.includes(field)
+  const subtabReadOnly = columns.every(c => !isEditable(c.field))
 
   function avg(id) {
     const s = scores[id] || {}
@@ -1391,7 +1401,7 @@ function ExamTab({ courseId, course }) {
     const key = `${enrollmentId}-${field}`
     setSaving(prev => ({ ...prev, [key]: true }))
     try {
-      await adminUpdateEnrollment(enrollmentId, { [field]: value === '' ? null : parseFloat(value) })
+      await updateEnrollment(enrollmentId, { [field]: value === '' ? null : parseFloat(value) })
     } catch {
       setScore(enrollmentId, field, prevValue)
     } finally {
@@ -1441,7 +1451,7 @@ function ExamTab({ courseId, course }) {
     setScores(next)
     setFilling(true)
     try {
-      await Promise.all(enrollments.map(e => adminUpdateEnrollment(e.id, Object.fromEntries(
+      await Promise.all(enrollments.map(e => updateEnrollment(e.id, Object.fromEntries(
         columns.map(c => [c.field, next[e.id][c.field] === '' ? null : parseFloat(next[e.id][c.field])])
       ))))
     } catch {
@@ -1460,6 +1470,14 @@ function ExamTab({ courseId, course }) {
   function renderCell(enrollmentId, col) {
     const key = `${enrollmentId}-${col.field}`
     const val = scores[enrollmentId]?.[col.field] ?? ''
+    if (!isEditable(col.field)) {
+      if (val === '') return <span className="text-gray-300">—</span>
+      return (
+        <span className="font-medium text-gray-700">
+          {val.replace('.', ',')}{col.type === 'points' && <span className="text-xs text-gray-400">/{THEORY_MAX_POINTS}</span>}
+        </span>
+      )
+    }
     if (col.type === 'points') {
       return (
         <div className="inline-flex items-center gap-1">
@@ -1512,13 +1530,15 @@ function ExamTab({ courseId, course }) {
             </button>
           ))}
         </div>
-        <button
-          onClick={handleFillRandom}
-          disabled={filling}
-          className="text-sm font-semibold px-4 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-        >
-          {filling ? 'Zapisywanie…' : 'Wypełnij losowo'}
-        </button>
+        {showFillRandom && (
+          <button
+            onClick={handleFillRandom}
+            disabled={filling}
+            className="text-sm font-semibold px-4 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+          >
+            {filling ? 'Zapisywanie…' : 'Wypełnij losowo'}
+          </button>
+        )}
       </div>
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
         <table className="w-full text-sm">
@@ -1566,7 +1586,9 @@ function ExamTab({ courseId, course }) {
         </table>
       </div>
       <p className="text-xs text-gray-400 mt-3">
-        {subtab === 'teoretyczny'
+        {subtabReadOnly
+          ? 'Tylko do odczytu.'
+          : subtab === 'teoretyczny'
           ? 'Punkty zapisywane po opuszczeniu pola, ocena końcowa od razu po wybraniu. Oceny: 2; 3; 3,5; 4; 4,5; 5.'
           : 'Oceny zapisywane automatycznie po wybraniu.'}
       </p>

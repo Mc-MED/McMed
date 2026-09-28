@@ -383,7 +383,10 @@ def send_course_email(*, to_email, first_name, subject, body, course_info=None):
     msg.send(fail_silently=True)
 
 
-def _html_password_reset(first_name, reset_link):
+def _html_password_reset(first_name, reset_link, *, heading='Resetowanie has&#322;a',
+                         intro='Otrzymali&#347;my pro&#347;b&#281; o zmian&#281; has&#322;a do Twojego konta w Mc Med.',
+                         expiry='2&nbsp;godzinach', button='Ustaw nowe has&#322;o',
+                         note='Je&#347;li to nie Ty prosi&#322;e&#347;/a&#347; o zmian&#281; has&#322;a &#8212; zignoruj t&#281; wiadomo&#347;&#263;. Twoje has&#322;o nie zosta&#322;o zmienione.'):
     logo_img = (
         '<img src="cid:mcmed_logo" alt="Mc Med" width="99" height="110"'
         ' style="display:block;width:99px;height:110px;">'
@@ -418,9 +421,9 @@ def _html_password_reset(first_name, reset_link):
         <tr>
           <td style="background:#ffffff;padding:40px 40px 24px;text-align:center;">
             <div style="width:68px;height:68px;background:#fef2f2;border-radius:50%;margin:0 auto 22px;font-size:34px;line-height:68px;text-align:center;">&#128273;</div>
-            <h1 style="margin:0 0 10px;font-size:28px;font-weight:900;color:#111827;font-family:Georgia,Times,serif;">Resetowanie has&#322;a</h1>
+            <h1 style="margin:0 0 10px;font-size:28px;font-weight:900;color:#111827;font-family:Georgia,Times,serif;">{heading}</h1>
             <p style="margin:0;font-size:14px;color:#6b7280;line-height:1.7;">
-              Cze&#347;&#263;, {first_name}! Otrzymali&#347;my pro&#347;b&#281; o zmian&#281; has&#322;a do Twojego konta w Mc Med.
+              Cze&#347;&#263;, {first_name}! {intro}
             </p>
           </td>
         </tr>
@@ -428,10 +431,10 @@ def _html_password_reset(first_name, reset_link):
           <td style="background:#ffffff;padding:4px 40px 36px;text-align:center;">
             <a href="{reset_link}"
                style="display:inline-block;background:#dc2626;color:#ffffff;font-size:16px;font-weight:700;padding:15px 44px;border-radius:12px;text-decoration:none;letter-spacing:0.2px;">
-              Ustaw nowe has&#322;o &#8594;
+              {button} &#8594;
             </a>
             <p style="margin:14px 0 0;font-size:11px;color:#9ca3af;">
-              Link wygasa po 2&nbsp;godzinach.<br>
+              Link wygasa po {expiry}.<br>
               Je&#347;li przycisk nie dzia&#322;a, skopiuj ten adres do przegl&#261;darki:<br>
               <a href="{reset_link}" style="color:#dc2626;word-break:break-all;">{reset_link}</a>
             </p>
@@ -441,7 +444,7 @@ def _html_password_reset(first_name, reset_link):
           <td style="background:#ffffff;padding:0 40px 36px;">
             <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:16px 20px;">
               <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6;">
-                Je&#347;li to nie Ty prosi&#322;e&#347;/a&#347; o zmian&#281; has&#322;a &#8212; zignoruj t&#281; wiadomo&#347;&#263;. Twoje has&#322;o nie zosta&#322;o zmienione.
+                {note}
               </p>
             </div>
           </td>
@@ -479,6 +482,39 @@ def send_password_reset_email(*, to_email, first_name, reset_link):
     )
     msg.mixed_subtype = 'related'
     msg.attach_alternative(_html_password_reset(first_name, reset_link), 'text/html')
+    if LOGO_PATH.exists():
+        logo = MIMEImage(_logo_transparent_bytes(), _subtype='png')
+        logo.add_header('Content-ID', '<mcmed_logo>')
+        logo.add_header('Content-Disposition', 'inline', filename='logo.png')
+        msg.attach(logo)
+    msg.send(fail_silently=True)
+
+
+def send_instructor_invite_email(*, to_email, first_name, set_password_link):
+    """Zaproszenie do panelu prowadzącego — link do ustawienia hasła (ważny 72 h)."""
+    plain = (
+        f'Dzień dobry {first_name},\n\n'
+        'Zostało dla Ciebie założone konto w panelu prowadzącego Mc Med. '
+        'Zobaczysz w nim swoje kursy, listę uczestników i wpiszesz oceny z egzaminu praktycznego.\n\n'
+        f'Kliknij poniższy link, aby ustawić hasło:\n{set_password_link}\n\n'
+        'Link wygasa po 72 godzinach.\n\n'
+        'Pozdrawiamy,\nZespół Mc Med'
+    )
+    msg = EmailMultiAlternatives(
+        subject='Dostęp do panelu prowadzącego – Mc Med',
+        body=plain,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[to_email],
+    )
+    msg.mixed_subtype = 'related'
+    msg.attach_alternative(_html_password_reset(
+        first_name, set_password_link,
+        heading='Panel prowadz&#261;cego',
+        intro='Zosta&#322;o dla Ciebie za&#322;o&#380;one konto w panelu prowadz&#261;cego Mc Med. '
+              'Zobaczysz w nim swoje kursy, list&#281; uczestnik&#243;w i wpiszesz oceny z egzaminu praktycznego.',
+        expiry='72&nbsp;godzinach', button='Ustaw has&#322;o',
+        note='Je&#347;li nie spodziewa&#322;e&#347;/a&#347; si&#281; tej wiadomo&#347;ci &#8212; zignoruj j&#261;.',
+    ), 'text/html')
     if LOGO_PATH.exists():
         logo = MIMEImage(_logo_transparent_bytes(), _subtype='png')
         logo.add_header('Content-ID', '<mcmed_logo>')

@@ -77,6 +77,9 @@ McMed/
 | `/admin/courses/create` | CourseCreate.jsx | JWT |
 | `/admin/courses/:id` | CourseDetail.jsx | JWT |
 | `/admin/participants` | ParticipantList.jsx | JWT |
+| `/prowadzacy` | Login.jsx (logowanie prowadzącego) | Publiczny |
+| `/prowadzacy/kursy` | instructor/CourseList.jsx | JWT (prowadzący) |
+| `/prowadzacy/kursy/:id` | instructor/CourseDetail.jsx – Uczestnicy + Egzamin | JWT (prowadzący) |
 
 ## API endpoints
 
@@ -94,6 +97,16 @@ McMed/
 | GET/PATCH | `/api/courses/admin/:id/` | Szczegóły / edycja kursu |
 | GET | `/api/courses/enrollments/list/` | Lista zapisów (opcjonalnie `?course=id`) |
 | DELETE | `/api/courses/enrollments/:id/` | Usuń zapis uczestnika |
+| POST | `/api/courses/instructors/:id/invite/` | Załóż konto prowadzącego i wyślij link do ustawienia hasła (72 h) |
+
+### Panel prowadzącego (konto powiązane z `Instructor.user`)
+| Metoda | URL | Opis |
+|---|---|---|
+| GET | `/api/users/me/` | Rola zalogowanego: admin / instructor / participant |
+| GET | `/api/courses/instructor/` | Kursy prowadzącego (prowadzący kursu lub członek komisji) |
+| GET | `/api/courses/instructor/:id/` | Szczegóły kursu |
+| GET | `/api/courses/instructor/:id/enrollments/` | Uczestnicy: imię, nazwisko, telefon, email, oceny |
+| PATCH | `/api/courses/instructor/enrollments/:id/` | Tylko egzamin praktyczny: `exam_rko`, `exam_zad1`, `exam_zad2` |
 
 ### Auth
 | Metoda | URL | Opis |

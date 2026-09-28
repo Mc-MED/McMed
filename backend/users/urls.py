@@ -2,10 +2,11 @@ from django.urls import path
 from .views import (
     ActivateAccountView, ResendActivationView,
     PasswordResetRequestView, PasswordResetConfirmView,
-    AdminGenerateResetLinkView, AdminSendAccessEmailView,
+    AdminGenerateResetLinkView, AdminSendAccessEmailView, MeView,
 )
 
 urlpatterns = [
+    path('me/',                           MeView.as_view(),                      name='me'),
     path('activate/<uuid:token>/',        ActivateAccountView.as_view(),        name='activate-account'),
     path('resend-activation/',            ResendActivationView.as_view(),        name='resend-activation'),
     path('password-reset/',               PasswordResetRequestView.as_view(),    name='password-reset-request'),

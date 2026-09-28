@@ -21,4 +21,10 @@ urlpatterns = [
     path('admin/<int:pk>/', views.AdminCourseDetailView.as_view(), name='admin-course-detail'),
     path('instructors/', views.InstructorListCreateView.as_view(), name='instructor-list'),
     path('instructors/<int:pk>/', views.InstructorDetailView.as_view(), name='instructor-detail'),
+    path('instructors/<int:pk>/invite/', views.invite_instructor, name='instructor-invite'),
+    # Panel prowadzącego
+    path('instructor/', views.InstructorCourseListView.as_view(), name='instructor-course-list'),
+    path('instructor/<int:pk>/', views.InstructorCourseDetailView.as_view(), name='instructor-course-detail'),
+    path('instructor/<int:pk>/enrollments/', views.InstructorEnrollmentListView.as_view(), name='instructor-enrollment-list'),
+    path('instructor/enrollments/<int:pk>/', views.InstructorEnrollmentDetailView.as_view(), name='instructor-enrollment-detail'),
 ]

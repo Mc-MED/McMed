@@ -6,12 +6,16 @@ class InstructorSerializer(serializers.ModelSerializer):
     full_name            = serializers.CharField(read_only=True)
     specializations      = serializers.ListField(child=serializers.CharField(), read_only=True)
     specializations_str  = serializers.CharField(read_only=True)
+    has_account          = serializers.SerializerMethodField()
+
+    def get_has_account(self, obj):
+        return obj.user_id is not None
 
     class Meta:
         model  = Instructor
         fields = [
             'id', 'first_name', 'last_name', 'title', 'profession',
-            'years_experience',
+            'years_experience', 'email', 'has_account',
             'full_name', 'specializations', 'specializations_str',
             'spec_L', 'spec_P', 'spec_Ps', 'spec_R', 'spec_Rt',
             'spec_Rch', 'spec_Re', 'spec_Rwo', 'spec_Rwy',
@@ -187,6 +191,38 @@ class EnrollmentSerializer(ExamScoreValidationMixin, serializers.ModelSerializer
                 {'course': 'Brak wolnych miejsc na wybranym kursie.'}
             )
         return data
+
+
+class InstructorCourseSerializer(serializers.ModelSerializer):
+    """Kurs w panelu prowadzącego — tylko do odczytu, bez danych organizacyjnych i finansowych."""
+    course_type_display = serializers.CharField(source='get_course_type_display', read_only=True)
+
+    class Meta:
+        model  = Course
+        fields = [
+            'id', 'course_number', 'name', 'course_type', 'course_type_display', 'city',
+            'course_days', 'start_date', 'end_date',
+            'exam_date', 'exam_time', 'exam_location',
+            'committee_chair', 'committee_member1', 'committee_member2',
+        ]
+        read_only_fields = fields
+
+
+INSTRUCTOR_EDITABLE_EXAM_FIELDS = ['exam_rko', 'exam_zad1', 'exam_zad2']
+
+
+class InstructorEnrollmentSerializer(ExamScoreValidationMixin, serializers.ModelSerializer):
+    """Uczestnik w panelu prowadzącego — dane kontaktowe i oceny; prowadzący zmienia tylko egzamin praktyczny."""
+
+    class Meta:
+        model  = Enrollment
+        fields = [
+            'id', 'first_name', 'last_name', 'phone', 'email',
+            'exam_rko', 'exam_zad1', 'exam_zad2',
+            'exam_theory_attempt1', 'exam_theory_attempt2', 'exam_theory_grade',
+            'exam_committee_chair', 'exam_committee_member1', 'exam_committee_member2',
+        ]
+        read_only_fields = [f for f in fields if f not in INSTRUCTOR_EDITABLE_EXAM_FIELDS]
 
 
 class PublicEnrollmentSerializer(EnrollmentSerializer):

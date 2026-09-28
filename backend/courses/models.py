@@ -38,6 +38,13 @@ class Instructor(models.Model):
     spec_Rwy         = models.BooleanField(default=False, verbose_name='Rwy – ratownictwo wysokościowe')
     years_experience = models.CharField(max_length=100, blank=True, default='', verbose_name='Staż pracy')
 
+    # Konto w panelu prowadzącego
+    email = models.EmailField(blank=True, default='')
+    user  = models.OneToOneField(
+        get_user_model(), on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='instructor_profile',
+    )
+
     class Meta:
         ordering = ['last_name', 'first_name']
 
@@ -56,6 +63,19 @@ class Instructor(models.Model):
     @property
     def specializations_str(self):
         return ', '.join(self.specializations)
+
+    def panel_courses(self):
+        """Kursy, które prowadzący widzi w swoim panelu: jest wśród prowadzących albo w komisji egzaminacyjnej.
+
+        Komisja jest zapisana jako tekst (imię i nazwisko z listy instruktorów), więc dopasowujemy po nazwie.
+        """
+        names = {self.full_name, f'{self.first_name} {self.last_name}'}
+        return Course.objects.filter(
+            models.Q(instructors=self)
+            | models.Q(committee_chair__in=names)
+            | models.Q(committee_member1__in=names)
+            | models.Q(committee_member2__in=names)
+        ).distinct()
 
 
 class Course(models.Model):

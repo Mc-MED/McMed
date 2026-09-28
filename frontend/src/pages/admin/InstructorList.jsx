@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { adminFetchInstructors, adminCreateInstructor, adminUpdateInstructor, adminDeleteInstructor } from '../../api/admin'
+import { adminFetchInstructors, adminCreateInstructor, adminUpdateInstructor, adminDeleteInstructor, adminInviteInstructor } from '../../api/admin'
 
 const SPECS = [
   { key: 'spec_L',   label: 'L',   title: 'lekarz systemu' },
@@ -14,7 +14,7 @@ const SPECS = [
 ]
 
 const EMPTY_FORM = {
-  first_name: '', last_name: '', title: '', profession: '', years_experience: '',
+  first_name: '', last_name: '', title: '', profession: '', years_experience: '', email: '',
   spec_L: false, spec_P: false, spec_Ps: false, spec_R: false,
   spec_Rt: false, spec_Rch: false, spec_Re: false, spec_Rwo: false, spec_Rwy: false,
 }
@@ -26,6 +26,8 @@ export default function InstructorList() {
   const [form, setForm]         = useState(EMPTY_FORM)
   const [saving, setSaving]     = useState(false)
   const [deleteId, setDeleteId] = useState(null)
+  const [inviting, setInviting] = useState(null)   // id instruktora
+  const [invited, setInvited]   = useState({})     // { [id]: true } — wysłano w tej sesji
 
   useEffect(() => { load() }, [])
 
@@ -66,6 +68,19 @@ export default function InstructorList() {
     setSaving(false)
   }
 
+  async function handleInvite(inst) {
+    setInviting(inst.id)
+    try {
+      const updated = await adminInviteInstructor(inst.id)
+      setInstructors(prev => prev.map(i => i.id === inst.id ? updated : i))
+      setInvited(prev => ({ ...prev, [inst.id]: true }))
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Nie udało się wysłać dostępu.')
+    } finally {
+      setInviting(null)
+    }
+  }
+
   async function handleDelete(id) {
     try {
       await adminDeleteInstructor(id)
@@ -104,6 +119,7 @@ export default function InstructorList() {
                 <th className="text-left px-5 py-3 font-semibold text-gray-600">Zawód</th>
                 <th className="text-left px-5 py-3 font-semibold text-gray-600">Specjalizacje</th>
                 <th className="text-left px-5 py-3 font-semibold text-gray-600">Staż (lata)</th>
+                <th className="text-left px-5 py-3 font-semibold text-gray-600">Panel prowadzącego</th>
                 <th className="px-5 py-3"></th>
               </tr>
             </thead>
@@ -125,6 +141,26 @@ export default function InstructorList() {
                   </td>
                   <td className="px-5 py-3 text-gray-500">
                     {inst.years_experience != null ? inst.years_experience : '—'}
+                  </td>
+                  <td className="px-5 py-3">
+                    <div className="flex flex-col items-start gap-1">
+                      <span className="text-xs text-gray-500">{inst.email || <span className="text-gray-300">brak emaila</span>}</span>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
+                          inst.has_account ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-400'
+                        }`}>
+                          {inst.has_account ? 'konto aktywne' : 'brak konta'}
+                        </span>
+                        <button
+                          onClick={() => handleInvite(inst)}
+                          disabled={!inst.email || inviting === inst.id}
+                          title={inst.email ? 'Wyślij link do ustawienia hasła' : 'Najpierw wpisz email w edycji'}
+                          className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                          {inviting === inst.id ? 'Wysyłanie…' : invited[inst.id] ? 'Wysłano ✓' : inst.has_account ? 'Wyślij ponownie' : 'Wyślij dostęp'}
+                        </button>
+                      </div>
+                    </div>
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex gap-2 justify-end">
@@ -178,6 +214,7 @@ export default function InstructorList() {
               <Field label="Tytuł (np. dr, mgr)" name="title" value={form.title} onChange={handleChange} required={false} />
               <Field label="Zawód" name="profession" value={form.profession} onChange={handleChange} required={false} />
               <Field label="Staż pracy (np. Pow. 8 lat)" name="years_experience" value={form.years_experience ?? ''} onChange={handleChange} required={false} />
+              <Field label="Email (login do panelu prowadzącego)" name="email" type="email" value={form.email ?? ''} onChange={handleChange} required={false} />
 
               <div>
                 <p className="text-sm font-semibold text-gray-700 mb-3">Specjalizacje</p>

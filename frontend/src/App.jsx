@@ -13,6 +13,8 @@ const TITLES = {
   '/admin/instructors':   'McMed – Instruktorzy',
   '/admin/links':         'McMed – Linki',
   '/admin/materials':     'McMed – Materiały',
+  '/prowadzacy/kursy':    'McMed – Moje kursy',
+  '/prowadzacy':          'McMed – Panel prowadzącego',
 }
 
 function TitleManager() {
@@ -31,6 +33,9 @@ function RedirectToLanding() {
   return null
 }
 import AdminLayout from './layouts/AdminLayout'
+import InstructorLayout from './layouts/InstructorLayout'
+import InstructorCourseList from './pages/instructor/CourseList'
+import InstructorCourseDetail from './pages/instructor/CourseDetail'
 import CourseList from './pages/admin/CourseList'
 import CourseCreate from './pages/admin/CourseCreate'
 import CourseDetail from './pages/admin/CourseDetail'
@@ -73,6 +78,13 @@ export default function App() {
           <Route path="instructors" element={<InstructorList />} />
           <Route path="links" element={<MaciusiLinks />} />
           <Route path="materials" element={<Materials />} />
+        </Route>
+
+        {/* Panel prowadzącego */}
+        <Route path="/prowadzacy" element={<Login />} />
+        <Route path="/prowadzacy/kursy" element={<InstructorLayout />}>
+          <Route index element={<InstructorCourseList />} />
+          <Route path=":id" element={<InstructorCourseDetail />} />
         </Route>
 
         <Route path="*" element={<NotFound />} />

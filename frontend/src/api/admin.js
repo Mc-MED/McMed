@@ -56,6 +56,9 @@ export const adminUpdateInstructor = (id, data) =>
 export const adminDeleteInstructor = (id) =>
   adminAxios.delete(`/api/courses/instructors/${id}/`)
 
+export const adminInviteInstructor = (id) =>
+  adminAxios.post(`/api/courses/instructors/${id}/invite/`).then(r => r.data)
+
 export const adminSendPasswordReset = (enrollmentId) =>
   adminAxios.post('/api/users/admin/send-access-email/', { enrollment_id: enrollmentId })
 

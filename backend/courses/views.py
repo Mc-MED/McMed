@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
@@ -9,10 +11,17 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 
 from .models import Course, Enrollment, Instructor
-from .serializers import CourseSerializer, AdminCourseSerializer, EnrollmentSerializer, PublicEnrollmentSerializer, AdminEnrollmentCreateSerializer, InstructorSerializer, MyEnrollmentSerializer
+from .permissions import IsInstructor
+from .serializers import (
+    CourseSerializer, AdminCourseSerializer, EnrollmentSerializer, PublicEnrollmentSerializer,
+    AdminEnrollmentCreateSerializer, InstructorSerializer, MyEnrollmentSerializer,
+    InstructorCourseSerializer, InstructorEnrollmentSerializer,
+)
+from django.shortcuts import get_object_or_404
 from rest_framework.exceptions import ValidationError
-from users.emails import send_activation_email, send_course_email
-from users.views import sync_account_email, EmailTakenError, EMAIL_TAKEN_MSG
+from users.emails import send_activation_email, send_course_email, send_instructor_invite_email
+from users.models import PasswordResetToken
+from users.views import sync_account_email, EmailTakenError, EMAIL_TAKEN_MSG, _admin_find_user, _frontend_url
 
 User = get_user_model()
 
@@ -211,6 +220,85 @@ class InstructorDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAdminUser]
     serializer_class   = InstructorSerializer
     queryset           = Instructor.objects.all()
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def invite_instructor(request, pk):
+    """Zakłada (lub podpina istniejące) konto prowadzącego i wysyła link do ustawienia hasła."""
+    instructor = get_object_or_404(Instructor, pk=pk)
+    email = instructor.email.strip()
+    if not email:
+        return Response({'detail': 'Najpierw wpisz email instruktora.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    user = instructor.user
+    if user is None or user.email.lower() != email.lower():
+        user = _admin_find_user(email) or User.objects.filter(username=email.lower()).first()
+    if user is None:
+        user = User(username=email.lower(), email=email, first_name=instructor.first_name, last_name=instructor.last_name)
+        user.set_unusable_password()
+        user.save()
+    if user.is_staff:
+        return Response({'detail': 'Ten email należy do konta administratora.'}, status=status.HTTP_400_BAD_REQUEST)
+    if Instructor.objects.filter(user=user).exclude(pk=instructor.pk).exists():
+        return Response({'detail': 'To konto jest już przypisane do innego instruktora.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    with transaction.atomic():
+        if not user.is_active:
+            user.is_active = True
+            user.save(update_fields=['is_active'])
+        instructor.user = user
+        instructor.save(update_fields=['user'])
+        # Zaproszenie ważne dłużej niż zwykły reset hasła (2 h)
+        PasswordResetToken.objects.filter(user=user, is_used=False).update(is_used=True)
+        token = PasswordResetToken.objects.create(user=user, expires_at=timezone.now() + timedelta(hours=72))
+
+    send_instructor_invite_email(
+        to_email=email,
+        first_name=instructor.first_name,
+        set_password_link=f'{_frontend_url()}/reset-hasla/{token.token}?panel=prowadzacy',
+    )
+    return Response(InstructorSerializer(instructor).data)
+
+
+# ─── Panel prowadzącego ───────────────────────────────────────────────
+
+def _instructor_courses(request):
+    return request.user.instructor_profile.panel_courses()
+
+
+class InstructorCourseListView(generics.ListAPIView):
+    permission_classes = [IsInstructor]
+    serializer_class   = InstructorCourseSerializer
+
+    def get_queryset(self):
+        return _instructor_courses(self.request)
+
+
+class InstructorCourseDetailView(generics.RetrieveAPIView):
+    permission_classes = [IsInstructor]
+    serializer_class   = InstructorCourseSerializer
+
+    def get_queryset(self):
+        return _instructor_courses(self.request)
+
+
+class InstructorEnrollmentListView(generics.ListAPIView):
+    permission_classes = [IsInstructor]
+    serializer_class   = InstructorEnrollmentSerializer
+
+    def get_queryset(self):
+        course = get_object_or_404(_instructor_courses(self.request), pk=self.kwargs['pk'])
+        return course.enrollments.filter(is_deleted=False)
+
+
+class InstructorEnrollmentDetailView(generics.UpdateAPIView):
+    permission_classes = [IsInstructor]
+    serializer_class   = InstructorEnrollmentSerializer
+    http_method_names  = ['patch']
+
+    def get_queryset(self):
+        return Enrollment.objects.filter(is_deleted=False, course__in=_instructor_courses(self.request))
 
 
 @api_view(['POST'])

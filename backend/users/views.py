@@ -30,6 +30,21 @@ class ParticipantTokenView(TokenObtainPairView):
 User = get_user_model()
 
 
+class MeView(APIView):
+    """Rola zalogowanego — frontend kieruje admina do /admin, a prowadzącego do /prowadzacy."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        if user.is_staff:
+            role = 'admin'
+        elif hasattr(user, 'instructor_profile'):
+            role = 'instructor'
+        else:
+            role = 'participant'
+        return Response({'role': role, 'first_name': user.first_name})
+
+
 class ActivateAccountView(APIView):
     permission_classes = [AllowAny]
 

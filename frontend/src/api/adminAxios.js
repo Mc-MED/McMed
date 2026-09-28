@@ -31,7 +31,7 @@ adminAxios.interceptors.response.use(
         .catch(() => {
           localStorage.removeItem('access_token')
           localStorage.removeItem('refresh_token')
-          window.location.href = '/panel-42'
+          window.location.href = window.location.pathname.startsWith('/prowadzacy') ? '/prowadzacy' : '/panel-42'
           return Promise.reject(new Error('session_expired'))
         })
         .finally(() => { refreshing = null })

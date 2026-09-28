@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import axios from 'axios'
+import { fetchMe } from '../api/instructor'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -8,6 +9,8 @@ export default function Login() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
+  // Ten sam formularz dla admina (/panel-42) i prowadzącego (/prowadzacy) — dokąd dalej, decyduje rola konta
+  const isInstructorLogin = useLocation().pathname.startsWith('/prowadzacy')
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -15,12 +18,22 @@ export default function Login() {
     setLoading(true)
     try {
       const { data } = await axios.post('/api/auth/token/', {
-        username: email,
+        // Prowadzący logują się emailem (login = email małymi literami)
+        username: isInstructorLogin ? email.trim().toLowerCase() : email,
         password,
       })
       localStorage.setItem('access_token', data.access)
       localStorage.setItem('refresh_token', data.refresh)
-      navigate('/admin')
+      const { role } = await fetchMe()
+      if (role === 'admin') {
+        navigate('/admin')
+      } else if (role === 'instructor') {
+        navigate('/prowadzacy/kursy')
+      } else {
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('refresh_token')
+        setError('To konto nie ma dostępu do panelu.')
+      }
     } catch {
       setError('Nieprawidłowy login lub hasło.')
     } finally {
@@ -33,19 +46,19 @@ export default function Login() {
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm w-full max-w-sm p-8">
         <div className="text-center mb-8">
           <p className="text-2xl font-extrabold text-gray-900 tracking-tight">Mc Med</p>
-          <p className="text-sm text-gray-400 mt-1">Panel zarządzania</p>
+          <p className="text-sm text-gray-400 mt-1">{isInstructorLogin ? 'Panel prowadzącego' : 'Panel zarządzania'}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Login
+              {isInstructorLogin ? 'Email' : 'Login'}
             </label>
             <input
               type="text"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              placeholder="admin"
+              placeholder={isInstructorLogin ? 'jan@example.com' : 'admin'}
               className="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition"
             />
           </div>
