@@ -10,6 +10,12 @@ from pathlib import Path
 
 def spa_index(request):
     index = Path(settings.BASE_DIR) / 'frontend_build' / 'index.html'
+    if not index.exists():
+        return HttpResponse(
+            'Brak zbudowanego frontendu (backend/frontend_build/index.html). '
+            'W trybie deweloperskim otwórz aplikację na http://localhost:3000.',
+            status=404, content_type='text/plain; charset=utf-8',
+        )
     return HttpResponse(index.read_bytes(), content_type='text/html')
 
 
