@@ -1426,8 +1426,10 @@ function ExamTab({ courseId, course }) {
     const randomValue = col => {
       if (col.type === 'points') {
         // II podejście tylko gdy pierwsze się nie udało — przy losowaniu zostawiamy puste
-        return col.field === 'exam_theory_attempt2' ? '' : String(Math.floor(Math.random() * (THEORY_MAX_POINTS + 1)))
+        // Losujemy wynik zdający: 27–30 pkt
+        return col.field === 'exam_theory_attempt2' ? '' : String(27 + Math.floor(Math.random() * (THEORY_MAX_POINTS - 27 + 1)))
       }
+      if (col.field === 'exam_theory_grade') return '5'
       return pickFrom(col.options)
     }
     const prevScores = scores
