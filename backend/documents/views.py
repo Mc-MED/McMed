@@ -1,4 +1,5 @@
 import re
+import math
 import copy
 import datetime
 import subprocess
@@ -28,7 +29,7 @@ ALLOWED_ENROLLMENT_ZIP_TEMPLATES = {'zaliczenia_tematow_KPP'}
 
 ALLOWED_CERT_TEMPLATES = {'certyfikat'}
 
-ALLOWED_XLSX_TEMPLATES = {'program', 'obsluga-egzaminu-rec', 'zestawienie-rec'}
+ALLOWED_XLSX_TEMPLATES = {'program', 'obsluga-egzaminu-rec', 'zestawienie-rec', 'egzamin'}
 
 ALLOWED_ATTENDANCE_XLSX_TEMPLATES = {'obecnosc'}
 
@@ -159,15 +160,73 @@ def _xlsx_replace(ws, context):
             cell.value = val
 
 
-def _xlsx_fill_enrollment_rows(ws, enrollments, course, ctx):
+def _recert_row_ctx(enr, lp, course):
+    c_n  = course.course_number or ''
+    year = str(datetime.date.today().year)[-2:]
+    return {
+        'p_lp':               str(lp),
+        'p_first_name':       enr.first_name or '',
+        'p_last_name':        enr.last_name or '',
+        'p_cert_number':      enr.cert_number or '',
+        'p_cert_date':        enr.cert_date.strftime('%d.%m.%Y') if enr.cert_date else '',
+        'p_new_cert_number':  f'KPP/ER/{c_n}/{year}/{str(lp).zfill(2)}',
+        'p_new_cert_date':    course.exam_date.strftime('%d.%m.%Y') if course.exam_date else '',
+    }
+
+
+def _grade(value):
+    """Ocena z bazy (Decimal) → liczba do komórki: 5, 4.5; brak → ''."""
+    if value is None:
+        return ''
+    f = float(value)
+    return int(f) if f.is_integer() else f
+
+
+def _avg_grade(values):
+    """Średnia zaokrąglona do 0,5 — tak samo jak kolumna „Średnia” w zakładce Egzamin."""
+    vals = [float(v) for v in values if v is not None]
+    if not vals:
+        return ''
+    return _grade(math.floor(sum(vals) / len(vals) * 2 + 0.5) / 2)
+
+
+def _egzamin_row_ctx(enr, lp, course):
+    """Wiersz uczestnika w kartach oceny egzaminu (egzamin.xlsx)."""
+    def points(value, empty):
+        return f'{value}/30' if value is not None else empty
+
+    return {
+        'p_lp':                  lp,
+        'p_lp_pad':              str(lp).zfill(2),
+        'p_first_name':          enr.first_name or '',
+        'p_last_name':           enr.last_name or '',
+        'p_theory_1':            points(enr.exam_theory_attempt1, '…./30'),
+        'p_theory_2':            points(enr.exam_theory_attempt2, ''),
+        'p_theory_grade':        _grade(enr.exam_theory_grade),
+        'p_rko':                 _grade(enr.exam_rko),
+        'p_zad1':                _grade(enr.exam_zad1),
+        'p_zad2':                _grade(enr.exam_zad2),
+        'p_practical_grade':     _avg_grade([enr.exam_rko, enr.exam_zad1, enr.exam_zad2]),
+        'p_committee_chair':     _grade(enr.exam_committee_chair),
+        'p_committee_member1':   _grade(enr.exam_committee_member1),
+        'p_committee_member2':   _grade(enr.exam_committee_member2),
+        'p_final_grade':         _avg_grade([enr.exam_committee_chair, enr.exam_committee_member1, enr.exam_committee_member2]),
+        'p_cert_number':         enr.cert_number or '',
+        'p_cert_date':           enr.cert_date.strftime('%d.%m.%Y') if enr.cert_date else '',
+    }
+
+
+def _xlsx_fill_enrollment_rows(ws, enrollments, course, ctx, row_ctx=_recert_row_ctx):
     """
-    Szuka wiersza z {{p_lp}}, kopiuje jego styl dla każdego uczestnika,
+    Szuka wiersza z {{p_lp}} (lub {{p_lp_pad}}), kopiuje jego styl dla każdego uczestnika,
     podmienia zmienne. Pozostałe wiersze – standardowy _xlsx_replace z ctx.
+    Komórka z samą zmienną dostaje wartość liczbową, jeśli row_ctx zwraca liczbę.
     """
     tpl_row_idx = None
     for row in ws.iter_rows():
         for cell in row:
-            if isinstance(cell.value, str) and '{{p_lp}}' in cell.value:
+            # {{p_lp}} albo {{p_lp_pad}} (Lp. dwucyfrowe: 01, 02…)
+            if isinstance(cell.value, str) and re.search(r'\{\{p_lp(_pad)?\}\}', cell.value):
                 tpl_row_idx = cell.row
                 break
         if tpl_row_idx is not None:
@@ -186,7 +245,13 @@ def _xlsx_fill_enrollment_rows(ws, enrollments, course, ctx):
                     val = re.sub(r'\{\{\s*' + re.escape(key) + r'\s*\}\}', str(replacement), val)
             cell.value = val
 
-    if tpl_row_idx is None or not enrollments:
+    if tpl_row_idx is None:
+        return
+    if not enrollments:
+        # Brak uczestników — nie zostawiaj {{…}} w wierszu-szablonie
+        for cell in ws[tpl_row_idx]:
+            if isinstance(cell.value, str) and '{{' in cell.value:
+                cell.value = None
         return
 
     # Zapamiętaj styl wiersza-szablonu
@@ -203,21 +268,9 @@ def _xlsx_fill_enrollment_rows(ws, enrollments, course, ctx):
             'number_format': c.number_format,
         })
 
-    c_n   = course.course_number or ''
-    year  = str(datetime.date.today().year)[-2:]
-    exam_date = course.exam_date.strftime('%d.%m.%Y') if course.exam_date else ''
-
     for lp, enr in enumerate(enrollments, 1):
         row_idx = tpl_row_idx + lp - 1
-        row_ctx = {
-            'p_lp':               str(lp),
-            'p_first_name':       enr.first_name or '',
-            'p_last_name':        enr.last_name or '',
-            'p_cert_number':      enr.cert_number or '',
-            'p_cert_date':        enr.cert_date.strftime('%d.%m.%Y') if enr.cert_date else '',
-            'p_new_cert_number':  f'KPP/ER/{c_n}/{year}/{str(lp).zfill(2)}',
-            'p_new_cert_date':    exam_date,
-        }
+        values = row_ctx(enr, lp, course)
         for col_idx, snap in enumerate(tpl_snapshot, 1):
             cell = ws.cell(row_idx, col_idx)
             if isinstance(cell, openpyxl.cell.cell.MergedCell):
@@ -229,8 +282,12 @@ def _xlsx_fill_enrollment_rows(ws, enrollments, course, ctx):
             cell.number_format = snap['number_format']
             val = snap['value']
             if isinstance(val, str):
-                for key, replacement in row_ctx.items():
-                    val = val.replace(f'{{{{{key}}}}}', str(replacement))
+                whole = re.fullmatch(r'\{\{\s*(\w+)\s*\}\}', val.strip())
+                if whole and whole.group(1) in values:
+                    val = values[whole.group(1)]
+                else:
+                    for key, replacement in values.items():
+                        val = val.replace(f'{{{{{key}}}}}', str(replacement))
             cell.value = val
 
 
@@ -308,6 +365,16 @@ def download_xlsx(request, course_id, doc_name):
         )
         for ws in wb.worksheets:
             _xlsx_fill_enrollment_rows(ws, enrollments, course, ctx)
+    elif doc_name == 'egzamin':
+        # Kolejność jak w zakładce Egzamin (wg daty zapisu), żeby Lp. się zgadzały
+        enrollments = list(
+            course.enrollments.filter(deleted_at__isnull=True)
+            .order_by('created_at')
+        )
+        for name in ('EGZ Teoria', 'EGZ praktyczny', 'EGZ ZBIORCZY', 'Arkusz1'):
+            _xlsx_fill_enrollment_rows(wb[name], enrollments, course, ctx, row_ctx=_egzamin_row_ctx)
+        # NR TESTU = miesiąc i rok egzaminu (komórka ma format mmm-yy)
+        wb['EGZ Teoria']['C4'] = course.exam_date
     elif doc_name == 'obsluga-egzaminu-rec':
         enrollments = list(
             course.enrollments.filter(deleted_at__isnull=True)
@@ -318,8 +385,10 @@ def download_xlsx(request, course_id, doc_name):
         for ws in wb.worksheets:
             _xlsx_replace(ws, ctx)
 
-    for ws in wb.worksheets:
-        ws.page_setup.orientation = 'landscape'
+    # Karty egzaminu mają własną orientację stron w szablonie
+    if doc_name != 'egzamin':
+        for ws in wb.worksheets:
+            ws.page_setup.orientation = 'landscape'
 
     buf = BytesIO()
     wb.save(buf)

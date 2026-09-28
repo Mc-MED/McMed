@@ -1840,7 +1840,9 @@ const MANAGEMENT_DOCUMENTS_RECERT = [
   { filename: 'sprawozdanie-egzamin-rec', label: 'Sprawozdanie z egzaminu recertyfikacyjnego', description: '' },
 ]
 
-const MANAGEMENT_XLSX_DOCUMENTS_KPP = []
+const MANAGEMENT_XLSX_DOCUMENTS_KPP = [
+  { filename: 'egzamin', label: 'Karty oceny egzaminu', description: 'Teoria, praktyczny, zbiorczy i zestawienie do sprawozdania – z ocenami wpisanymi w zakładce Egzamin' },
+]
 
 const MANAGEMENT_XLSX_DOCUMENTS_RECERT = [
   { filename: 'obsluga-egzaminu-rec', label: 'Obsługa egzaminu recertyfikacyjnego', description: '' },
