@@ -20,6 +20,26 @@ SPECIALIZATION_LABELS = {
 }
 
 
+# Członkowie komisji egzaminacyjnej — każdy wystawia własne oceny z egzaminu praktycznego
+COMMITTEE_ROLES = ['chair', 'member1', 'member2']
+PRACTICAL_TASKS = ['rko', 'zad1', 'zad2']
+
+
+def practical_field(role, task):
+    return f'exam_{role}_{task}'
+
+
+PRACTICAL_FIELDS = [practical_field(r, t) for r in COMMITTEE_ROLES for t in PRACTICAL_TASKS]
+
+
+def round_grade(values):
+    """Średnia ocen zaokrąglona do 0,5 (połówki w górę); brak ocen → None."""
+    vals = [float(v) for v in values if v is not None]
+    if not vals:
+        return None
+    return math.floor(sum(vals) / len(vals) * 2 + 0.5) / 2
+
+
 class Instructor(models.Model):
     first_name = models.CharField(max_length=100)
     last_name  = models.CharField(max_length=100)
@@ -64,12 +84,20 @@ class Instructor(models.Model):
     def specializations_str(self):
         return ', '.join(self.specializations)
 
+    def committee_names(self):
+        return {self.full_name, f'{self.first_name} {self.last_name}'}
+
+    def committee_roles(self, course):
+        """Role prowadzącego w komisji egzaminacyjnej kursu: 'chair' / 'member1' / 'member2'."""
+        names = self.committee_names()
+        return [role for role in COMMITTEE_ROLES if getattr(course, f'committee_{role}') in names]
+
     def panel_courses(self):
         """Kursy, które prowadzący widzi w swoim panelu: jest wśród prowadzących albo w komisji egzaminacyjnej.
 
         Komisja jest zapisana jako tekst (imię i nazwisko z listy instruktorów), więc dopasowujemy po nazwie.
         """
-        names = {self.full_name, f'{self.first_name} {self.last_name}'}
+        names = self.committee_names()
         return Course.objects.filter(
             models.Q(instructors=self)
             | models.Q(committee_chair__in=names)
@@ -194,9 +222,20 @@ class Enrollment(models.Model):
     cert_number      = models.CharField(max_length=100, blank=True, default='')
     cert_date        = models.DateField(null=True, blank=True)
     photo_consent    = models.BooleanField(default=False)
+    # Egzamin praktyczny — średnie z ocen członków komisji (liczone w recompute_practical_grades)
     exam_rko         = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     exam_zad1        = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     exam_zad2        = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    # Egzamin praktyczny — oceny każdego członka komisji
+    exam_chair_rko     = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
+    exam_chair_zad1    = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
+    exam_chair_zad2    = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
+    exam_member1_rko   = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
+    exam_member1_zad1  = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
+    exam_member1_zad2  = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
+    exam_member2_rko   = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
+    exam_member2_zad1  = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
+    exam_member2_zad2  = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
     # Egzamin teoretyczny: punkty z testu (/30) w dwóch podejściach + ocena końcowa
     exam_theory_attempt1 = models.PositiveSmallIntegerField(null=True, blank=True)
     exam_theory_attempt2 = models.PositiveSmallIntegerField(null=True, blank=True)
@@ -227,3 +266,13 @@ class Enrollment(models.Model):
 
     def __str__(self):
         return f'{self.last_name} {self.first_name} – {self.course}'
+
+    def recompute_practical_grades(self, roles):
+        """Po zmianie ocen praktycznych członków komisji (roles): średnia członka trafia do jego kolumny
+        w ocenie zbiorczej, a exam_rko/zad1/zad2 to średnie danego zadania od całej komisji."""
+        for role in roles:
+            setattr(self, f'exam_committee_{role}',
+                    round_grade(getattr(self, practical_field(role, t)) for t in PRACTICAL_TASKS))
+        for task in PRACTICAL_TASKS:
+            setattr(self, f'exam_{task}',
+                    round_grade(getattr(self, practical_field(r, task)) for r in COMMITTEE_ROLES))

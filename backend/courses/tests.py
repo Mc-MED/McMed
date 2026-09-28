@@ -56,24 +56,53 @@ class InstructorPanelTests(TestCase):
         self.assertNotIn('pesel', res.data[0])
         self.assertNotIn('payment_status', res.data[0])
 
-    def test_can_set_practical_grades_only(self):
-        url = f'/api/courses/instructor/enrollments/{self.enrollment.pk}/'
+    def test_committee_member_sets_only_own_practical_grades(self):
+        enrollment = make_enrollment(self.committee)
+        url = f'/api/courses/instructor/enrollments/{enrollment.pk}/'
         res = self.client.patch(url, {
-            'exam_rko': 4.5, 'exam_theory_grade': 2, 'exam_committee_chair': 3, 'first_name': 'Zmieniony',
+            'exam_member1_rko': 4.5, 'exam_chair_rko': 3, 'exam_theory_grade': 2,
+            'exam_committee_chair': 3, 'first_name': 'Zmieniony',
         }, format='json')
         self.assertEqual(res.status_code, 200)
+        enrollment.refresh_from_db()
+        self.assertEqual(float(enrollment.exam_member1_rko), 4.5)
+        self.assertIsNone(enrollment.exam_chair_rko)
+        self.assertIsNone(enrollment.exam_theory_grade)
+        self.assertIsNone(enrollment.exam_committee_chair)
+        self.assertEqual(enrollment.first_name, 'Jan')
+
+    def test_member_average_goes_to_own_committee_column(self):
+        enrollment = make_enrollment(self.committee, exam_chair_rko=3, exam_chair_zad1=3, exam_chair_zad2=3)
+        url = f'/api/courses/instructor/enrollments/{enrollment.pk}/'
+        self.client.patch(url, {'exam_member1_rko': 4, 'exam_member1_zad1': 4.5}, format='json')
+        res = self.client.patch(url, {'exam_member1_zad2': 4}, format='json')
+        # (4 + 4,5 + 4) / 3 = 4,17 → 4
+        self.assertEqual(float(res.data['exam_committee_member1']), 4)
+        self.assertIsNone(res.data['exam_committee_chair'])
+        # Średnie zadań od całej komisji: RKO (3 + 4) / 2 = 3,5
+        self.assertEqual(float(res.data['exam_rko']), 3.5)
+
+    def test_non_committee_instructor_cannot_grade_practical(self):
+        url = f'/api/courses/instructor/enrollments/{self.enrollment.pk}/'
+        res = self.client.patch(url, {'exam_chair_rko': 5, 'exam_rko': 5}, format='json')
+        self.assertEqual(res.status_code, 200)
         self.enrollment.refresh_from_db()
-        self.assertEqual(float(self.enrollment.exam_rko), 4.5)
-        self.assertIsNone(self.enrollment.exam_theory_grade)
-        self.assertIsNone(self.enrollment.exam_committee_chair)
-        self.assertEqual(self.enrollment.first_name, 'Jan')
+        self.assertIsNone(self.enrollment.exam_chair_rko)
+        self.assertIsNone(self.enrollment.exam_rko)
+
+    def test_course_reports_my_committee_roles(self):
+        res = self.client.get(f'/api/courses/instructor/{self.committee.pk}/')
+        self.assertEqual(res.data['my_committee_roles'], ['member1'])
+        res = self.client.get(f'/api/courses/instructor/{self.own.pk}/')
+        self.assertEqual(res.data['my_committee_roles'], [])
 
     def test_grade_scale_is_validated(self):
-        res = self.client.patch(f'/api/courses/instructor/enrollments/{self.enrollment.pk}/', {'exam_zad1': 2}, format='json')
+        enrollment = make_enrollment(self.committee)
+        res = self.client.patch(f'/api/courses/instructor/enrollments/{enrollment.pk}/', {'exam_member1_zad1': 2}, format='json')
         self.assertEqual(res.status_code, 400)
 
     def test_cannot_grade_foreign_enrollment(self):
-        res = self.client.patch(f'/api/courses/instructor/enrollments/{self.foreign_enrollment.pk}/', {'exam_rko': 5}, format='json')
+        res = self.client.patch(f'/api/courses/instructor/enrollments/{self.foreign_enrollment.pk}/', {'exam_chair_rko': 5}, format='json')
         self.assertEqual(res.status_code, 404)
 
     def test_participant_and_anonymous_are_rejected(self):
@@ -82,6 +111,20 @@ class InstructorPanelTests(TestCase):
         self.assertEqual(self.client.get('/api/courses/instructor/').status_code, 403)
         self.client.force_authenticate(None)
         self.assertEqual(self.client.get('/api/courses/instructor/').status_code, 401)
+
+
+class AdminPracticalGradesTests(TestCase):
+    def test_admin_grades_for_any_member_and_committee_average_updates(self):
+        client = APIClient()
+        client.force_authenticate(User.objects.create_user('admin', 'a@example.com', 'x', is_staff=True))
+        enrollment = make_enrollment(Course.objects.create(name='Kurs'))
+        url = f'/api/courses/enrollments/{enrollment.pk}/'
+        res = client.patch(url, {'exam_chair_rko': 5, 'exam_chair_zad1': 5, 'exam_chair_zad2': 4.5}, format='json')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(float(res.data['exam_committee_chair']), 5)  # 4,83 → 5
+        res = client.patch(url, {'exam_chair_zad1': None, 'exam_chair_rko': None, 'exam_chair_zad2': None}, format='json')
+        self.assertIsNone(res.data['exam_committee_chair'])
+        self.assertIsNone(res.data['exam_rko'])
 
 
 class MeViewTests(TestCase):

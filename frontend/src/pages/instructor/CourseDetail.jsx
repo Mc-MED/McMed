@@ -1,11 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { instructorFetchCourse, instructorFetchEnrollments, instructorUpdateEnrollment } from '../../api/instructor'
-import { ExamTab } from '../admin/CourseDetail'
+import { ExamTab, practicalFields } from '../admin/CourseDetail'
 import { courseTerm, formatDate } from './CourseList'
-
-// Prowadzący wpisuje tylko egzamin praktyczny; teoretyczny i zbiorczy widzi bez edycji
-const EDITABLE_EXAM_FIELDS = ['exam_rko', 'exam_zad1', 'exam_zad2']
 
 function ParticipantsTab({ courseId }) {
   const [enrollments, setEnrollments] = useState([])
@@ -104,7 +101,9 @@ export default function InstructorCourseDetail() {
             course={course}
             fetchEnrollments={instructorFetchEnrollments}
             updateEnrollment={instructorUpdateEnrollment}
-            editableFields={EDITABLE_EXAM_FIELDS}
+            // Członek komisji wpisuje tylko swoje oceny z egzaminu praktycznego; resztę widzi bez edycji
+            editableFields={course.my_committee_roles.flatMap(practicalFields)}
+            practicalRoles={course.my_committee_roles}
             showFillRandom={false}
             initialSubtab="praktyczny"
           />

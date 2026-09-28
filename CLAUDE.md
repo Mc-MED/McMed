@@ -106,7 +106,7 @@ McMed/
 | GET | `/api/courses/instructor/` | Kursy prowadzącego (prowadzący kursu lub członek komisji) |
 | GET | `/api/courses/instructor/:id/` | Szczegóły kursu |
 | GET | `/api/courses/instructor/:id/enrollments/` | Uczestnicy: imię, nazwisko, telefon, email, oceny |
-| PATCH | `/api/courses/instructor/enrollments/:id/` | Tylko egzamin praktyczny: `exam_rko`, `exam_zad1`, `exam_zad2` |
+| PATCH | `/api/courses/instructor/enrollments/:id/` | Tylko własne oceny praktyczne członka komisji: `exam_<chair\|member1\|member2>_<rko\|zad1\|zad2>`; średnia trafia do `exam_committee_<rola>` (zbiorczy) |
 
 ### Auth
 | Metoda | URL | Opis |

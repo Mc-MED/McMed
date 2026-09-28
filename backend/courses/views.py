@@ -10,7 +10,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 
-from .models import Course, Enrollment, Instructor
+from .models import PRACTICAL_TASKS, Course, Enrollment, Instructor, practical_field
 from .permissions import IsInstructor
 from .serializers import (
     CourseSerializer, AdminCourseSerializer, EnrollmentSerializer, PublicEnrollmentSerializer,
@@ -299,6 +299,14 @@ class InstructorEnrollmentDetailView(generics.UpdateAPIView):
 
     def get_queryset(self):
         return Enrollment.objects.filter(is_deleted=False, course__in=_instructor_courses(self.request))
+
+    def get_serializer_context(self):
+        # Członek komisji wpisuje oceny praktyczne tylko w swojej kolumnie komisji
+        context = super().get_serializer_context()
+        enrollment = self.get_object()
+        roles = self.request.user.instructor_profile.committee_roles(enrollment.course)
+        context['editable_fields'] = [practical_field(r, t) for r in roles for t in PRACTICAL_TASKS]
+        return context
 
 
 @api_view(['POST'])

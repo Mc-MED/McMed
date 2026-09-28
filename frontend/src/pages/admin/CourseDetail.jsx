@@ -1326,17 +1326,28 @@ const EXAM_SUBTABS = [
   { id: 'zbiorczy',    label: 'Zbiorczy' },
 ]
 
-function examColumns(subtab, course) {
+// Komisja egzaminacyjna — każdy członek wystawia własne oceny z egzaminu praktycznego,
+// a ich średnia trafia do jego kolumny w ocenie zbiorczej
+export const COMMITTEE_ROLES = [
+  { id: 'chair',   label: 'Przewodniczący komisji', courseField: 'committee_chair' },
+  { id: 'member1', label: 'Członek komisji',        courseField: 'committee_member1' },
+  { id: 'member2', label: 'Członek komisji',        courseField: 'committee_member2' },
+]
+const PRACTICAL_TASKS = [['rko', 'RKO'], ['zad1', 'ZAD 1'], ['zad2', 'ZAD 2']]
+export const practicalFields = role => PRACTICAL_TASKS.map(([task]) => `exam_${role}_${task}`)
+
+function examColumns(subtab, course, practicalRole) {
   if (subtab === 'teoretyczny') return [
     { field: 'exam_theory_attempt1', label: 'I podejście',    type: 'points' },
     { field: 'exam_theory_attempt2', label: 'II podejście',   type: 'points' },
     { field: 'exam_theory_grade',    label: 'Ocena końcowa',  type: 'select', options: THEORY_GRADE_OPTIONS },
   ]
-  if (subtab === 'praktyczny') return [
-    { field: 'exam_rko',  label: 'RKO',   type: 'select', options: EXAM_SCORE_OPTIONS },
-    { field: 'exam_zad1', label: 'ZAD 1', type: 'select', options: EXAM_SCORE_OPTIONS },
-    { field: 'exam_zad2', label: 'ZAD 2', type: 'select', options: EXAM_SCORE_OPTIONS },
-  ]
+  if (subtab === 'praktyczny') {
+    if (!practicalRole) return []
+    return PRACTICAL_TASKS.map(([task, label]) => (
+      { field: `exam_${practicalRole}_${task}`, label, type: 'select', options: EXAM_SCORE_OPTIONS }
+    ))
+  }
   return [
     { field: 'exam_committee_chair',   label: '1. Przewodniczący komisji', person: course?.committee_chair,   type: 'select', options: EXAM_SCORE_OPTIONS },
     { field: 'exam_committee_member1', label: '2. Członek komisji',        person: course?.committee_member1, type: 'select', options: EXAM_SCORE_OPTIONS },
@@ -1344,7 +1355,13 @@ function examColumns(subtab, course) {
   ]
 }
 
-const ALL_EXAM_FIELDS = EXAM_SUBTABS.flatMap(t => examColumns(t.id).map(c => c.field))
+const COMMITTEE_GRADE_FIELDS = examColumns('zbiorczy').map(c => c.field)
+const ALL_EXAM_FIELDS = [
+  ...examColumns('teoretyczny').map(c => c.field),
+  ...COMMITTEE_ROLES.flatMap(r => practicalFields(r.id)),
+  ...COMMITTEE_GRADE_FIELDS,
+]
+const toScore = v => v != null ? String(parseFloat(v)) : ''
 
 // Używany też w panelu prowadzącego: własne API, edycja tylko wybranych pól, bez losowania
 export function ExamTab({
@@ -1354,8 +1371,10 @@ export function ExamTab({
   editableFields = null,
   showFillRandom = true,
   initialSubtab = 'teoretyczny',
+  practicalRoles = COMMITTEE_ROLES.map(r => r.id),   // role komisji, których oceny praktyczne widać
 }) {
   const [subtab, setSubtab]           = useState(initialSubtab)
+  const [practicalRole, setPracticalRole] = useState(practicalRoles[0] ?? null)
   const [enrollments, setEnrollments] = useState([])
   const [loading, setLoading]         = useState(true)
   const [scores, setScores]           = useState({})   // { [enrollmentId]: { [apiField]: '4.5' } }
@@ -1370,16 +1389,14 @@ export function ExamTab({
         const init = {}
         active.forEach(e => {
           init[e.id] = {}
-          ALL_EXAM_FIELDS.forEach(f => {
-            init[e.id][f] = e[f] != null ? String(parseFloat(e[f])) : ''
-          })
+          ALL_EXAM_FIELDS.forEach(f => { init[e.id][f] = toScore(e[f]) })
         })
         setScores(init)
       })
       .finally(() => setLoading(false))
   }, [courseId])
 
-  const columns = examColumns(subtab, course)
+  const columns = examColumns(subtab, course, practicalRole)
   const showAvg = subtab !== 'teoretyczny'
   const isEditable = field => !editableFields || editableFields.includes(field)
   const subtabReadOnly = columns.every(c => !isEditable(c.field))
@@ -1397,11 +1414,20 @@ export function ExamTab({
     setScores(prev => ({ ...prev, [enrollmentId]: { ...prev[enrollmentId], [field]: value } }))
   }
 
+  // Ocenę zbiorczą członka komisji przelicza backend po zapisie jego ocen praktycznych
+  function applyCommitteeGrades(enrollmentId, data) {
+    setScores(prev => ({
+      ...prev,
+      [enrollmentId]: { ...prev[enrollmentId], ...Object.fromEntries(COMMITTEE_GRADE_FIELDS.map(f => [f, toScore(data[f])])) },
+    }))
+  }
+
   async function save(enrollmentId, field, value, prevValue) {
     const key = `${enrollmentId}-${field}`
     setSaving(prev => ({ ...prev, [key]: true }))
     try {
-      await updateEnrollment(enrollmentId, { [field]: value === '' ? null : parseFloat(value) })
+      const res = await updateEnrollment(enrollmentId, { [field]: value === '' ? null : parseFloat(value) })
+      applyCommitteeGrades(enrollmentId, res.data)
     } catch {
       setScore(enrollmentId, field, prevValue)
     } finally {
@@ -1451,9 +1477,10 @@ export function ExamTab({
     setScores(next)
     setFilling(true)
     try {
-      await Promise.all(enrollments.map(e => updateEnrollment(e.id, Object.fromEntries(
+      const responses = await Promise.all(enrollments.map(e => updateEnrollment(e.id, Object.fromEntries(
         columns.map(c => [c.field, next[e.id][c.field] === '' ? null : parseFloat(next[e.id][c.field])])
       ))))
+      responses.forEach((res, i) => applyCommitteeGrades(enrollments[i].id, res.data))
     } catch {
       setScores(prevScores)
       alert('Nie udało się zapisać wszystkich wyników. Odśwież stronę i sprawdź wyniki.')
@@ -1530,7 +1557,7 @@ export function ExamTab({
             </button>
           ))}
         </div>
-        {showFillRandom && (
+        {showFillRandom && columns.length > 0 && (
           <button
             onClick={handleFillRandom}
             disabled={filling}
@@ -1540,6 +1567,34 @@ export function ExamTab({
           </button>
         )}
       </div>
+      {subtab === 'praktyczny' && practicalRoles.length > 1 && (
+        <div className="flex gap-2 mb-3 flex-wrap">
+          {COMMITTEE_ROLES.filter(r => practicalRoles.includes(r.id)).map(r => (
+            <button
+              key={r.id}
+              onClick={() => setPracticalRole(r.id)}
+              className={`text-left text-sm px-3 py-1.5 rounded-lg border transition-colors ${
+                practicalRole === r.id ? 'border-red-600 bg-red-50 text-red-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <span className="font-semibold">{r.label}</span>
+              <span className="block text-xs">{course?.[r.courseField] || 'nie wybrano'}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {subtab === 'praktyczny' && practicalRoles.length === 1 && (
+        <p className="text-sm text-gray-500 mb-3">
+          Twoje oceny jako: <span className="font-semibold text-gray-800">
+            {COMMITTEE_ROLES.find(r => r.id === practicalRole)?.label.toLowerCase()}
+          </span>
+        </p>
+      )}
+      {subtab === 'praktyczny' && !practicalRole ? (
+        <p className="text-gray-400 text-sm mt-8">
+          Nie jesteś w komisji egzaminacyjnej tego kursu — oceny z egzaminu praktycznego wpisują jej członkowie.
+        </p>
+      ) : (<>
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
         <table className="w-full text-sm">
           <thead>
@@ -1590,8 +1645,11 @@ export function ExamTab({
           ? 'Tylko do odczytu.'
           : subtab === 'teoretyczny'
           ? 'Punkty zapisywane po opuszczeniu pola, ocena końcowa od razu po wybraniu. Oceny: 2; 3; 3,5; 4; 4,5; 5.'
-          : 'Oceny zapisywane automatycznie po wybraniu.'}
+          : subtab === 'praktyczny'
+          ? 'Oceny zapisywane automatycznie po wybraniu. Średnia trafia do kolumny tego członka komisji w ocenie zbiorczej.'
+          : 'Oceny członków komisji wyliczane z ich ocen z egzaminu praktycznego; można je poprawić ręcznie.'}
       </p>
+      </>)}
     </div>
   )
 }

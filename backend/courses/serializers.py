@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Course, Enrollment, Instructor
+from .models import COMMITTEE_ROLES, PRACTICAL_FIELDS, PRACTICAL_TASKS, Course, Enrollment, Instructor, practical_field
 
 
 class InstructorSerializer(serializers.ModelSerializer):
@@ -123,6 +123,15 @@ class ExamScoreValidationMixin:
     def validate_exam_zad2(self, value):
         return self._validate_exam_score(value)
 
+    def update(self, instance, validated_data):
+        # Zmiana ocen praktycznych członka komisji przelicza jego ocenę zbiorczą i średnie zadań
+        roles = [r for r in COMMITTEE_ROLES if any(practical_field(r, t) in validated_data for t in PRACTICAL_TASKS)]
+        instance = super().update(instance, validated_data)
+        if roles:
+            instance.recompute_practical_grades(roles)
+            instance.save(update_fields=[f'exam_committee_{r}' for r in roles] + [f'exam_{t}' for t in PRACTICAL_TASKS])
+        return instance
+
     def validate_exam_committee_chair(self, value):
         return self._validate_exam_score(value)
 
@@ -149,6 +158,11 @@ class ExamScoreValidationMixin:
         return value
 
 
+# validate_exam_chair_rko, validate_exam_member1_zad2, … — ta sama skala co pozostałe oceny praktyczne
+for _field in PRACTICAL_FIELDS:
+    setattr(ExamScoreValidationMixin, f'validate_{_field}', ExamScoreValidationMixin._validate_exam_score)
+
+
 class EnrollmentSerializer(ExamScoreValidationMixin, serializers.ModelSerializer):
     course_name            = serializers.SerializerMethodField()
     exam_date              = serializers.SerializerMethodField()
@@ -171,13 +185,16 @@ class EnrollmentSerializer(ExamScoreValidationMixin, serializers.ModelSerializer
             'email', 'phone',
             'zip_code', 'city', 'street', 'house_number', 'apartment_number',
             'cert_number', 'cert_date',
-            'photo_consent', 'payment_status', 'exam_rko', 'exam_zad1', 'exam_zad2',
+            'photo_consent', 'payment_status', 'exam_rko', 'exam_zad1', 'exam_zad2', *PRACTICAL_FIELDS,
             'exam_theory_attempt1', 'exam_theory_attempt2', 'exam_theory_grade',
             'exam_committee_chair', 'exam_committee_member1', 'exam_committee_member2',
             'certificate_visible', 'created_at',
             'is_deleted', 'deleted_at', 'deletion_reason', 'deletion_reason_display',
         ]
-        read_only_fields = ['id', 'course_name', 'exam_date', 'created_at', 'is_deleted', 'deleted_at', 'deletion_reason', 'deletion_reason_display']
+        read_only_fields = [
+            'id', 'course_name', 'exam_date', 'created_at', 'is_deleted', 'deleted_at', 'deletion_reason', 'deletion_reason_display',
+            'exam_rko', 'exam_zad1', 'exam_zad2',
+        ]
 
     def validate_pesel(self, value):
         if value and (not value.isdigit() or len(value) != 11):
@@ -204,25 +221,38 @@ class InstructorCourseSerializer(serializers.ModelSerializer):
             'course_days', 'start_date', 'end_date',
             'exam_date', 'exam_time', 'exam_location',
             'committee_chair', 'committee_member1', 'committee_member2',
+            'my_committee_roles',
         ]
         read_only_fields = fields
 
+    my_committee_roles = serializers.SerializerMethodField()
 
-INSTRUCTOR_EDITABLE_EXAM_FIELDS = ['exam_rko', 'exam_zad1', 'exam_zad2']
+    def get_my_committee_roles(self, obj):
+        return self.context['request'].user.instructor_profile.committee_roles(obj)
 
 
 class InstructorEnrollmentSerializer(ExamScoreValidationMixin, serializers.ModelSerializer):
-    """Uczestnik w panelu prowadzącego — dane kontaktowe i oceny; prowadzący zmienia tylko egzamin praktyczny."""
+    """Uczestnik w panelu prowadzącego — dane kontaktowe i oceny.
+
+    Prowadzący zmienia tylko oceny praktyczne swojej roli w komisji — pola przekazane w context['editable_fields'].
+    """
 
     class Meta:
         model  = Enrollment
         fields = [
             'id', 'first_name', 'last_name', 'phone', 'email',
-            'exam_rko', 'exam_zad1', 'exam_zad2',
+            'exam_rko', 'exam_zad1', 'exam_zad2', *PRACTICAL_FIELDS,
             'exam_theory_attempt1', 'exam_theory_attempt2', 'exam_theory_grade',
             'exam_committee_chair', 'exam_committee_member1', 'exam_committee_member2',
         ]
-        read_only_fields = [f for f in fields if f not in INSTRUCTOR_EDITABLE_EXAM_FIELDS]
+        read_only_fields = [f for f in fields if f not in PRACTICAL_FIELDS]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        editable = self.context.get('editable_fields', [])
+        for name in PRACTICAL_FIELDS:
+            if name not in editable:
+                self.fields[name].read_only = True
 
 
 class PublicEnrollmentSerializer(EnrollmentSerializer):
