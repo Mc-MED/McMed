@@ -25,6 +25,11 @@ function TitleManager() {
   }, [pathname])
   return null
 }
+
+function RedirectToLanding() {
+  useEffect(() => { window.location.replace('https://mcmed.pl') }, [])
+  return null
+}
 import AdminLayout from './layouts/AdminLayout'
 import CourseList from './pages/admin/CourseList'
 import CourseCreate from './pages/admin/CourseCreate'
@@ -47,6 +52,7 @@ export default function App() {
     <BrowserRouter>
       <TitleManager />
       <Routes>
+        <Route path="/" element={<RedirectToLanding />} />
         <Route path="/panel-42" element={<Login />} />
 
         {/* Strefa uczestnika */}
