@@ -219,6 +219,11 @@ def _egzamin_row_ctx(enr, lp, course):
     }
 
 
+def _egzamin_rec_row_ctx(enr, lp, course):
+    """Wiersz uczestnika w obsluga-egzaminu-rec.xlsx: oceny jak w egzamin.xlsx, zaświadczenia jak w recertyfikacji."""
+    return {**_egzamin_row_ctx(enr, lp, course), **_recert_row_ctx(enr, lp, course), 'p_lp': lp}
+
+
 def _xlsx_fill_enrollment_rows(ws, enrollments, course, ctx, row_ctx=_recert_row_ctx):
     """
     Szuka wiersza z {{p_lp}} (lub {{p_lp_pad}}), kopiuje jego styl dla każdego uczestnika,
@@ -295,7 +300,7 @@ def _xlsx_fill_enrollment_rows(ws, enrollments, course, ctx, row_ctx=_recert_row
 
 
 def _xlsx_fill_obsluga_egzaminu_rec(wb, enrollments, course, ctx):
-    """Wypełnia arkusz DANE danymi kursu i uczestników; Arkusz1 – szablon wierszy."""
+    """Wypełnia arkusz DANE danymi kursu i uczestników; karty oceny i Arkusz1 – szablon wierszy."""
     ws_dane = wb['DANE ']
 
     # Daty zjazdów w N2–N7, data egzaminu w N8 (kolumna N = 14)
@@ -327,8 +332,9 @@ def _xlsx_fill_obsluga_egzaminu_rec(wb, enrollments, course, ctx):
             enr.cert_date.strftime('%d.%m.%Y') if enr.cert_date else ''
         )
 
-    # Arkusz1 ma {{p_lp}} – wypełnij wiersze uczestników
-    _xlsx_fill_enrollment_rows(wb['Arkusz1'], enrollments, course, ctx)
+    # Karty oceny i Arkusz1 mają {{p_lp}} – wypełnij wiersze uczestników ocenami z zakładki Egzamin
+    for name in ('EGZ Teoria', 'EGZ praktyczny', 'EGZ ZBIORCZY', 'Arkusz1'):
+        _xlsx_fill_enrollment_rows(wb[name], enrollments, course, ctx, row_ctx=_egzamin_rec_row_ctx)
 
 
 def _resolve_xlsx(doc_name, instructor_count):
@@ -379,6 +385,7 @@ def download_xlsx(request, course_id, doc_name):
         # NR TESTU = miesiąc i rok egzaminu (komórka ma format mmm-yy)
         wb['EGZ Teoria']['C4'] = course.exam_date
     elif doc_name == 'obsluga-egzaminu-rec':
+        # Kolejność jak w zakładce Egzamin (wg daty zapisu), żeby Lp. się zgadzały
         enrollments = list(
             course.enrollments.filter(deleted_at__isnull=True)
             .order_by('created_at')
@@ -389,7 +396,7 @@ def download_xlsx(request, course_id, doc_name):
             _xlsx_replace(ws, ctx)
 
     # Karty egzaminu mają własną orientację stron w szablonie
-    if doc_name != 'egzamin':
+    if doc_name not in ('egzamin', 'obsluga-egzaminu-rec'):
         for ws in wb.worksheets:
             ws.page_setup.orientation = 'landscape'
 

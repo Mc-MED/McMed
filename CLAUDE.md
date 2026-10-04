@@ -50,9 +50,13 @@ McMed/
     └── src/
         ├── api/
         │   ├── courses.js  # fetchCourses, submitEnrollment (publiczne)
-        │   └── admin.js    # adminFetchCourses/Course/Enrollments, create/update/delete (JWT)
+        │   ├── admin.js    # adminFetchCourses/Course/Enrollments, create/update/delete (JWT)
+        │   └── instructor.js # panel prowadzącego: fetchMe, kursy, uczestnicy, zapis ocen
+        ├── data/
+        │   └── kppQuestions.js # 280 pytań do nauki (źródło: backend/documents/templates/pytania.pdf)
         ├── layouts/
-        │   └── AdminLayout.jsx
+        │   ├── AdminLayout.jsx
+        │   └── InstructorLayout.jsx
         ├── pages/
         │   ├── Login.jsx           # Logowanie → JWT zapisywany w localStorage
         │   ├── NotFound.jsx
@@ -60,7 +64,11 @@ McMed/
         │   │   ├── Dashboard.jsx       # Statystyki (stub)
         │   │   ├── CourseList.jsx      # Lista kursów, klik → szczegóły
         │   │   ├── CourseCreate.jsx    # Formularz tworzenia kursu
-        │   │   └── CourseDetail.jsx    # Szczegóły kursu + edycja + uczestnicy
+        │   │   ├── CourseDetail.jsx    # Szczegóły kursu + edycja + uczestnicy + Egzamin (ExamTab)
+        │   │   └── InstructorList.jsx  # Instruktorzy + zaproszenie do panelu prowadzącego
+        │   ├── instructor/
+        │   │   ├── CourseList.jsx      # Kursy prowadzącego
+        │   │   └── CourseDetail.jsx    # Uczestnicy + Egzamin (ExamTab z panelu admina)
         │   └── participant/
         │       └── EnrollForm.jsx      # Publiczny formularz zapisu na kurs
         └── index.css       # Globalne klasy: .field-label, .field-input
@@ -77,6 +85,8 @@ McMed/
 | `/admin/courses/create` | CourseCreate.jsx | JWT |
 | `/admin/courses/:id` | CourseDetail.jsx | JWT |
 | `/admin/participants` | ParticipantList.jsx | JWT |
+| `/admin/instructors` | InstructorList.jsx | JWT |
+| `/reset-hasla/:token` | participant/ResetPassword.jsx (też ustawienie hasła z zaproszenia, `?panel=prowadzacy`) | Publiczny |
 | `/prowadzacy` | Login.jsx (logowanie prowadzącego) | Publiczny |
 | `/prowadzacy/kursy` | instructor/CourseList.jsx | JWT (prowadzący) |
 | `/prowadzacy/kursy/:id` | instructor/CourseDetail.jsx – Uczestnicy + Egzamin | JWT (prowadzący) |
@@ -116,15 +126,30 @@ McMed/
 
 Token przechowywany w `localStorage` jako `access_token` i `refresh_token`.
 
+Linki w mailach (zaproszenie prowadzącego, reset hasła) budowane są z `FRONTEND_URL` w `backend/.env` — w dev `http://localhost:3000` (Vite). Django na porcie 8000 serwuje SPA tylko z `backend/frontend_build/` (build produkcyjny); bez niego zwraca 404.
+
 ## Modele Django
 
+### Instructor
+Pola: `first_name`, `last_name`, `title`, `profession`, specjalizacje `spec_*`, `years_experience`, `email`, `user` (OneToOne → konto w panelu prowadzącego, `related_name='instructor_profile'`).
+
+Metody: `panel_courses()` — kursy, w których jest prowadzącym lub w komisji; `committee_roles(course)` — role w komisji kursu (`chair` / `member1` / `member2`). Komisja w `Course` to tekst, więc dopasowanie jest po imieniu i nazwisku (z tytułem lub bez).
+
 ### Course
-Pola: `name`, `course_type` (kpp/recert), `city`, `max_participants`, `price`, `is_active`, `created_at`, `course_days` (JSONField, 6 dat), `start_date`/`end_date` (auto z course_days), `exam_date`, `exam_location`, `entity_director`, `academic_director`, `instructors` (JSONField), `psychologist`, `committee_chair`, `committee_member1`, `committee_member2`.
+Pola: `name`, `course_type` (kpp/recert), `city`, `max_participants`, `price`, `is_active`, `created_at`, `course_days` (JSONField, 6 dat), `start_date`/`end_date` (auto z course_days), `exam_date`, `exam_location`, `entity_director`, `academic_director`, `instructors` (M2M → Instructor), `psychologist`, `committee_chair`, `committee_member1`, `committee_member2` (tekst: imię i nazwisko z listy instruktorów).
 
 Properties: `spots_left`, `is_full`, `instructors_count` (ceil(max_participants/6)).
 
 ### Enrollment
 Pola: `course` (FK), `first_name`, `last_name`, `pesel`, `birth_date`, `email`, `phone`, `zip_code`, `city`, `street`, `house_number`, `apartment_number` (opcjonalne), `photo_consent`, `created_at`.
+
+Egzamin (skala ocen 3; 3,5; 4; 4,5; 5, teoretyczna ocena końcowa także 2):
+- Teoretyczny: `exam_theory_attempt1`, `exam_theory_attempt2` (punkty /30), `exam_theory_grade`.
+- Praktyczny: każdy członek komisji ma własne oceny `exam_<chair|member1|member2>_<rko|zad1|zad2>`.
+- Zbiorczy: `exam_committee_chair`, `exam_committee_member1`, `exam_committee_member2`.
+- `exam_rko`, `exam_zad1`, `exam_zad2` — wyliczane (średnia zadania od całej komisji), tylko do odczytu; używa ich karta „EGZ praktyczny” w `egzamin.xlsx`.
+
+Po zapisie ocen praktycznych członka komisji serializer wywołuje `Enrollment.recompute_practical_grades(roles)`: średnia jego trzech ocen (zaokrąglona do 0,5, połówki w górę — `round_grade`) trafia do jego kolumny w zbiorczym. Admin może ręcznie poprawić ocenę zbiorczą, ale kolejna zmiana ocen praktycznych tego członka ją nadpisze.
 
 ## Co zostało zrobione
 
@@ -154,6 +179,21 @@ Pola: `course` (FK), `first_name`, `last_name`, `pesel`, `birth_date`, `email`, 
   - *Dane kursu*: edytowalny formularz, przycisk "Zapisz zmiany" (PATCH)
   - *Uczestnicy*: tabela z usuwaniem (potwierdzenie inline)
 - **Lista uczestników** – tabela wszystkich zapisów z filtrem po kursie
+- **Instruktorzy** – lista instruktorów; przycisk zaproszenia zakłada konto (login = email) i wysyła link do ustawienia hasła ważny 72 h
+
+### Egzamin (zakładka w szczegółach kursu, komponent `ExamTab`)
+- Podzakładki: *Teoretyczny* (punkty z dwóch podejść + ocena końcowa), *Praktyczny*, *Zbiorczy*; kolumna „Średnia” w praktycznym i zbiorczym.
+- *Praktyczny*: admin przełącza się między członkami komisji i może wpisać oceny za każdego (np. z papierowej karty).
+- *Zbiorczy*: kolumny członków komisji wypełniają się same ze średnich z praktycznego; ocena końcowa = średnia z trzech kolumn.
+- „Wypełnij losowo” (tylko admin) — losowe wyniki w bieżącej podzakładce; teoretyczny: 27–30 pkt i ocena 5.
+- Dokument `egzamin.xlsx` (zakładka Dokumenty) — karty oceny wypełniane ocenami z tej zakładki.
+- Recertyfikacja: `obsluga-egzaminu-rec.xlsx` działa tak samo (wiersz-szablon `{{p_…}}` w kartach oceny i w zestawieniu), dodatkowo arkusz `DANE` z listą uczestników i numerami przedkładanych zaświadczeń.
+
+### Panel prowadzącego (`/prowadzacy`)
+- Konto zakłada admin zaproszeniem z listy instruktorów; `GET /api/users/me/` zwraca rolę `instructor`, uprawnienie `IsInstructor` (`courses/permissions.py`).
+- Prowadzący widzi kursy, w których prowadzi zajęcia lub jest w komisji; zakładki *Uczestnicy* (kontakt) i *Egzamin*.
+- W *Praktycznym* członek komisji widzi i wpisuje tylko swoje oceny RKO / ZAD 1 / ZAD 2 (rola z `my_committee_roles` kursu); teoretyczny i zbiorczy tylko do odczytu. Prowadzący spoza komisji nie wpisuje ocen.
+- Backend pilnuje tego sam: `InstructorEnrollmentDetailView` przekazuje serializerowi `editable_fields` z ról w komisji, pozostałe pola są ignorowane.
 
 ## Do zrobienia (następne kroki)
 - `users/` – model użytkownika uczestnika, rejestracja konta przy zapisie na kurs

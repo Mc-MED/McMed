@@ -1903,7 +1903,7 @@ const MANAGEMENT_XLSX_DOCUMENTS_KPP = [
 ]
 
 const MANAGEMENT_XLSX_DOCUMENTS_RECERT = [
-  { filename: 'obsluga-egzaminu-rec', label: 'Obsługa egzaminu recertyfikacyjnego', description: '' },
+  { filename: 'obsluga-egzaminu-rec', label: 'Obsługa egzaminu recertyfikacyjnego', description: 'Dane, teoria, praktyczny, zbiorczy i zestawienie do sprawozdania – z ocenami wpisanymi w zakładce Egzamin' },
 ]
 
 function CourseManagementTab({ courseId, courseType }) {
