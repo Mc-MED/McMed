@@ -175,8 +175,9 @@ class AdminEnrollmentListView(generics.ListAPIView):
             return qs.filter(course__isnull=True)
         qs = qs.filter(course__isnull=False)
         if course_id:
-            qs = qs.filter(course_id=course_id)
-        return qs
+            return qs.filter(course_id=course_id)
+        # Pozycja na liście ma sens tylko w obrębie jednego kursu
+        return qs.order_by('created_at')
 
 
 class AdminEnrollmentCreateView(generics.CreateAPIView):
@@ -322,6 +323,33 @@ def soft_delete_enrollment(request, pk):
     enrollment.deletion_reason = reason
     enrollment.save()
     return Response(EnrollmentSerializer(enrollment).data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def reorder_enrollments(request, pk):
+    """Nowa kolejność uczestników kursu: {"order": [id, id, …]} — wszyscy aktywni, każdy raz.
+
+    Usunięci uczestnicy zostają na swoich miejscach, żeby po przywróceniu wrócili tam, gdzie byli.
+    """
+    course = get_object_or_404(Course, pk=pk)
+    order = request.data.get('order')
+    with transaction.atomic():
+        enrollments = list(course.enrollments.select_for_update().order_by('position', 'created_at'))
+        active_ids = [e.id for e in enrollments if not e.is_deleted]
+        if not isinstance(order, list) or sorted(order, key=str) != sorted(active_ids, key=str):
+            return Response(
+                {'detail': 'Lista uczestników zmieniła się w międzyczasie. Odśwież stronę i spróbuj ponownie.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        by_id = {e.id: e for e in enrollments}
+        new_active = iter(order)
+        for position, enrollment in enumerate(enrollments, 1):
+            target = enrollment if enrollment.is_deleted else by_id[next(new_active)]
+            target.position = position
+        Enrollment.objects.bulk_update(enrollments, ['position'])
+    active = course.enrollments.filter(is_deleted=False).select_related('course')
+    return Response(EnrollmentSerializer(active, many=True).data)
 
 
 @api_view(['POST'])

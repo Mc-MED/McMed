@@ -26,6 +26,9 @@ export const adminFetchUnassignedEnrollments = () =>
 export const adminCreateEnrollment = (data) =>
   adminAxios.post('/api/courses/enrollments/admin-create/', data)
 
+export const adminReorderEnrollments = (courseId, order) =>
+  adminAxios.post(`/api/courses/admin/${courseId}/enrollments/reorder/`, { order }).then(r => r.data)
+
 export const adminDeleteEnrollment = (id) =>
   adminAxios.delete(`/api/courses/enrollments/${id}/`)
 

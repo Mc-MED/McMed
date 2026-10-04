@@ -107,6 +107,7 @@ McMed/
 | GET/PATCH | `/api/courses/admin/:id/` | Szczegóły / edycja kursu |
 | GET | `/api/courses/enrollments/list/` | Lista zapisów (opcjonalnie `?course=id`) |
 | DELETE | `/api/courses/enrollments/:id/` | Usuń zapis uczestnika |
+| POST | `/api/courses/admin/:id/enrollments/reorder/` | Nowa kolejność uczestników kursu: `{"order": [id, …]}` (wszyscy aktywni) |
 | POST | `/api/courses/instructors/:id/invite/` | Załóż konto prowadzącego i wyślij link do ustawienia hasła (72 h) |
 
 ### Panel prowadzącego (konto powiązane z `Instructor.user`)
@@ -141,7 +142,9 @@ Pola: `name`, `course_type` (kpp/recert), `city`, `max_participants`, `price`, `
 Properties: `spots_left`, `is_full`, `instructors_count` (ceil(max_participants/6)).
 
 ### Enrollment
-Pola: `course` (FK), `first_name`, `last_name`, `pesel`, `birth_date`, `email`, `phone`, `zip_code`, `city`, `street`, `house_number`, `apartment_number` (opcjonalne), `photo_consent`, `created_at`.
+Pola: `course` (FK), `first_name`, `last_name`, `pesel`, `birth_date`, `email`, `phone`, `zip_code`, `city`, `street`, `house_number`, `apartment_number` (opcjonalne), `photo_consent`, `created_at`, `position`.
+
+`position` — miejsce na liście kursu (domyślna kolejność modelu). Z niej wynika Lp. i numer zaświadczenia we wszystkich dokumentach. Nowy zapis i przeniesienie na inny kurs trafiają na koniec listy (`Enrollment.save`); usunięty uczestnik zachowuje miejsce i po przywróceniu na nie wraca. Admin zmienia kolejność w zakładce Uczestnicy (strzałki, wpisanie numeru, „Ustaw alfabetycznie”).
 
 Egzamin (skala ocen 3; 3,5; 4; 4,5; 5, teoretyczna ocena końcowa także 2):
 - Teoretyczny: `exam_theory_attempt1`, `exam_theory_attempt2` (punkty /30), `exam_theory_grade`.

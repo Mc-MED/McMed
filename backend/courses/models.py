@@ -251,6 +251,9 @@ class Enrollment(models.Model):
         default='none',
     )
     created_at       = models.DateTimeField(auto_now_add=True)
+    # Miejsce na liście kursu — z niego wynika Lp. w dokumentach. Usunięty uczestnik je zachowuje,
+    # więc po przywróceniu wraca na to samo miejsce.
+    position         = models.PositiveIntegerField(default=0)
 
     # Soft-delete
     is_deleted      = models.BooleanField(default=False)
@@ -262,10 +265,28 @@ class Enrollment(models.Model):
     ])
 
     class Meta:
-        ordering = ['created_at']
+        ordering = ['position', 'created_at']
 
     def __str__(self):
         return f'{self.last_name} {self.first_name} – {self.course}'
+
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        instance = super().from_db(db, field_names, values)
+        instance._loaded_course_id = instance.__dict__.get('course_id')
+        return instance
+
+    def save(self, *args, **kwargs):
+        # Nowy zapis albo przeniesienie na inny kurs → koniec listy tego kursu
+        moved = self.pk is not None and self.course_id != getattr(self, '_loaded_course_id', self.course_id)
+        if self.course_id and (not self.position or moved):
+            last = (Enrollment.objects.filter(course_id=self.course_id).exclude(pk=self.pk)
+                    .aggregate(models.Max('position'))['position__max'])
+            self.position = (last or 0) + 1
+            if kwargs.get('update_fields') is not None:
+                kwargs['update_fields'] = [*kwargs['update_fields'], 'position']
+        super().save(*args, **kwargs)
+        self._loaded_course_id = self.course_id
 
     def recompute_practical_grades(self, roles):
         """Po zmianie ocen praktycznych członków komisji (roles): średnia członka trafia do jego kolumny

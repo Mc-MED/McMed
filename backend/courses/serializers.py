@@ -188,11 +188,11 @@ class EnrollmentSerializer(ExamScoreValidationMixin, serializers.ModelSerializer
             'photo_consent', 'payment_status', 'exam_rko', 'exam_zad1', 'exam_zad2', *PRACTICAL_FIELDS,
             'exam_theory_attempt1', 'exam_theory_attempt2', 'exam_theory_grade',
             'exam_committee_chair', 'exam_committee_member1', 'exam_committee_member2',
-            'certificate_visible', 'created_at',
+            'certificate_visible', 'created_at', 'position',
             'is_deleted', 'deleted_at', 'deletion_reason', 'deletion_reason_display',
         ]
         read_only_fields = [
-            'id', 'course_name', 'exam_date', 'created_at', 'is_deleted', 'deleted_at', 'deletion_reason', 'deletion_reason_display',
+            'id', 'course_name', 'exam_date', 'created_at', 'position', 'is_deleted', 'deleted_at', 'deletion_reason', 'deletion_reason_display',
             'exam_rko', 'exam_zad1', 'exam_zad2',
         ]
 

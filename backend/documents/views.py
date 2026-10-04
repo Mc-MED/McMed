@@ -370,25 +370,25 @@ def download_xlsx(request, course_id, doc_name):
     if doc_name == 'zestawienie-rec':
         enrollments = list(
             course.enrollments.filter(deleted_at__isnull=True)
-            .order_by('last_name', 'first_name')
+            .order_by('position', 'created_at')
         )
         for ws in wb.worksheets:
             _xlsx_fill_enrollment_rows(ws, enrollments, course, ctx)
     elif doc_name == 'egzamin':
-        # Kolejność jak w zakładce Egzamin (wg daty zapisu), żeby Lp. się zgadzały
+        # Kolejność jak na liście uczestników kursu, żeby Lp. się zgadzały
         enrollments = list(
             course.enrollments.filter(deleted_at__isnull=True)
-            .order_by('created_at')
+            .order_by('position', 'created_at')
         )
         for name in ('EGZ Teoria', 'EGZ praktyczny', 'EGZ ZBIORCZY', 'Arkusz1'):
             _xlsx_fill_enrollment_rows(wb[name], enrollments, course, ctx, row_ctx=_egzamin_row_ctx)
         # NR TESTU = miesiąc i rok egzaminu (komórka ma format mmm-yy)
         wb['EGZ Teoria']['C4'] = course.exam_date
     elif doc_name == 'obsluga-egzaminu-rec':
-        # Kolejność jak w zakładce Egzamin (wg daty zapisu), żeby Lp. się zgadzały
+        # Kolejność jak na liście uczestników kursu, żeby Lp. się zgadzały
         enrollments = list(
             course.enrollments.filter(deleted_at__isnull=True)
-            .order_by('created_at')
+            .order_by('position', 'created_at')
         )
         _xlsx_fill_obsluga_egzaminu_rec(wb, enrollments, course, ctx)
     else:
@@ -469,7 +469,7 @@ def download_zaliczenia_zip(request, course_id, doc_name):
     enrollments = list(
         course.enrollments.filter(deleted_at__isnull=True)
         .select_related('user', 'course')
-        .order_by('last_name', 'first_name')
+        .order_by('position', 'created_at')
     )
     if not enrollments:
         return Response({'detail': 'Brak uczestników na tym kursie.'}, status=404)
@@ -570,7 +570,7 @@ def _build_certificate_context(enrollment):
     if course:
         ids = list(
             course.enrollments.filter(is_deleted=False)
-            .order_by('created_at')
+            .order_by('position', 'created_at')
             .values_list('id', flat=True)
         )
         lp = str(ids.index(enrollment.id) + 1).zfill(2) if enrollment.id in ids else ''
@@ -728,7 +728,7 @@ def download_xlsx_per_enrollment(request, course_id, doc_name):
         return Response({'detail': 'Brak pliku szablonu.'}, status=404)
 
     enrollments = list(
-        course.enrollments.filter(deleted_at__isnull=True).order_by('last_name', 'first_name')
+        course.enrollments.filter(deleted_at__isnull=True).order_by('position', 'created_at')
     )
     if not enrollments:
         return Response({'detail': 'Brak uczestników na tym kursie.'}, status=404)
@@ -773,7 +773,7 @@ def download_certificates_zip(request, course_id):
         return Response({'detail': 'Kurs nie istnieje.'}, status=404)
 
     enrollments = list(
-        course.enrollments.filter(deleted_at__isnull=True).order_by('last_name', 'first_name')
+        course.enrollments.filter(deleted_at__isnull=True).order_by('position', 'created_at')
     )
     if not enrollments:
         return Response({'detail': 'Brak uczestników na tym kursie.'}, status=404)

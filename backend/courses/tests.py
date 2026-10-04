@@ -178,3 +178,56 @@ class InviteInstructorTests(TestCase):
         res = self.client.post(f'/api/courses/instructors/{self.instructor.pk}/invite/')
         self.assertEqual(res.status_code, 400)
         send.assert_not_called()
+
+
+class EnrollmentPositionTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.client.force_authenticate(User.objects.create_superuser('admin', 'admin@example.com', 'haslo12345'))
+        self.course = Course.objects.create(name='Kurs')
+        self.a, self.b, self.c = (make_enrollment(self.course, last_name=n) for n in ('A', 'B', 'C'))
+
+    def active(self):
+        return [e.last_name for e in self.course.enrollments.filter(is_deleted=False)]
+
+    def reorder(self, *enrollments):
+        return self.client.post(
+            f'/api/courses/admin/{self.course.pk}/enrollments/reorder/', {'order': [e.pk for e in enrollments]}, format='json',
+        )
+
+    def test_new_enrollment_goes_to_the_end(self):
+        self.assertEqual([e.position for e in (self.a, self.b, self.c)], [1, 2, 3])
+
+    def test_restored_enrollment_returns_to_its_place(self):
+        self.client.post(f'/api/courses/enrollments/{self.b.pk}/remove/', {'reason': 'forfeit'}, format='json')
+        self.assertEqual(self.active(), ['A', 'C'])
+        self.client.post(f'/api/courses/enrollments/{self.b.pk}/restore/')
+        self.assertEqual(self.active(), ['A', 'B', 'C'])
+
+    def test_reorder(self):
+        response = self.reorder(self.c, self.a, self.b)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([e['last_name'] for e in response.data], ['C', 'A', 'B'])
+        self.assertEqual(self.active(), ['C', 'A', 'B'])
+
+    def test_reorder_keeps_place_of_deleted_enrollment(self):
+        self.client.post(f'/api/courses/enrollments/{self.b.pk}/remove/', {'reason': 'forfeit'}, format='json')
+        self.assertEqual(self.reorder(self.c, self.a).status_code, 200)
+        self.client.post(f'/api/courses/enrollments/{self.b.pk}/restore/')
+        self.assertEqual(self.active(), ['C', 'B', 'A'])
+
+    def test_reorder_rejects_incomplete_list(self):
+        self.assertEqual(self.reorder(self.c, self.a).status_code, 400)
+        self.assertEqual(self.active(), ['A', 'B', 'C'])
+
+    def test_transfer_to_another_course_goes_to_the_end(self):
+        other = Course.objects.create(name='Inny', max_participants=10)
+        make_enrollment(other, last_name='X')
+        response = self.client.patch(f'/api/courses/enrollments/{self.a.pk}/', {'course': other.pk}, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([e.last_name for e in other.enrollments.all()], ['X', 'A'])
+
+    def test_saving_grades_keeps_position(self):
+        self.reorder(self.c, self.a, self.b)
+        self.client.patch(f'/api/courses/enrollments/{self.c.pk}/', {'exam_chair_rko': '5'}, format='json')
+        self.assertEqual(self.active(), ['C', 'A', 'B'])

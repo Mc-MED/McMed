@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { adminFetchCourse, adminUpdateCourse, adminDeleteCourse, adminFetchEnrollments, adminDeleteEnrollment, adminUpdateEnrollment, adminAnonymizeEnrollment, adminSoftDeleteEnrollment, adminFetchCourses, adminDownloadDocument, adminDownloadDocumentPdf, adminDownloadXlsx, adminDownloadAttendanceXlsx, adminFetchInstructors, adminSendEmail, adminSendSms, adminCreateEnrollment, adminDownloadCertificate, adminDownloadCertificatesZip, adminDownloadZaliczeniaZip } from '../../api/admin'
+import { adminFetchCourse, adminUpdateCourse, adminDeleteCourse, adminFetchEnrollments, adminReorderEnrollments, adminDeleteEnrollment, adminUpdateEnrollment, adminAnonymizeEnrollment, adminSoftDeleteEnrollment, adminFetchCourses, adminDownloadDocument, adminDownloadDocumentPdf, adminDownloadXlsx, adminDownloadAttendanceXlsx, adminFetchInstructors, adminSendEmail, adminSendSms, adminCreateEnrollment, adminDownloadCertificate, adminDownloadCertificatesZip, adminDownloadZaliczeniaZip } from '../../api/admin'
 import DeletionReasonModal from '../../components/DeletionReasonModal'
 import { adminGetCourseFiles, adminUploadCourseFile, adminDownloadCourseFile, adminDeleteCourseFile } from '../../api/documents'
 import * as XLSX from 'xlsx'
@@ -689,6 +689,8 @@ function EnrollmentTable({ courseId, courseName, examDate, startDate, courseType
   const [processingId, setProcessingId]   = useState(null)
   const [togglingDeposit, setTogglingDeposit] = useState(null)
   const [downloadingCert, setDownloadingCert] = useState(null)
+  const [reordering, setReordering]           = useState(false)
+  const [reorderError, setReorderError]       = useState('')
 
   // modals
   const [editingEnrollment, setEditingEnrollment]   = useState(null)
@@ -717,6 +719,38 @@ function EnrollmentTable({ courseId, courseName, examDate, startDate, courseType
     } finally {
       setTogglingDeposit(null)
     }
+  }
+
+  // Kolejność na liście = Lp. we wszystkich dokumentach kursu
+  async function saveOrder(next) {
+    if (reordering) return
+    const previous = enrollments
+    setReordering(true)
+    setReorderError('')
+    setEnrollments(next)
+    try {
+      setEnrollments(await adminReorderEnrollments(courseId, next.map(e => e.id)))
+    } catch (err) {
+      setEnrollments(previous)
+      setReorderError(err.response?.data?.detail || 'Nie udało się zapisać kolejności.')
+    } finally {
+      setReordering(false)
+    }
+  }
+
+  function moveEnrollment(from, to) {
+    const target = Math.max(0, Math.min(enrollments.length - 1, to))
+    if (!Number.isInteger(target) || target === from) return
+    const next = [...enrollments]
+    const [moved] = next.splice(from, 1)
+    next.splice(target, 0, moved)
+    saveOrder(next)
+  }
+
+  function sortAlphabetically() {
+    if (!confirm('Ustawić uczestników alfabetycznie? Numery Lp. w dokumentach zmienią się zgodnie z nową kolejnością.')) return
+    const name = e => `${e.last_name} ${e.first_name}`
+    saveOrder([...enrollments].sort((a, b) => name(a).localeCompare(name(b), 'pl')))
   }
 
   async function handleDelete(id) {
@@ -844,7 +878,7 @@ function EnrollmentTable({ courseId, courseName, examDate, startDate, courseType
           courseId={parseInt(courseId)}
           courseType={courseType}
           onSave={created => {
-            setEnrollments(prev => [created, ...prev])
+            setEnrollments(prev => [...prev, created])
             setAddingParticipant(false)
           }}
           onClose={() => setAddingParticipant(false)}
@@ -883,8 +917,21 @@ function EnrollmentTable({ courseId, courseName, examDate, startDate, courseType
 
       {/* Toolbar */}
       <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-gray-500">{count} uczestnik{suffix}</p>
+        <p className="text-sm text-gray-500">
+          {count} uczestnik{suffix}
+          {reorderError && <span className="ml-3 text-red-600">{reorderError}</span>}
+        </p>
         <div className="flex gap-2">
+          {count > 1 && (
+            <button
+              onClick={sortAlphabetically}
+              disabled={reordering}
+              title="Ustawia Lp. według nazwisk"
+              className="text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+            >
+              Ustaw alfabetycznie
+            </button>
+          )}
           <button
             onClick={() => exportToExcel(enrollments, courseName)}
             className="flex items-center gap-1.5 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 active:bg-green-800 px-4 py-2 rounded-lg transition-colors"
@@ -1033,7 +1080,7 @@ function EnrollmentTable({ courseId, courseName, examDate, startDate, courseType
           <thead>
             <tr className="border-b border-gray-100 bg-gray-50 text-left">
               {(emailMode || smsMode) && <th className="px-4 py-3.5 w-10"></th>}
-              <th className="px-4 py-3.5 font-semibold text-gray-600 w-10">Lp.</th>
+              <th className="px-4 py-3.5 font-semibold text-gray-600 w-24" title="Numer w dokumentach kursu. Wpisz inny numer albo użyj strzałek, żeby przenieść uczestnika.">Lp.</th>
               <th className="px-5 py-3.5 font-semibold text-gray-600">Uczestnik</th>
               <th className="px-5 py-3.5 font-semibold text-gray-600">PESEL</th>
               <th className="px-5 py-3.5 font-semibold text-gray-600">Data ur.</th>
@@ -1065,7 +1112,40 @@ function EnrollmentTable({ courseId, courseName, examDate, startDate, courseType
                     />
                   </td>
                 )}
-                <td className="px-4 py-4 text-gray-400 text-sm tabular-nums">{idx + 1}</td>
+                <td className="px-4 py-4 whitespace-nowrap" onClick={ev => ev.stopPropagation()}>
+                  <div className="flex items-center gap-1">
+                    <input
+                      key={`${e.id}-${idx}`}
+                      type="number"
+                      min="1"
+                      max={enrollments.length}
+                      defaultValue={idx + 1}
+                      disabled={reordering}
+                      aria-label={`Lp. – ${e.last_name} ${e.first_name}`}
+                      onKeyDown={ev => { if (ev.key === 'Enter') ev.currentTarget.blur() }}
+                      onBlur={ev => {
+                        const to = parseInt(ev.currentTarget.value, 10) - 1
+                        if (Number.isInteger(to) && to !== idx) moveEnrollment(idx, to)
+                        else ev.currentTarget.value = idx + 1
+                      }}
+                      className="w-11 text-center text-sm tabular-nums text-gray-700 border border-gray-200 rounded px-1 py-0.5 focus:outline-none focus:border-blue-500 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                    />
+                    <div className="flex flex-col leading-none">
+                      <button
+                        onClick={() => moveEnrollment(idx, idx - 1)}
+                        disabled={reordering || idx === 0}
+                        title="Przenieś wyżej"
+                        className="text-[10px] text-gray-400 hover:text-gray-900 disabled:opacity-20 disabled:hover:text-gray-400"
+                      >▲</button>
+                      <button
+                        onClick={() => moveEnrollment(idx, idx + 1)}
+                        disabled={reordering || idx === enrollments.length - 1}
+                        title="Przenieś niżej"
+                        className="text-[10px] text-gray-400 hover:text-gray-900 disabled:opacity-20 disabled:hover:text-gray-400"
+                      >▼</button>
+                    </div>
+                  </div>
+                </td>
                 <td className="px-5 py-4 font-medium text-gray-900">{e.last_name} {e.first_name}</td>
                 <td className="px-5 py-4 text-gray-600 font-mono tracking-wide whitespace-nowrap">
                   {e.pesel || <span className="text-gray-300 italic">usunięto</span>}
