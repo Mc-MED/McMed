@@ -195,6 +195,9 @@ def _egzamin_row_ctx(enr, lp, course):
     def points(value, empty):
         return f'{value}/30' if value is not None else empty
 
+    c_n  = course.course_number or ''
+    year = str((course.exam_date or datetime.date.today()).year)[-2:]
+
     return {
         'p_lp':                  lp,
         'p_lp_pad':              str(lp).zfill(2),
@@ -211,8 +214,8 @@ def _egzamin_row_ctx(enr, lp, course):
         'p_committee_member1':   _grade(enr.exam_committee_member1),
         'p_committee_member2':   _grade(enr.exam_committee_member2),
         'p_final_grade':         _avg_grade([enr.exam_committee_chair, enr.exam_committee_member1, enr.exam_committee_member2]),
-        'p_cert_number':         enr.cert_number or '',
-        'p_cert_date':           enr.cert_date.strftime('%d.%m.%Y') if enr.cert_date else '',
+        'p_cert_number':         f'KPP/EK/{c_n}/{year}/{str(lp).zfill(2)}',
+        'p_cert_date':           course.exam_date.strftime('%d.%m.%Y') if course.exam_date else '',
     }
 
 
