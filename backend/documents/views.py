@@ -23,7 +23,7 @@ from .models import Topic, TopicFile, TopicFileProgress, QuizProgress, CourseFil
 
 TEMPLATES_DIR = Path(__file__).parent / 'templates'
 
-ALLOWED_TEMPLATES = {'oswiadczenie', 'sprzet', 'sale', 'wniosek', 'prosba', 'instruktorzy', 'prosba-recertyfikacja', 'informacja-kpp', 'sprawozdanie-egzamin-rec'}
+ALLOWED_TEMPLATES = {'oswiadczenie', 'sprzet', 'sale', 'wniosek', 'prosba', 'instruktorzy', 'prosba-recertyfikacja', 'informacja-kpp', 'sprawozdanie-egzamin-rec', 'sprawozdanie-egzamin'}
 
 ALLOWED_ENROLLMENT_ZIP_TEMPLATES = {'zaliczenia_tematow_KPP'}
 

@@ -1972,7 +1972,9 @@ function DocumentsTab({ courseId, courseType }) {
 
 // ─── Zakładka: Obsługa kursu ──────────────────────────────────────────
 
-const MANAGEMENT_DOCUMENTS_KPP = []
+const MANAGEMENT_DOCUMENTS_KPP = [
+  { filename: 'sprawozdanie-egzamin', label: 'Sprawozdanie z egzaminu KPP', description: '' },
+]
 
 const MANAGEMENT_DOCUMENTS_RECERT = [
   { filename: 'sprawozdanie-egzamin-rec', label: 'Sprawozdanie z egzaminu recertyfikacyjnego', description: '' },
