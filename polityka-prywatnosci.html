@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polityka prywatności – Mc Med</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --red:        #C0392B;
+            --red-dark:   #A93226;
+            --red-light:  #FDECEA;
+            --dark:       #1A1A1A;
+            --gray-dark:  #333333;
+            --gray:       #666666;
+            --gray-light: #F7F7F7;
+            --border:     #E5E5E5;
+            --white:      #FFFFFF;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            color: var(--dark);
+            background: var(--gray-light);
+            line-height: 1.7;
+        }
+
+        a { color: var(--red); }
+
+        /* ─── NAVBAR ─────────────────────────────────── */
+        nav {
+            height: 70px;
+            background: var(--white);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .nav-inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+        }
+
+        .nav-brand img { height: 40px; width: auto; }
+
+        .nav-brand-name {
+            font-size: 1.35rem;
+            font-weight: 800;
+            color: var(--dark);
+            letter-spacing: -0.5px;
+        }
+
+        .nav-back {
+            color: var(--gray-dark);
+            text-decoration: none;
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+
+        .nav-back:hover { color: var(--red); }
+
+        /* ─── DOKUMENT ───────────────────────────────── */
+        main {
+            max-width: 860px;
+            margin: 3rem auto;
+            padding: 3rem 3.5rem;
+            background: var(--white);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+        }
+
+        h1 {
+            font-size: 1.75rem;
+            font-weight: 800;
+            line-height: 1.3;
+            letter-spacing: -0.5px;
+            margin-bottom: 0.5rem;
+        }
+
+        .doc-sub { color: var(--gray); font-size: 0.95rem; }
+
+        h1 + * { margin-top: 0; }
+        .doc-head { padding-bottom: 1.5rem; margin-bottom: 0.5rem; border-bottom: 3px solid var(--red); }
+
+        h2 {
+            font-size: 1.15rem;
+            font-weight: 700;
+            margin: 2.25rem 0 0.75rem;
+            scroll-margin-top: 1rem;
+        }
+
+        h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 1.25rem 0 0.4rem;
+        }
+
+        p, li { font-size: 0.97rem; color: var(--gray-dark); }
+        p { margin-bottom: 0.6rem; }
+        p.meta { margin-top: 2rem; }
+
+        ol { padding-left: 1.6rem; margin-bottom: 0.6rem; }
+        ol > li { margin-bottom: 0.5rem; padding-left: 0.3rem; }
+        ol > li::marker { color: var(--red); font-weight: 600; }
+        ul { padding-left: 1.4rem; margin-top: 0.35rem; list-style: disc; }
+        ul > li { margin-bottom: 0.2rem; }
+
+
+        /* ─── FOOTER ─────────────────────────────────── */
+        footer {
+            background: var(--dark);
+            color: #888;
+            padding: 30px 2rem;
+            font-size: 0.85rem;
+        }
+
+        .footer-inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem 1.5rem;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .footer-links { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; }
+        footer a { color: #aaa; text-decoration: none; }
+        footer a:hover { color: var(--red); }
+
+        @media (max-width: 700px) {
+            .nav-inner { padding: 0 16px; }
+            main { margin: 0; padding: 2rem 16px; border: 0; border-radius: 0; }
+            h1 { font-size: 1.4rem; }
+            footer { padding: 24px 16px; }
+        }
+
+        @media print {
+            nav, footer { display: none; }
+            body { background: #fff; }
+            main { margin: 0; padding: 0; border: 0; max-width: none; }
+            a { color: inherit; text-decoration: none; }
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="nav-inner">
+        <a href="/" class="nav-brand">
+            <img src="logomc.svg" alt="Mc Med">
+            <span class="nav-brand-name">Mc Med</span>
+        </a>
+        <a href="/" class="nav-back">&#8592; Strona główna</a>
+    </div>
+</nav>
+
+<main>
+    <div class="doc-head">
+        <h1>POLITYKA PRYWATNOŚCI</h1>
+        <p class="doc-sub">Serwisu internetowego <a href="https://mcmed.pl/">www.mcmed.pl</a></p><p class="doc-sub">Data obowiązywania: 01.09.2026 r.</p>
+    </div>
+<h2 id="par-1">§ 1. Administrator danych osobowych</h2>
+<ol>
+<li>Administratorem danych osobowych przetwarzanych za pośrednictwem serwisu <a href="https://mcmed.pl/">www.mcmed.pl</a> jest Mc MED Maciej Świerszcz, prowadzący działalność gospodarczą, zwany dalej „Administratorem”.
+</li>
+<li>Dane identyfikacyjne i kontaktowe Administratora:
+<ul>
+<li>Nazwa firmy: Mc MED Maciej Świerszcz
+</li>
+<li>NIP: 8491546237
+</li>
+<li>Adres: 19-311 Chruściele 22CG
+</li>
+<li>E-mail: <a href="mailto:mcmed@wp.pl">mcmed@wp.pl</a>
+</li>
+<li>Telefon: <a href="tel:+48785725603">785 725 603</a>
+</li></ul>
+</li>
+<li>W sprawach dotyczących przetwarzania danych osobowych można kontaktować się z Administratorem za pośrednictwem wskazanego adresu e-mail lub adresu korespondencyjnego.
+</li>
+<li>Administrator przetwarza dane osobowe zgodnie z rozporządzeniem Parlamentu Europejskiego i Rady (UE) 2016/679 (RODO) oraz pozostałymi obowiązującymi przepisami prawa.
+</li></ol>
+<h2 id="par-2">§ 2. Zakres przetwarzanych danych</h2>
+<ol>
+<li>W związku z zapisami na kursy kwalifikowanej pierwszej pomocy (KPP) Administrator przetwarza następujące dane:
+<ul>
+<li>imię i nazwisko;
+</li>
+<li>adres zamieszkania;
+</li>
+<li>adres e-mail;
+</li>
+<li>numer telefonu;
+</li>
+<li>wybrany kurs i termin szkolenia;
+</li>
+<li>informacje o dokonanym zapisie i statusie płatności.
+</li></ul>
+</li>
+<li>W przypadku wystawiania faktur Administrator przetwarza również dane niezbędne do ich wystawienia, w szczególności nazwę firmy, adres i NIP, a w odpowiednich przypadkach inne wymagane dane nabywcy.
+</li>
+<li>W związku z realizacją kursów KPP, przeprowadzaniem egzaminów i wydawaniem zaświadczeń Administrator przetwarza dane wymagane przepisami dotyczącymi tych szkoleń, w szczególności informacje o obecności, wynikach egzaminów i wydanych zaświadczeniach.
+</li>
+<li>Jeżeli w szkoleniu uczestniczy osoba niepełnoletnia, Administrator może przetwarzać dane jej przedstawiciela ustawowego w zakresie niezbędnym do udokumentowania wymaganej zgody i organizacji szkolenia.
+</li>
+<li>W ramach działania serwisu mogą być również przetwarzane dane techniczne, takie jak adres IP, informacje o przeglądarce, urządzeniu, czasie połączenia i zdarzeniach związanych z bezpieczeństwem, w zakresie wynikającym z faktycznej konfiguracji aplikacji i infrastruktury.
+</li>
+<li>Administrator nie wymaga podawania danych dotyczących stanu zdrowia w standardowym formularzu zapisu na kurs.
+</li></ol>
+<h2 id="par-3">§ 3. Cele i podstawy prawne przetwarzania</h2>
+<p>Administrator przetwarza dane osobowe w następujących celach:</p>
+<h3>1. Obsługa zapisów i realizacja kursów</h3>
+<p>Przyjmowanie zgłoszeń, rezerwacja miejsc, potwierdzanie uczestnictwa, przekazywanie informacji organizacyjnych i realizacja szkoleń.</p>
+<p>Podstawa prawna: art. 6 ust. 1 lit. b RODO – wykonanie umowy lub podjęcie działań przed jej zawarciem.</p>
+<p>W przypadku danych przedstawicieli firm lub innych osób niebędących stroną umowy podstawą może być art. 6 ust. 1 lit. f RODO – prawnie uzasadniony interes polegający na organizacji współpracy i kontaktowaniu się w sprawie szkolenia.</p>
+<h3>2. Obsługa płatności</h3>
+<p>Realizacja i potwierdzanie płatności, identyfikacja transakcji oraz dokonywanie ewentualnych zwrotów.</p>
+<p>Podstawa prawna: art. 6 ust. 1 lit. b RODO.</p>
+<h3>3. Fakturowanie i obowiązki podatkowe</h3>
+<p>Wystawianie i przechowywanie faktur, prowadzenie wymaganej dokumentacji księgowej oraz realizacja obowiązków podatkowych.</p>
+<p>Podstawa prawna: art. 6 ust. 1 lit. c RODO.</p>
+<h3>4. Dokumentacja szkoleń KPP</h3>
+<p>Prowadzenie dokumentacji kursowej, egzaminacyjnej, ewidencji wyników i wydanych zaświadczeń.</p>
+<p>Podstawa prawna: art. 6 ust. 1 lit. c RODO – w zakresie wynikającym z przepisów dotyczących kursów KPP; w pozostałym niezbędnym zakresie art. 6 ust. 1 lit. b RODO.</p>
+<h3>5. Kontakt i reklamacje</h3>
+<p>Odpowiadanie na pytania, obsługa korespondencji, zgłoszeń oraz reklamacji.</p>
+<p>Podstawa prawna: art. 6 ust. 1 lit. b, c lub f RODO, zależnie od charakteru sprawy.</p>
+<h3>6. Bezpieczeństwo oraz ochrona roszczeń</h3>
+<p>Zapewnienie bezpieczeństwa aplikacji, przeciwdziałanie nadużyciom oraz ustalanie, dochodzenie i obrona przed roszczeniami.</p>
+<p>Podstawa prawna: art. 6 ust. 1 lit. f RODO – prawnie uzasadniony interes Administratora.</p>
+<h2 id="par-4">§ 4. System zapisów i infrastruktura</h2>
+<ol>
+<li>W celu zapewnienia prawidłowego funkcjonowania serwisu oraz obsługi zapisów na kursy Administrator korzysta z usług zewnętrznych dostawców infrastruktury informatycznej, w tym usług hostingowych oraz usług przechowywania i obsługi baz danych. Podmioty te mogą przetwarzać dane osobowe w imieniu Administratora na podstawie odpowiednich umów powierzenia przetwarzania danych.
+</li>
+<li>Zgodnie z konfiguracją wskazaną przez Administratora infrastruktura aplikacji i baza danych są zlokalizowane w regionach Europejskiego Obszaru Gospodarczego (EOG).
+</li>
+<li>Dostawcy infrastruktury mogą przetwarzać dane osobowe w imieniu Administratora w zakresie niezbędnym do świadczenia usług i na warunkach właściwych umów o przetwarzanie danych.
+</li>
+<li>Korzystanie z infrastruktury znajdującej się w EOG nie wyklucza innych operacji przetwarzania danych związanych z obsługą i utrzymaniem usług. Zasady ewentualnego przekazywania danych poza EOG określa § 9.
+</li></ol>
+<h2 id="par-5">§ 5. Płatności</h2>
+<ol>
+<li>Administrator umożliwia opłacanie kursów kwalifikowanej pierwszej pomocy:
+<ul>
+<li>elektronicznie, za pośrednictwem systemu Przelewy24;
+</li>
+<li>gotówką.
+</li></ul>
+</li>
+<li>Operatorem systemu Przelewy24 jest PayPro S.A., ul. Pastelowa 8, 60-198 Poznań.
+</li>
+<li>W przypadku wyboru płatności elektronicznej dane niezbędne do przeprowadzenia i identyfikacji transakcji są przekazywane operatorowi płatności.
+</li>
+<li>PayPro S.A. przetwarza dane płatników jako odrębny administrator danych osobowych, zgodnie z obowiązującymi przepisami oraz własnymi obowiązkami informacyjnymi.
+</li>
+<li>Administrator otrzymuje dane niezbędne do identyfikacji i rozliczenia transakcji, w tym jej identyfikator, kwotę i status.
+</li>
+<li>Szczegółowe informacje dotyczące przetwarzania danych przez operatora płatności są dostępne na stronie <a href="https://www.przelewy24.pl" target="_blank" rel="noopener">www.przelewy24.pl</a>.
+</li>
+<li>W przypadku płatności gotówką dane rozliczeniowe są przetwarzane w celu wykonania umowy oraz realizacji obowiązków podatkowych.
+</li></ol>
+<h2 id="par-6">§ 6. Wystawianie faktur i korespondencja</h2>
+<ol>
+<li>W celu wystawiania i obsługi faktur Administrator korzysta z usług zewnętrznych dostawców systemów księgowych i fakturowania, którym przekazywane są dane osobowe w zakresie niezbędnym do realizacji obowiązków księgowych i podatkowych.
+</li>
+<li>W celu obsługi korespondencji elektronicznej Administrator korzysta z usług zewnętrznych dostawców poczty elektronicznej.
+</li>
+<li>W ramach obsługi korespondencji przetwarzane mogą być adresy e-mail, dane nadawców i odbiorców, treść wiadomości oraz załączniki.
+</li>
+<li>Dostawcy usług mogą przetwarzać dane osobowe w imieniu Administratora na podstawie odpowiednich umów powierzenia przetwarzania danych, jeżeli są one wymagane przepisami prawa.
+</li></ol>
+<h2 id="par-7">§ 7. Odbiorcy danych osobowych</h2>
+<ol>
+<li>Dane osobowe mogą być przekazywane następującym kategoriom odbiorców, w zakresie niezbędnym do realizacji określonych celów:
+<ul>
+<li>dostawcom usług hostingowych, infrastruktury informatycznej oraz usług bazodanowych;
+</li>
+<li>operatorom płatności elektronicznych;
+</li>
+<li>dostawcom systemów do wystawiania i obsługi faktur;
+</li>
+<li>dostawcom usług poczty elektronicznej;
+</li>
+<li>instruktorom, członkom komisji egzaminacyjnych oraz innym osobom uczestniczącym w organizacji i realizacji kursów, w zakresie niezbędnym do wykonywania ich obowiązków.
+</li></ul>
+</li>
+<li>Dane osobowe mogą być również udostępniane właściwemu wojewodzie oraz innym organom i instytucjom publicznym uprawnionym do ich otrzymania na podstawie obowiązujących przepisów prawa.
+</li>
+<li>Niektórzy odbiorcy przetwarzają dane osobowe w imieniu Administratora na podstawie odpowiednich umów powierzenia przetwarzania danych, natomiast inni działają jako odrębni administratorzy danych, zgodnie z charakterem świadczonych usług i obowiązującymi przepisami prawa.
+</li>
+<li>Administrator przekazuje dane osobowe wyłącznie w zakresie niezbędnym do realizacji określonych celów lub wykonania obowiązków prawnych.
+</li>
+<li>Administrator nie sprzedaje danych osobowych uczestników kursów.
+</li></ol>
+<h2 id="par-8">§ 8. Okres przechowywania danych</h2>
+<ol>
+<li>Dane wykorzystywane do zapisów i realizacji umów są przechowywane przez okres niezbędny do wykonania umowy, a następnie przez okres niezbędny do ustalenia, dochodzenia lub obrony przed roszczeniami.
+</li>
+<li>Protokoły egzaminacyjne oraz dokumentacja kursowa wskazana w § 10a rozporządzenia Ministra Zdrowia z dnia 19 marca 2007 r. w sprawie kursu w zakresie kwalifikowanej pierwszej pomocy przechowywane są przez 5 lat, licząc od końca roku kalendarzowego, w którym przeprowadzono egzamin.
+</li>
+<li>Dokumenty księgowe i podatkowe są przechowywane przez okresy wymagane obowiązującymi przepisami prawa.
+</li>
+<li>Dane zawarte w korespondencji są przechowywane przez okres niezbędny do obsługi sprawy, a następnie, jeżeli jest to uzasadnione, do czasu upływu właściwych terminów przedawnienia roszczeń.
+</li>
+<li>Dane techniczne i logi systemowe przechowywane są przez okres 30 dni od ich utworzenia. Dane związane z wykrytymi incydentami bezpieczeństwa mogą być przechowywane dłużej, jeżeli jest to niezbędne do wyjaśnienia incydentu lub dochodzenia roszczeń.
+</li>
+<li>Dane związane z zapisami na kursy, które nie należą do dokumentacji objętej obowiązkową retencją, nie są automatycznie przechowywane przez 5 lat wyłącznie z powodu obowiązku archiwizacji dokumentacji KPP.
+</li>
+<li>Po upływie właściwych okresów przechowywania dane są usuwane lub anonimizowane, chyba że dalsze przechowywanie jest wymagane na podstawie przepisów prawa.
+</li></ol>
+<h2 id="par-9">§ 9. Przekazywanie danych poza Europejski Obszar Gospodarczy</h2>
+<ol>
+<li>Administrator korzysta z infrastruktury informatycznej zlokalizowanej na terenie Europejskiego Obszaru Gospodarczego (EOG).
+</li>
+<li>W związku z korzystaniem z usług zewnętrznych dostawców technologicznych niektóre dane osobowe mogą być przekazywane poza EOG, w szczególności do Stanów Zjednoczonych i Singapuru, w zakresie niezbędnym do zapewnienia prawidłowego funkcjonowania usług, wsparcia technicznego oraz bezpieczeństwa systemów.
+</li>
+<li>Przekazywanie danych poza EOG odbywa się zgodnie z rozdziałem V RODO, w szczególności na podstawie decyzji Komisji Europejskiej stwierdzającej odpowiedni stopień ochrony (art. 45 RODO) lub z zastosowaniem odpowiednich zabezpieczeń, takich jak standardowe klauzule umowne zatwierdzone przez Komisję Europejską (art. 46 RODO), wraz z dodatkowymi środkami ochrony, jeżeli są wymagane.
+</li>
+<li>Informacje o stosowanych zabezpieczeniach oraz sposobie uzyskania ich kopii można uzyskać, kontaktując się z Administratorem za pośrednictwem danych kontaktowych wskazanych w § 1.
+</li></ol>
+<h2 id="par-10">§ 10. Pliki cookies i technologie podobne</h2>
+<ol>
+<li>Serwis internetowy może wykorzystywać pliki cookies lub podobne mechanizmy przechowywania informacji w urządzeniu użytkownika, w zakresie wynikającym z faktycznej konfiguracji aplikacji.
+</li>
+<li>Pliki cookies niezbędne do prawidłowego działania serwisu lub zapewnienia funkcji wyraźnie żądanych przez użytkownika mogą być wykorzystywane bez odrębnej zgody, w przypadkach przewidzianych prawem.
+</li>
+<li>Stosowanie innych plików cookies lub podobnych technologii wymagających zgody jest dopuszczalne po jej uzyskaniu.
+</li>
+<li>Użytkownik może zarządzać plikami cookies za pomocą ustawień przeglądarki. Jeśli serwis wykorzystuje technologie wymagające zgody, Administrator zapewnia również odpowiedni mechanizm zarządzania taką zgodą.
+</li></ol>
+<h2 id="par-11">§ 11. Prawa osób, których dane dotyczą</h2>
+<ol>
+<li>Osobom, których dane osobowe są przetwarzane, przysługuje – w przypadkach i na zasadach przewidzianych w RODO – prawo do:
+<ul>
+<li>dostępu do danych osobowych;
+</li>
+<li>sprostowania danych;
+</li>
+<li>usunięcia danych;
+</li>
+<li>ograniczenia przetwarzania;
+</li>
+<li>przenoszenia danych;
+</li>
+<li>wniesienia sprzeciwu wobec przetwarzania opartego na prawnie uzasadnionym interesie Administratora;
+</li>
+<li>cofnięcia zgody w dowolnym momencie, jeżeli przetwarzanie odbywa się na jej podstawie.
+</li></ul>
+</li>
+<li>Wycofanie zgody nie wpływa na zgodność z prawem przetwarzania dokonanego przed jej wycofaniem.
+</li>
+<li>Żądania dotyczące realizacji wskazanych praw można kierować na adres e-mail Administratora.
+</li>
+<li>Prawo do usunięcia danych nie ma charakteru bezwzględnego. Administrator może być zobowiązany do dalszego przechowywania określonych danych na podstawie obowiązujących przepisów prawa.
+</li>
+<li>Każdej osobie przysługuje również prawo wniesienia skargi do Prezesa Urzędu Ochrony Danych Osobowych (<a href="https://www.uodo.gov.pl" target="_blank" rel="noopener">www.uodo.gov.pl</a>).
+</li></ol>
+<h2 id="par-12">§ 12. Dobrowolność podania danych</h2>
+<ol>
+<li>Podanie danych niezbędnych do zawarcia i wykonania umowy o udział w kursie jest warunkiem dokonania zapisu.
+</li>
+<li>Niepodanie tych danych może uniemożliwić zapisanie się na kurs lub jego realizację.
+</li>
+<li>Podanie danych wymaganych do prowadzenia dokumentacji kursowej, egzaminacyjnej i podatkowej może wynikać z obowiązujących przepisów prawa.
+</li>
+<li>Podanie dodatkowych danych, które nie są konieczne do realizacji umowy lub obowiązku prawnego, jest dobrowolne, jeśli Administrator przewiduje możliwość ich przekazania.
+</li></ol>
+<h2 id="par-13">§ 13. Dane osób zapisanych przez firmy i inne podmioty</h2>
+<ol>
+<li>W przypadku zapisania uczestnika przez pracodawcę, firmę lub inny podmiot organizujący szkolenie Administrator może otrzymać dane uczestnika bezpośrednio od tego podmiotu.
+</li>
+<li>W takim przypadku przetwarzane mogą być dane identyfikacyjne i kontaktowe oraz informacje niezbędne do udziału w kursie.
+</li>
+<li>Administrator realizuje obowiązek informacyjny wobec takich osób zgodnie z art. 14 RODO, z uwzględnieniem wyjątków przewidzianych przepisami prawa.
+</li></ol>
+<h2 id="par-14">§ 14. Bezpieczeństwo danych</h2>
+<ol>
+<li>Administrator stosuje środki techniczne i organizacyjne odpowiednie do ryzyka związanego z przetwarzaniem danych osobowych.
+</li>
+<li>Dostęp do danych osobowych jest ograniczony do osób upoważnionych oraz podmiotów, którym dostęp jest niezbędny do świadczenia określonych usług.
+</li>
+<li>Administrator podejmuje działania w celu ochrony danych przed nieuprawnionym dostępem, utratą, zniszczeniem, ujawnieniem lub nieuprawnioną modyfikacją.
+</li>
+<li>Środki bezpieczeństwa są dobierane z uwzględnieniem charakteru przetwarzanych danych oraz aktualnych zagrożeń.
+</li></ol>
+<h2 id="par-15">§ 15. Zautomatyzowane podejmowanie decyzji</h2>
+<ol>
+<li>Automatyczne przetwarzanie zgłoszeń, potwierdzanie zapisów lub rejestrowanie statusów płatności nie stanowi samo w sobie zautomatyzowanego podejmowania decyzji w rozumieniu art. 22 RODO.
+</li></ol>
+<h2 id="par-16">§ 16. Postanowienia końcowe</h2>
+<ol>
+<li>Niniejsza Polityka prywatności obowiązuje od dnia 01.09.2026r.
+</li>
+<li>Administrator może aktualizować dokument w przypadku zmian przepisów prawa, wykorzystywanych technologii lub sposobu przetwarzania danych.
+</li>
+<li>Aktualna wersja Polityki prywatności jest udostępniana na stronie <a href="https://mcmed.pl/">www.mcmed.pl</a>.
+</li>
+<li>Polityka prywatności ma charakter informacyjny i nie ogranicza praw osób, których dane dotyczą, wynikających z obowiązujących przepisów.
+</li></ol>
+<p class="meta"><strong>Data ostatniej aktualizacji: 01.09.2026</strong></p>
+</main>
+
+<footer>
+    <div class="footer-inner">
+        <span>© 2026 Mc Med. Wszelkie prawa zastrzeżone.</span>
+        <div class="footer-links">
+            <a href="/">Strona główna</a>
+            <a href="regulamin.html">Regulamin</a>
+            <a href="mailto:mcmed@wp.pl">mcmed@wp.pl</a>
+        </div>
+    </div>
+</footer>
+
+</body>
+</html>

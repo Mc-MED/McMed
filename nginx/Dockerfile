@@ -8,6 +8,8 @@ RUN npm run build
 FROM nginx:alpine
 COPY --from=react-build /app/dist  /usr/share/nginx/html/react
 COPY index.html                    /usr/share/nginx/html/landing/index.html
+COPY regulamin.html                /usr/share/nginx/html/landing/regulamin.html
+COPY polityka-prywatnosci.html     /usr/share/nginx/html/landing/polityka-prywatnosci.html
 COPY logomc.svg                    /usr/share/nginx/html/landing/logomc.svg
 COPY logo.png                      /usr/share/nginx/html/landing/logo.png
 COPY favicon.svg                   /usr/share/nginx/html/landing/favicon.svg

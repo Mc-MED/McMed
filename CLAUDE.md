@@ -37,6 +37,8 @@ npm run dev
 ```
 McMed/
 ├── index.html              # Landing page (statyczna, bez frameworka)
+├── regulamin.html          # Regulamin zapisów (podstrona landing page)
+├── polityka-prywatnosci.html
 ├── logomc.svg              # Logo
 ├── backend/
 │   ├── config/             # settings.py, urls.py, wsgi.py
@@ -163,6 +165,7 @@ Po zapisie ocen praktycznych członka komisji serializer wywołuje `Enrollment.r
 - Sekcja **Galeria** – mozaikowy grid 4 kolumny, hover z czerwoną nakładką, lightbox po kliknięciu
 - Nawigacja: O nas, KPP, Recertyfikacja, Galeria, Zapisz się na kurs
 - Przyciski "Zapisz się" na kartach kursów → `http://localhost:3000/zapisz-sie`
+- `regulamin.html`, `polityka-prywatnosci.html` – statyczne podstrony z treścią dokumentów (źródło: pliki Word od klienta), linki w stopce w kolumnie „Informacje”
 
 ### Formularz zapisu (publiczny)
 - Sekcje: Wybór kursu (dropdown z API), Dane osobowe, Adres, Utwórz konto, Zgody

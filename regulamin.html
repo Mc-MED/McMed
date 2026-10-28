@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Regulamin – Mc Med</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --red:        #C0392B;
+            --red-dark:   #A93226;
+            --red-light:  #FDECEA;
+            --dark:       #1A1A1A;
+            --gray-dark:  #333333;
+            --gray:       #666666;
+            --gray-light: #F7F7F7;
+            --border:     #E5E5E5;
+            --white:      #FFFFFF;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            color: var(--dark);
+            background: var(--gray-light);
+            line-height: 1.7;
+        }
+
+        a { color: var(--red); }
+
+        /* ─── NAVBAR ─────────────────────────────────── */
+        nav {
+            height: 70px;
+            background: var(--white);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .nav-inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+        }
+
+        .nav-brand img { height: 40px; width: auto; }
+
+        .nav-brand-name {
+            font-size: 1.35rem;
+            font-weight: 800;
+            color: var(--dark);
+            letter-spacing: -0.5px;
+        }
+
+        .nav-back {
+            color: var(--gray-dark);
+            text-decoration: none;
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+
+        .nav-back:hover { color: var(--red); }
+
+        /* ─── DOKUMENT ───────────────────────────────── */
+        main {
+            max-width: 860px;
+            margin: 3rem auto;
+            padding: 3rem 3.5rem;
+            background: var(--white);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+        }
+
+        h1 {
+            font-size: 1.75rem;
+            font-weight: 800;
+            line-height: 1.3;
+            letter-spacing: -0.5px;
+            margin-bottom: 0.5rem;
+        }
+
+        .doc-sub { color: var(--gray); font-size: 0.95rem; }
+
+        h1 + * { margin-top: 0; }
+        .doc-head { padding-bottom: 1.5rem; margin-bottom: 0.5rem; border-bottom: 3px solid var(--red); }
+
+        h2 {
+            font-size: 1.15rem;
+            font-weight: 700;
+            margin: 2.25rem 0 0.75rem;
+            scroll-margin-top: 1rem;
+        }
+
+        h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 1.25rem 0 0.4rem;
+        }
+
+        p, li { font-size: 0.97rem; color: var(--gray-dark); }
+        p { margin-bottom: 0.6rem; }
+        p.meta { margin-top: 2rem; }
+
+        ol { padding-left: 1.6rem; margin-bottom: 0.6rem; }
+        ol > li { margin-bottom: 0.5rem; padding-left: 0.3rem; }
+        ol > li::marker { color: var(--red); font-weight: 600; }
+        ul { padding-left: 1.4rem; margin-top: 0.35rem; list-style: disc; }
+        ul > li { margin-bottom: 0.2rem; }
+
+
+        /* ─── FOOTER ─────────────────────────────────── */
+        footer {
+            background: var(--dark);
+            color: #888;
+            padding: 30px 2rem;
+            font-size: 0.85rem;
+        }
+
+        .footer-inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem 1.5rem;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .footer-links { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; }
+        footer a { color: #aaa; text-decoration: none; }
+        footer a:hover { color: var(--red); }
+
+        @media (max-width: 700px) {
+            .nav-inner { padding: 0 16px; }
+            main { margin: 0; padding: 2rem 16px; border: 0; border-radius: 0; }
+            h1 { font-size: 1.4rem; }
+            footer { padding: 24px 16px; }
+        }
+
+        @media print {
+            nav, footer { display: none; }
+            body { background: #fff; }
+            main { margin: 0; padding: 0; border: 0; max-width: none; }
+            a { color: inherit; text-decoration: none; }
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="nav-inner">
+        <a href="/" class="nav-brand">
+            <img src="logomc.svg" alt="Mc Med">
+            <span class="nav-brand-name">Mc Med</span>
+        </a>
+        <a href="/" class="nav-back">&#8592; Strona główna</a>
+    </div>
+</nav>
+
+<main>
+    <div class="doc-head">
+        <h1>REGULAMIN ZAPISÓW I UCZESTNICTWA W KURSACH KWALIFIKOWANEJ PIERWSZEJ POMOCY (KPP)</h1>
+    </div>
+<h2 id="par-1">§ 1. Postanowienia ogólne</h2>
+<ol>
+<li>Niniejszy regulamin określa zasady dokonywania zapisów, zawierania umów, dokonywania płatności oraz uczestnictwa w kursach kwalifikowanej pierwszej pomocy (KPP) organizowanych przez Mc MED Maciej Świerszcz.
+</li>
+<li>Organizatorem kursów jest Mc MED Maciej Świerszcz, prowadzący działalność gospodarczą pod adresem:
+<ul>
+<li>Adres: 19-311 Chruściele 22CG
+</li>
+<li>NIP: 8491546237
+</li>
+<li>E-mail: <a href="mailto:mcmed@wp.pl">mcmed@wp.pl</a>
+</li>
+<li>Telefon: <a href="tel:+48785725603">785 725 603</a>
+</li></ul>
+</li>
+<li>Zapisy na kursy prowadzone są za pośrednictwem strony internetowej <a href="https://mcmed.pl/">www.mcmed.pl</a>.
+</li>
+<li>Kursy odbywają się wyłącznie w formie stacjonarnej.
+</li>
+<li>Oferta skierowana jest do osób fizycznych oraz podmiotów gospodarczych.
+</li>
+<li>Regulamin jest udostępniany nieodpłatnie na stronie internetowej Organizatora w sposób umożliwiający jego zapisanie i odtworzenie.
+</li></ol>
+<h2 id="par-2">§ 2. Zakres i organizacja kursów</h2>
+<ol>
+<li>Organizator prowadzi kursy w zakresie kwalifikowanej pierwszej pomocy (KPP), zgodnie z obowiązującymi przepisami prawa oraz właściwym programem szkolenia.
+</li>
+<li>Informacje o terminie, miejscu, programie, czasie trwania oraz cenie kursu publikowane są na stronie internetowej Organizatora przed dokonaniem zapisu.
+</li>
+<li>Zajęcia obejmują część teoretyczną i praktyczną, zgodnie z programem kursu.
+</li>
+<li>Uczestnik zobowiązany jest do przestrzegania zasad bezpieczeństwa, poleceń instruktorów oraz zasad organizacyjnych obowiązujących podczas szkolenia.
+</li>
+<li>Warunki ukończenia kursu, dopuszczenia do egzaminu oraz uzyskania odpowiedniego zaświadczenia określają obowiązujące przepisy dotyczące kursów KPP.
+</li></ol>
+<h2 id="par-3">§ 3. Zasady zapisów</h2>
+<ol>
+<li>Zapis na kurs odbywa się poprzez wybór szkolenia i terminu oraz wypełnienie formularza dostępnego na stronie internetowej Organizatora.
+</li>
+<li>Podczas zapisu wymagane jest podanie danych niezbędnych do realizacji szkolenia, w szczególności imienia, nazwiska, adresu zamieszkania, adresu e-mail oraz numeru telefonu.
+</li>
+<li>Osoby zapisujące się na kurs w imieniu przedsiębiorstwa podają również dane niezbędne do wystawienia faktury.
+</li>
+<li>Przed dokonaniem zapisu osoba zamawiająca zobowiązana jest do zapoznania się z niniejszym regulaminem i jego zaakceptowania.
+</li>
+<li>Umowa o uczestnictwo w kursie zostaje zawarta z chwilą przesłania przez Organizatora wiadomości e-mail potwierdzającej przyjęcie zapisu.
+</li>
+<li>W przypadku wyboru płatności internetowej potwierdzenie przyjęcia zapisu następuje po uzyskaniu informacji o prawidłowym dokonaniu płatności.
+</li>
+<li>W przypadku wyboru płatności gotówką potwierdzenie przyjęcia zapisu stanowi rezerwację miejsca z obowiązkiem dokonania zapłaty zgodnie z § 4.
+</li>
+<li>Liczba miejsc na kursie może być ograniczona. O przyjęciu decyduje dostępność miejsc oraz prawidłowe dokonanie zapisu.
+</li></ol>
+<h2 id="par-4">§ 4. Ceny i płatności</h2>
+<ol>
+<li>Ceny kursów podawane są w złotych polskich (PLN) i stanowią całkowitą cenę należną za udział w szkoleniu, z uwzględnieniem należnych podatków.
+</li>
+<li>Uczestnik może dokonać płatności:
+<ul>
+<li>elektronicznie, za pośrednictwem systemu Przelewy24;
+</li>
+<li>gotówką, bezpośrednio u Organizatora, najpóźniej w dniu rozpoczęcia kursu.
+</li></ul>
+</li>
+<li>W przypadku płatności elektronicznej wymagana jest zapłata pełnej ceny szkolenia.
+</li>
+<li>Obsługa płatności internetowych odbywa się zgodnie z zasadami operatora płatności Przelewy24.
+</li>
+<li>Organizator wystawia fakturę dokumentującą zakup kursu, wykorzystując dane podane podczas zapisu. Faktura może zostać przekazana elektronicznie na podany adres e-mail, zgodnie z przepisami dotyczącymi fakturowania elektronicznego.
+</li>
+<li>Nieuiszczenie należnej opłaty przed rozpoczęciem kursu może stanowić podstawę odmowy dopuszczenia do zajęć.
+</li></ol>
+<h2 id="par-5">§ 5. Warunki uczestnictwa i zaświadczenia</h2>
+<ol>
+<li>Warunkiem uczestnictwa w szkoleniu jest dokonanie prawidłowego zapisu, spełnienie wymagań określonych przepisami dotyczącymi kursu KPP oraz uregulowanie należnej opłaty.
+</li>
+<li>Uczestnik zobowiązany jest do udziału w wymaganych zajęciach teoretycznych i praktycznych.
+</li>
+<li>Uzyskanie zaświadczenia o ukończeniu kursu KPP i uzyskaniu tytułu ratownika wymaga spełnienia warunków określonych przepisami prawa, w tym uzyskania pozytywnego wyniku wymaganego egzaminu.
+</li>
+<li>Organizator nie gwarantuje uzyskania zaświadczenia ani tytułu ratownika osobie, która nie spełni wymaganych warunków.
+</li>
+<li>Udział osób niepełnoletnich w kursach KPP możliwy jest wyłącznie w przypadkach dopuszczonych obowiązującymi przepisami oraz za zgodą przedstawiciela ustawowego, jeżeli jest ona wymagana.
+</li>
+<li>W przypadku członków młodzieżowych drużyn pożarniczych, uprawnionych do uczestnictwa w kursie od ukończenia 16 lat, przystąpienie do egzaminu potwierdzającego uzyskanie tytułu ratownika możliwe jest nie wcześniej niż z dniem ukończenia 18 lat.
+</li>
+<li>Samo uczestnictwo w kursie przed osiągnięciem pełnoletności nie uprawnia do automatycznego otrzymania zaświadczenia KPP po ukończeniu 18 lat.
+</li></ol>
+<h2 id="par-6">§ 6. Rezygnacja, zmiana terminu i nieobecność</h2>
+<ol>
+<li>Uczestnik może zrezygnować z udziału w szkoleniu, przesyłając informację na adres e-mail Organizatora.
+</li>
+<li>W przypadku rezygnacji zgłoszonej co najmniej 7 dni kalendarzowych przed rozpoczęciem kursu Organizator zwraca 100% wniesionej opłaty.
+</li>
+<li>W przypadku rezygnacji zgłoszonej później niż 7 dni przed rozpoczęciem kursu dobrowolny zwrot opłaty na zasadach określonych w ust. 2 nie przysługuje, z zastrzeżeniem obowiązujących przepisów prawa i pozostałych postanowień regulaminu.
+</li>
+<li>Uczestnik może zwrócić się o bezpłatną zmianę terminu kursu. Zmiana jest możliwa pod warunkiem zgłoszenia jej co najmniej 7 dni przed rozpoczęciem szkolenia oraz dostępności miejsc w innym terminie.
+</li>
+<li>Przeniesienie rezerwacji na inną osobę jest możliwe po wcześniejszym poinformowaniu Organizatora i pod warunkiem spełnienia przez nowego uczestnika wymagań dotyczących udziału w kursie.
+</li>
+<li>Nieobecność uczestnika na szkoleniu bez wcześniejszego poinformowania Organizatora nie stanowi podstawy do dobrowolnego zwrotu wniesionej opłaty.
+</li>
+<li>Postanowienia niniejszego paragrafu nie wyłączają ani nie ograniczają uprawnień konsumenta wynikających z bezwzględnie obowiązujących przepisów prawa, w szczególności prawa do odstąpienia od umowy oraz uprawnień związanych z niewykonaniem lub nienależytym wykonaniem usługi.
+</li></ol>
+<h2 id="par-7">§ 7. Prawo odstąpienia od umowy</h2>
+<ol>
+<li>Konsument, który zawarł umowę na odległość za pośrednictwem strony internetowej, ma co do zasady prawo odstąpić od umowy w terminie 14 dni od dnia jej zawarcia, bez podawania przyczyny.
+</li>
+<li>Do zachowania terminu wystarczy wysłanie oświadczenia o odstąpieniu przed jego upływem.
+</li>
+<li>Oświadczenie można przesłać na adres e-mail Organizatora lub na jego adres korespondencyjny.
+</li>
+<li>Konsument może skorzystać z wzoru formularza odstąpienia od umowy stanowiącego załącznik do regulaminu, jednak nie jest to obowiązkowe.
+</li>
+<li>Jeżeli na wyraźne żądanie konsumenta świadczenie usługi rozpocznie się przed upływem ustawowego terminu odstąpienia, a konsument odstąpi od umowy po rozpoczęciu świadczenia, może być zobowiązany do zapłaty kwoty proporcjonalnej do zakresu świadczenia spełnionego do chwili odstąpienia, na zasadach określonych ustawą o prawach konsumenta.
+</li>
+<li>Prawo odstąpienia nie przysługuje po pełnym wykonaniu odpłatnej usługi, jeżeli została ona wykonana za uprzednią i wyraźną zgodą konsumenta, który przed rozpoczęciem świadczenia został poinformowany, że po jego spełnieniu utraci prawo odstąpienia, i przyjął to do wiadomości.
+</li>
+<li>W przypadkach, w których konsument skutecznie odstępuje od umowy, Organizator dokonuje należnego zwrotu płatności nie później niż w terminie 14 dni od otrzymania oświadczenia, z uwzględnieniem zasad przewidzianych przepisami prawa.
+</li>
+<li>Zwrot następuje co do zasady przy użyciu takiego samego sposobu płatności, jakiego użył konsument, chyba że wyraźnie zgodził się na inny sposób niewiążący się dla niego z kosztami.
+</li>
+<li>Powyższe uprawnienia stosuje się również do osób fizycznych prowadzących działalność gospodarczą w zakresie, w jakim przepisy przyznają im ochronę przewidzianą dla konsumentów.
+</li></ol>
+<h2 id="par-8">§ 8. Odwołanie lub zmiana terminu kursu przez Organizatora</h2>
+<ol>
+<li>Organizator może odwołać szkolenie z uzasadnionych przyczyn organizacyjnych, w szczególności z powodu niewystarczającej liczby uczestników, niedostępności kadry dydaktycznej lub innych okoliczności uniemożliwiających przeprowadzenie szkolenia.
+</li>
+<li>O odwołaniu szkolenia Organizator informuje uczestników niezwłocznie, korzystając z podanych danych kontaktowych.
+</li>
+<li>W razie odwołania kursu przed jego rozpoczęciem uczestnik ma prawo wybrać:
+<ul>
+<li>pełny zwrot wniesionej opłaty;
+</li>
+<li>udział w szkoleniu w innym uzgodnionym terminie.
+</li></ul>
+</li>
+<li>W przypadku istotnej zmiany terminu szkolenia uczestnik może nie wyrazić zgody na proponowaną zmianę i żądać pełnego zwrotu wniesionej opłaty.
+</li>
+<li>Postanowienia niniejszego paragrafu nie ograniczają uprawnień uczestnika wynikających z obowiązujących przepisów prawa.
+</li></ol>
+<h2 id="par-9">§ 9. Reklamacje</h2>
+<ol>
+<li>Uczestnik może zgłaszać reklamacje dotyczące zapisów, płatności oraz realizacji kursu.
+</li>
+<li>Reklamacje należy kierować na adres e-mail Organizatora lub na jego adres korespondencyjny.
+</li>
+<li>Reklamacja powinna zawierać dane umożliwiające identyfikację zgłoszenia, opis problemu oraz oczekiwany sposób jego rozwiązania.
+</li>
+<li>Organizator rozpatruje reklamacje i udziela odpowiedzi w terminie do 14 dni od ich otrzymania.
+</li>
+<li>Odpowiedź przekazywana jest na adres e-mail wskazany przez osobę składającą reklamację, chyba że uzgodniono inną formę komunikacji.
+</li>
+<li>Niniejszy regulamin nie wyłącza uprawnień wynikających z obowiązujących przepisów dotyczących odpowiedzialności za niewykonanie lub nienależyte wykonanie umowy.
+</li></ol>
+<h2 id="par-10">§ 10. Dane osobowe</h2>
+<ol>
+<li>Administratorem danych osobowych przetwarzanych w związku z zapisami i realizacją kursów jest Mc MED Maciej Świerszcz.
+</li>
+<li>Dane osobowe są przetwarzane w szczególności w celu obsługi zapisów, zawarcia i wykonania umowy, realizacji płatności, wystawiania dokumentów księgowych, przeprowadzenia szkolenia oraz prowadzenia wymaganej prawem dokumentacji kursowej.
+</li>
+<li>Szczegółowe informacje dotyczące przetwarzania danych osobowych, w tym podstaw prawnych, okresów przechowywania oraz praw osób, których dane dotyczą, zawiera Polityka prywatności udostępniona na stronie <a href="https://mcmed.pl/">www.mcmed.pl</a>.
+</li>
+<li>Dane osobowe przetwarzane są zgodnie z obowiązującymi przepisami prawa, w szczególności rozporządzeniem RODO.
+</li></ol>
+<h2 id="par-11">§ 11. Postanowienia końcowe</h2>
+<ol>
+<li>Regulamin obowiązuje od dnia 01.09.2026r.
+</li>
+<li>W sprawach nieuregulowanych niniejszym regulaminem zastosowanie mają obowiązujące przepisy prawa polskiego, w szczególności Kodeks cywilny, ustawa o prawach konsumenta oraz przepisy dotyczące Państwowego Ratownictwa Medycznego.
+</li>
+<li>Ewentualne zmiany regulaminu nie naruszają praw nabytych uczestników ani warunków umów zawartych przed wejściem zmian w życie.
+</li>
+<li>Regulamin jest dostępny na stronie <a href="https://mcmed.pl/">www.mcmed.pl</a>.
+</li></ol>
+<h2 id="zalacznik-1">Załącznik nr 1 – Wzór formularza odstąpienia od umowy</h2>
+<p>Adresat: Mc MED Maciej Świerszcz</p>
+<p>Adres: 19-311 Chruściele 22CG</p>
+<p>E-mail: <a href="mailto:mcmed@wp.pl">mcmed@wp.pl</a></p>
+<p>Niniejszym informuję o odstąpieniu od umowy dotyczącej udziału w kursie kwalifikowanej pierwszej pomocy.</p>
+<ol>
+<li>Imię i nazwisko: ................................................
+</li>
+<li>Adres e-mail: ................................................
+</li>
+<li>Data zawarcia umowy: ................................................
+</li>
+<li>Termin kursu: ................................................
+</li>
+<li>Data złożenia oświadczenia: ................................................
+</li></ol>
+<p>Podpis konsumenta (wyłącznie w przypadku formularza przesyłanego w wersji papierowej):</p>
+<p>................................................</p>
+</main>
+
+<footer>
+    <div class="footer-inner">
+        <span>© 2026 Mc Med. Wszelkie prawa zastrzeżone.</span>
+        <div class="footer-links">
+            <a href="/">Strona główna</a>
+            <a href="polityka-prywatnosci.html">Polityka prywatności</a>
+            <a href="mailto:mcmed@wp.pl">mcmed@wp.pl</a>
+        </div>
+    </div>
+</footer>
+
+</body>
+</html>
