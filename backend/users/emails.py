@@ -1,4 +1,5 @@
 import html as html_lib
+from functools import lru_cache
 from io import BytesIO
 from pathlib import Path
 from email.mime.image import MIMEImage
@@ -10,6 +11,7 @@ from PIL import Image
 LOGO_PATH = Path(__file__).parent / 'logo.png'
 
 
+@lru_cache(maxsize=1)
 def _logo_transparent_bytes():
     """Zwraca logo jako białe logo na przezroczystym tle."""
     img = Image.open(LOGO_PATH).convert('RGBA')
@@ -362,13 +364,15 @@ def _html_course_email(first_name, subject, body, course_info):
 </html>'''
 
 
-def send_course_email(*, to_email, first_name, subject, body, course_info=None):
-    """Wysyła HTML-owy mail od admina do uczestnika kursu."""
+def send_course_email(*, to_email, first_name, subject, body, course_info=None, connection=None):
+    """Wysyła HTML-owy mail od admina do uczestnika kursu. Błąd wysyłki rzuca wyjątek.
+    `connection` — wspólne połączenie SMTP przy wysyłce do wielu osób."""
     msg = EmailMultiAlternatives(
         subject=subject,
         body=f'Dzień dobry {first_name},\n\n{body}\n\nPozdrawiamy,\nZespół Mc Med',
         from_email=settings.DEFAULT_FROM_EMAIL,
         to=[to_email],
+        connection=connection,
     )
     msg.mixed_subtype = 'related'
     msg.attach_alternative(
@@ -380,7 +384,7 @@ def send_course_email(*, to_email, first_name, subject, body, course_info=None):
         logo.add_header('Content-ID', '<mcmed_logo>')
         logo.add_header('Content-Disposition', 'inline', filename='logo.png')
         msg.attach(logo)
-    msg.send(fail_silently=True)
+    msg.send()
 
 
 def _html_password_reset(first_name, reset_link, *, heading='Resetowanie has&#322;a',

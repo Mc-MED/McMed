@@ -845,8 +845,8 @@ function EnrollmentTable({ courseId, courseName, examDate, startDate, courseType
     try {
       const res = await adminSendEmail([...selected], subject, body)
       setSendResult(res.data)
-    } catch {
-      setSendResult({ error: true })
+    } catch (err) {
+      setSendResult({ error: true, detail: err.response?.data?.detail })
     } finally {
       setSending(false)
     }
@@ -1065,9 +1065,18 @@ function EnrollmentTable({ courseId, courseName, examDate, startDate, courseType
               </span>
             )}
             {sendResult?.error && (
-              <span className="text-sm text-red-600">Błąd wysyłki. Sprawdź konfigurację e-mail.</span>
+              <span className="text-sm text-red-600">{sendResult.detail || 'Błąd wysyłki. Sprawdź konfigurację e-mail.'}</span>
             )}
           </div>
+          {sendResult?.failed?.length > 0 && (
+            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 space-y-1">
+              {sendResult.failed.map((f, i) => (
+                <p key={i} className="text-xs text-red-700">
+                  <span className="font-semibold">{f.name || `#${f.id}`}:</span> {f.error}
+                </p>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

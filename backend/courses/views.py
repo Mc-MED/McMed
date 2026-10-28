@@ -1,7 +1,9 @@
+import logging
 from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.mail import get_connection
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
@@ -22,6 +24,8 @@ from rest_framework.exceptions import ValidationError
 from users.emails import send_activation_email, send_course_email, send_instructor_invite_email
 from users.models import PasswordResetToken
 from users.views import sync_account_email, EmailTakenError, EMAIL_TAKEN_MSG, _admin_find_user, _frontend_url
+
+logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
@@ -526,26 +530,39 @@ def send_email_to_enrollments(request):
 
     sent = 0
     failed = []
-    for e in enrollments:
-        course = e.course
-        course_info = {
-            'Kurs':     course.name,
-            'Miasto':   course.city,
-            'Termin':   f'{course.start_date.strftime("%d.%m.%Y") if course.start_date else "–"}'
-                        f' – {course.end_date.strftime("%d.%m.%Y") if course.end_date else "–"}',
-            'Egzamin':  course.exam_date.strftime('%d.%m.%Y') if course.exam_date else '–',
-        }
-        try:
-            send_course_email(
-                to_email=e.email,
-                first_name=e.first_name,
-                subject=subject,
-                body=body,
-                course_info=course_info,
-            )
-            sent += 1
-        except Exception:
-            failed.append(e.id)
+    # Jedno połączenie SMTP na całą wysyłkę — osobne logowanie dla każdego maila
+    # przy kilkudziesięciu odbiorcach przekraczało limit czasu żądania.
+    connection = get_connection()
+    try:
+        connection.open()
+    except Exception as exc:
+        return Response({'detail': f'Brak połączenia z serwerem poczty: {exc}'},
+                        status=status.HTTP_502_BAD_GATEWAY)
+    try:
+        for e in enrollments:
+            course = e.course
+            course_info = {
+                'Kurs':     course.name,
+                'Miasto':   course.city,
+                'Termin':   f'{course.start_date.strftime("%d.%m.%Y") if course.start_date else "–"}'
+                            f' – {course.end_date.strftime("%d.%m.%Y") if course.end_date else "–"}',
+                'Egzamin':  course.exam_date.strftime('%d.%m.%Y') if course.exam_date else '–',
+            }
+            try:
+                send_course_email(
+                    to_email=e.email,
+                    first_name=e.first_name,
+                    subject=subject,
+                    body=body,
+                    course_info=course_info,
+                    connection=connection,
+                )
+                sent += 1
+            except Exception as exc:
+                logger.exception('Mail do zapisu %s nie wysłany', e.id)
+                failed.append({'id': e.id, 'name': f'{e.first_name} {e.last_name}', 'error': str(exc)})
+    finally:
+        connection.close()
 
     return Response({'sent': sent, 'failed': failed})
 
