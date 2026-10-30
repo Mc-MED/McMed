@@ -629,7 +629,7 @@
             max-width: 1200px;
             margin: 0 auto;
             display: grid;
-            grid-template-columns: 2fr 1fr 1fr 1fr;
+            grid-template-columns: 1.6fr 1fr 1fr 1.5fr;
             gap: 3rem;
             padding-bottom: 2.5rem;
             border-bottom: 1px solid #2a2a2a;
@@ -679,14 +679,36 @@
 
         .footer-col ul li a:hover { color: var(--red); }
 
+        .footer-company { font-style: normal; }
+
+        .footer-company-name {
+            color: var(--white);
+            font-weight: 700;
+            font-size: 0.95rem;
+            margin-bottom: 0.9rem;
+        }
+
         .footer-contact-item {
             display: flex;
-            align-items: center;
-            gap: 8px;
+            align-items: flex-start;
+            gap: 10px;
             color: #aaa;
             font-size: 0.88rem;
+            line-height: 1.5;
             margin-bottom: 0.6rem;
+            min-width: 0;
         }
+
+        .footer-contact-item span[aria-hidden] { flex-shrink: 0; width: 1.2em; text-align: center; }
+
+        .footer-contact-item a {
+            color: #aaa;
+            text-decoration: none;
+            overflow-wrap: anywhere;
+            transition: color 0.2s;
+        }
+
+        .footer-contact-item a:hover { color: var(--red); }
 
         .footer-bottom {
             max-width: 1200px;
@@ -1258,7 +1280,8 @@
             .recert-tl-title  { grid-area: title; align-self: end; padding-top: 0.75rem; }
             .recert-tl-desc   { grid-area: desc; }
             .courses-grid       { grid-template-columns: 1fr 1fr; }
-            .footer-inner       { grid-template-columns: 1fr; gap: 2rem; }
+            .footer-inner       { grid-template-columns: 1fr 1fr; gap: 2rem; }
+            .footer-brand       { grid-column: 1 / -1; }
             .footer-bottom      { flex-direction: column; gap: 1rem; text-align: center; }
             .gallery-grid       { grid-template-columns: repeat(2, 1fr); grid-auto-rows: 200px; }
             .photo.tall         { grid-row: span 1; }
@@ -1285,6 +1308,7 @@
             .recert-badge       { width: 120px !important; height: 120px !important; box-shadow: 0 0 0 8px rgba(192,57,43,0.12), 0 8px 24px rgba(192,57,43,0.25) !important; }
             .recert-badge-num   { font-size: 3rem !important; }
             footer              { padding: 50px 1rem 24px; }
+            .footer-inner       { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -1648,16 +1672,22 @@
         </div>
 
         <div class="footer-col">
-            <h4>Kontakt</h4>
-            <!-- TODO: podmień dane kontaktowe -->
-            <div class="footer-contact-item">
-                <span>📞</span>
-                <a href="tel:785 725 603" style="color:#aaa; text-decoration:none;">785 725 603</a>
-            </div>
-            <div class="footer-contact-item">
-                <span>✉️</span>
-                <a href="mailto:mcmed@wp.pl" style="color:#aaa; text-decoration:none;">mcmed@wp.pl</a>
-            </div>
+            <h4>Dane firmy</h4>
+            <address class="footer-company">
+                <div class="footer-company-name">Mc MED Maciej Świerszcz</div>
+                <div class="footer-contact-item">
+                    <span aria-hidden="true">📍</span>
+                    <span>19-311 Chruściele 22CG</span>
+                </div>
+                <div class="footer-contact-item">
+                    <span aria-hidden="true">📞</span>
+                    <a href="tel:+48785725603">785 725 603</a>
+                </div>
+                <div class="footer-contact-item">
+                    <span aria-hidden="true">✉️</span>
+                    <a href="mailto:mcmed@wp.pl">mcmed@wp.pl</a>
+                </div>
+            </address>
         </div>
     </div>
 
