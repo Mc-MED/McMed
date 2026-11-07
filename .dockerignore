@@ -5,6 +5,7 @@ backend/**/*.pyc
 backend/.env
 backend/staticfiles/
 backend/media/
+backend/pdf_cache/
 frontend/node_modules/
 frontend/dist/
 .git/

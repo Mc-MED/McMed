@@ -2,6 +2,10 @@ import re
 import math
 import copy
 import datetime
+import fcntl
+import hashlib
+import json
+import signal
 import subprocess
 import tempfile
 import os
@@ -9,6 +13,7 @@ import zipfile
 from io import BytesIO
 from pathlib import Path
 
+from django.conf import settings
 from django.http import HttpResponse, FileResponse
 from django.db.models import Q
 from django.utils import timezone
@@ -32,6 +37,77 @@ ALLOWED_CERT_TEMPLATES = {'certyfikat'}
 ALLOWED_XLSX_TEMPLATES = {'program', 'obsluga-egzaminu-rec', 'zestawienie-rec', 'egzamin'}
 
 ALLOWED_ATTENDANCE_XLSX_TEMPLATES = {'obecnosc'}
+
+
+# Jedna konwersja LibreOffice naraz (soffice zajmuje kilkaset MB RAM) — blokada wspólna dla wszystkich workerów gunicorna.
+_SOFFICE_LOCK = os.path.join(tempfile.gettempdir(), 'mcmed-soffice.lock')
+
+
+def _docx_to_pdf(docx_path, outdir, timeout=60):
+    """Konwertuje DOCX → PDF w outdir. Zwraca True, gdy PDF powstał.
+
+    Własny profil LibreOffice w outdir i osobna grupa procesów: po przekroczeniu czasu
+    zabijany jest też soffice.bin, a nie tylko skrypt startowy (inaczej zostaje w pamięci).
+    """
+    pdf_path = os.path.splitext(docx_path)[0] + '.pdf'
+    cmd = [
+        'libreoffice', '--headless', '--norestore',
+        f'-env:UserInstallation=file://{outdir}/lo-profile',
+        '--convert-to', 'pdf', '--outdir', outdir, docx_path,
+    ]
+    with open(_SOFFICE_LOCK, 'w') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        except FileNotFoundError:
+            return False
+        try:
+            proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            pass
+        finally:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            proc.wait()
+    return proc.returncode == 0 and os.path.exists(pdf_path)
+
+
+def _render_pdf(tpl_path, context):
+    """Wypełniony szablon jako PDF (bajty) albo None.
+
+    Gotowe PDF-y trafiają do backend/pdf_cache (poza /media — nginx go nie serwuje): kolejne pobranie tego samego dokumentu
+    z tymi samymi danymi nie uruchamia LibreOffice. Zmiana danych lub szablonu → nowy klucz.
+    """
+    stat = os.stat(tpl_path)
+    key_src = json.dumps([str(tpl_path), stat.st_mtime_ns, stat.st_size, context], sort_keys=True, default=str)
+    key = hashlib.sha256(key_src.encode()).hexdigest()
+    cache_dir = os.path.join(settings.BASE_DIR, 'pdf_cache')
+    cached = os.path.join(cache_dir, f'{key}.pdf')
+    if os.path.exists(cached):
+        with open(cached, 'rb') as f:
+            return f.read()
+
+    tpl = DocxTemplate(tpl_path)
+    tpl.render(context)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        docx_path = os.path.join(tmpdir, 'dokument.docx')
+        tpl.save(docx_path)
+        if not _docx_to_pdf(docx_path, tmpdir):
+            return None
+        with open(os.path.join(tmpdir, 'dokument.pdf'), 'rb') as f:
+            pdf_bytes = f.read()
+
+    try:
+        os.makedirs(cache_dir, exist_ok=True)
+        tmp = f'{cached}.{os.getpid()}.tmp'
+        with open(tmp, 'wb') as f:
+            f.write(pdf_bytes)
+        os.replace(tmp, cached)
+    except OSError:
+        pass
+    return pdf_bytes
 
 
 def _instructor_dict(inst):
@@ -537,23 +613,9 @@ def download_document_pdf(request, course_id, doc_name):
     if tpl_path is None:
         return Response({'detail': 'Brak pliku szablonu.'}, status=404)
 
-    tpl = DocxTemplate(tpl_path)
-    tpl.render(_build_context(course))
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        docx_path = os.path.join(tmpdir, f'{doc_name}.docx')
-        pdf_path  = os.path.join(tmpdir, f'{doc_name}.pdf')
-        tpl.save(docx_path)
-
-        result = subprocess.run(
-            ['libreoffice', '--headless', '--convert-to', 'pdf', '--outdir', tmpdir, docx_path],
-            capture_output=True, timeout=30,
-        )
-        if result.returncode != 0 or not os.path.exists(pdf_path):
-            return Response({'detail': 'Błąd konwersji do PDF.'}, status=500)
-
-        with open(pdf_path, 'rb') as f:
-            pdf_bytes = f.read()
+    pdf_bytes = _render_pdf(tpl_path, _build_context(course))
+    if pdf_bytes is None:
+        return Response({'detail': 'Błąd konwersji do PDF.'}, status=500)
 
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="{doc_name}_kurs_{course_id}.pdf"'
@@ -655,26 +717,9 @@ def participant_certificate(request, enrollment_id):
     if not tpl_path.exists():
         return Response({'detail': 'Brak pliku szablonu certyfikatu.'}, status=404)
 
-    tpl = DocxTemplate(tpl_path)
-    tpl.render(_build_certificate_context(enrollment))
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        docx_path = os.path.join(tmpdir, 'certyfikat.docx')
-        pdf_path  = os.path.join(tmpdir, 'certyfikat.pdf')
-        tpl.save(docx_path)
-        try:
-            result = subprocess.run(
-                ['libreoffice', '--headless', '--convert-to', 'pdf', '--outdir', tmpdir, docx_path],
-                capture_output=True, timeout=30,
-            )
-            ok = result.returncode == 0 and os.path.exists(pdf_path)
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            ok = False
-        if not ok:
-            return Response({'detail': 'Nie udało się wygenerować certyfikatu. Skontaktuj się z organizatorem.'}, status=500)
-
-        with open(pdf_path, 'rb') as f:
-            pdf_bytes = f.read()
+    pdf_bytes = _render_pdf(tpl_path, _build_certificate_context(enrollment))
+    if pdf_bytes is None:
+        return Response({'detail': 'Nie udało się wygenerować certyfikatu. Skontaktuj się z organizatorem.'}, status=500)
 
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     response['Content-Disposition'] = 'attachment; filename="certyfikat.pdf"'
