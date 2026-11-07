@@ -183,7 +183,7 @@ Po zapisie ocen praktycznych członka komisji serializer wywołuje `Enrollment.r
 
 ### Przypomnienia o recertyfikacji (`notifications/reminders.py`)
 - Certyfikat ważny 3 lata od `Enrollment.cert_date`; od 3 miesięcy przed wygaśnięciem do dnia wygaśnięcia uczestnik dostaje mail (przycisk do `/konto`) i SMS.
-- Wysyła komenda `python manage.py send_recert_reminders`, uruchamiana raz dziennie z crona (job na hostingu).
+- Wysyła komenda `python manage.py send_recert_reminders`, uruchamiana raz dziennie z crona (job na hostingu). Między 20:00 a 8:00 (czas polski) komenda nic nie wysyła, także przy ręcznym uruchomieniu.
 - Kanały odnotowywane osobno (`recert_email_sent_at`, `recert_sms_sent_at`): udany się nie powtarza, nieudany ponawia się przy kolejnym uruchomieniu; błąd w `recert_reminder_error`.
 - Pomijane, jeśli ta sama osoba (konto lub e-mail) ma nowszy certyfikat albo zapis na późniejszy kurs.
 - Panel admina `/admin/reminders` („Powiadomienia przypominające”): lista uczestników z datą certyfikatu, przypomnienia i statusem; test wysyłki (`notifications.TestReminder`) — e-mail, telefon, data: cron wyśle przykładowe przypomnienie w tym dniu, „Wyślij teraz” od razu.

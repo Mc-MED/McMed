@@ -113,3 +113,27 @@ class TestReminderTests(TestCase):
 
 
 STATUSES = {'planned', 'due', 'sent', 'error', 'renewed', 'expired', 'no_contact'}
+
+
+class SendingHoursTests(TestCase):
+    def run_at(self, hour):
+        from datetime import datetime
+        from io import StringIO
+        from zoneinfo import ZoneInfo
+        from django.core.management import call_command
+
+        at = datetime(2026, 11, 8, hour, 30, tzinfo=ZoneInfo('Europe/Warsaw'))
+        out = StringIO()
+        with mock.patch('django.utils.timezone.localtime', return_value=at), \
+             mock.patch('notifications.management.commands.send_recert_reminders.send_due_reminders',
+                        return_value=(0, 0)) as send:
+            call_command('send_recert_reminders', stdout=out)
+        return send.called
+
+    def test_nothing_sent_at_night(self):
+        for hour in (20, 23, 0, 7):
+            self.assertFalse(self.run_at(hour), hour)
+
+    def test_sends_during_day(self):
+        for hour in (8, 12, 19):
+            self.assertTrue(self.run_at(hour), hour)
