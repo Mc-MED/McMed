@@ -122,6 +122,13 @@ export default function Payment({ view = 'summary' }) {
                   className="mt-6 w-full bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-bold py-3 rounded-xl text-sm">
                   {loading ? 'Przekierowanie…' : 'Zapłać przez Przelewy24'}
                 </button>
+                {info.sandbox && (
+                  <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-900 leading-relaxed">
+                    <span className="font-bold">Uwaga: płatności online są w trakcie uruchamiania.</span>{' '}
+                    Strona, na którą nastąpi przekierowanie, jest testowa – nie pobiera żadnych pieniędzy.
+                    Kurs możesz opłacić przelewem na podstawie proformy z wiadomości e-mail lub gotówką.
+                  </div>
+                )}
               </>
             )}
             {error && <p className="mt-4 text-sm text-red-600">{error}</p>}

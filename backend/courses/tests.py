@@ -357,6 +357,7 @@ class BillingTests(TestCase):
         self.assertFalse(enrollment.invoices.exists())
         info = self.client.get(f'/api/payments/{enrollment.payment_token}/').data
         self.assertTrue(info['test_payment'])
+        self.assertTrue(info['sandbox'])
         self.assertFalse(info['paid'])
 
     @override_settings(DEBUG=False)

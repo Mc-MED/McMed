@@ -40,6 +40,7 @@ def payment_info(request, token):
         'paid':            enrollment.payment_status == 'paid',
         'pending':         enrollment.payments.filter(status=Payment.STATUS_PENDING, method=Payment.METHOD_ONLINE).exists(),
         'test_payment':    bool(last_online and last_online.status == Payment.STATUS_TEST),
+        'sandbox':         przelewy24.mode() == 'sandbox',
     })
 
 
