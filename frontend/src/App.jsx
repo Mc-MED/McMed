@@ -10,6 +10,9 @@ const TITLES = {
   '/admin/courses':       'McMed – Kursy',
   '/admin/courses/create':'McMed – Nowy kurs',
   '/admin/participants':  'McMed – Uczestnicy',
+  '/admin/payments':      'McMed – Płatności',
+  '/admin/reminders':     'McMed – Powiadomienia przypominające',
+  '/platnosc':            'McMed – Płatność',
   '/admin/instructors':   'McMed – Instruktorzy',
   '/admin/links':         'McMed – Linki',
   '/admin/materials':     'McMed – Materiały',
@@ -51,6 +54,9 @@ import ParticipantLogin from './pages/participant/ParticipantLogin'
 import ParticipantDashboard from './pages/participant/ParticipantDashboard'
 import ForgotPassword from './pages/participant/ForgotPassword'
 import ResetPassword from './pages/participant/ResetPassword'
+import Payment from './pages/participant/Payment'
+import Payments from './pages/admin/Payments'
+import Reminders from './pages/admin/Reminders'
 
 export default function App() {
   return (
@@ -67,6 +73,9 @@ export default function App() {
         <Route path="/konto" element={<ParticipantDashboard />} />
         <Route path="/zapomnialem-hasla" element={<ForgotPassword />} />
         <Route path="/reset-hasla/:token" element={<ResetPassword />} />
+        <Route path="/platnosc/:token" element={<Payment />} />
+        <Route path="/platnosc/:token/status" element={<Payment view="status" />} />
+        <Route path="/platnosc/:token/symulacja" element={<Payment view="simulation" />} />
 
         {/* Panel właściciela */}
         <Route path="/admin" element={<AdminLayout />}>
@@ -75,6 +84,8 @@ export default function App() {
           <Route path="courses/create" element={<CourseCreate />} />
           <Route path="courses/:id" element={<CourseDetail />} />
           <Route path="participants" element={<ParticipantList />} />
+          <Route path="payments" element={<Payments />} />
+          <Route path="reminders" element={<Reminders />} />
           <Route path="instructors" element={<InstructorList />} />
           <Route path="links" element={<MaciusiLinks />} />
           <Route path="materials" element={<Materials />} />

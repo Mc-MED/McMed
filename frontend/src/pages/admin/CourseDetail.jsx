@@ -675,6 +675,7 @@ function EnrollmentTable({ courseId, courseName, examDate, startDate, courseType
   const [selected, setSelected]     = useState(new Set())
   const [subject, setSubject]       = useState('')
   const [body, setBody]             = useState('')
+  const [attachments, setAttachments] = useState([])
   const [sending, setSending]       = useState(false)
   const [sendResult, setSendResult] = useState(null)
 
@@ -843,7 +844,7 @@ function EnrollmentTable({ courseId, courseName, examDate, startDate, courseType
     setSending(true)
     setSendResult(null)
     try {
-      const res = await adminSendEmail([...selected], subject, body)
+      const res = await adminSendEmail([...selected], subject, body, attachments)
       setSendResult(res.data)
     } catch (err) {
       setSendResult({ error: true, detail: err.response?.data?.detail })
@@ -1050,6 +1051,36 @@ function EnrollmentTable({ courseId, courseName, examDate, startDate, courseType
             rows={5}
             className="w-full border border-blue-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white resize-y"
           />
+          <div className="space-y-1">
+            <label className="inline-flex items-center gap-2 text-sm text-blue-700 font-medium cursor-pointer hover:underline">
+              📎 Dodaj załącznik
+              <input
+                type="file"
+                multiple
+                className="hidden"
+                onChange={e => {
+                  const files = [...e.target.files]
+                  setAttachments(prev => [...prev, ...files])
+                  e.target.value = ''
+                }}
+              />
+            </label>
+            {attachments.map((file, i) => (
+              <div key={i} className="flex items-center gap-2 text-xs text-blue-900">
+                <span className="truncate">{file.name}</span>
+                <span className="text-blue-500 shrink-0">({(file.size / 1024 / 1024).toFixed(1)} MB)</span>
+                <button
+                  onClick={() => setAttachments(prev => prev.filter((_, j) => j !== i))}
+                  className="text-red-600 hover:underline shrink-0"
+                >
+                  usuń
+                </button>
+              </div>
+            ))}
+            {attachments.reduce((sum, f) => sum + f.size, 0) > 15 * 1024 * 1024 && (
+              <p className="text-xs text-red-600">Załączniki razem mogą mieć najwyżej 15 MB.</p>
+            )}
+          </div>
           <div className="flex items-center gap-3">
             <button
               onClick={handleSend}

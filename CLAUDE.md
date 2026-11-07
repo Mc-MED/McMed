@@ -88,6 +88,9 @@ McMed/
 | `/admin/courses/:id` | CourseDetail.jsx | JWT |
 | `/admin/participants` | ParticipantList.jsx | JWT |
 | `/admin/instructors` | InstructorList.jsx | JWT |
+| `/admin/reminders` | Reminders.jsx – powiadomienia przypominające o recertyfikacji + test wysyłki | JWT |
+| `/admin/payments` | Payments.jsx – proformy, wpłaty, faktury wybranego kursu (`?kurs=id`) | JWT |
+| `/platnosc/:token` (+ `/status`, `/symulacja`) | participant/Payment.jsx – płatność online za kurs | Publiczny |
 | `/reset-hasla/:token` | participant/ResetPassword.jsx (też ustawienie hasła z zaproszenia, `?panel=prowadzacy`) | Publiczny |
 | `/prowadzacy` | Login.jsx (logowanie prowadzącego) | Publiczny |
 | `/prowadzacy/kursy` | instructor/CourseList.jsx | JWT (prowadzący) |
@@ -111,6 +114,19 @@ McMed/
 | DELETE | `/api/courses/enrollments/:id/` | Usuń zapis uczestnika |
 | POST | `/api/courses/admin/:id/enrollments/reorder/` | Nowa kolejność uczestników kursu: `{"order": [id, …]}` (wszyscy aktywni) |
 | POST | `/api/courses/instructors/:id/invite/` | Załóż konto prowadzącego i wyślij link do ustawienia hasła (72 h) |
+| GET | `/api/courses/admin/:id/payments/` | Uczestnicy kursu: proforma, wpłata, faktura, wysyłka mail/SMS |
+| POST | `/api/courses/enrollments/:id/mark-paid/` | Wpłata gotówką / przelewem (`{"method": "cash"\|"transfer"}`) → faktura VAT + mail z Fakturowni + SMS |
+| POST | `/api/courses/enrollments/:id/proforma/` | Proforma dla zapisu bez niej (np. dodanego przez admina) |
+| POST | `/api/courses/invoices/:id/retry/` | Niewystawiony dokument → wystaw ponownie; wystawiony → wyślij ponownie |
+| GET | `/api/courses/invoices/:id/pdf/` | PDF z Fakturowni |
+
+### Płatności (publiczne, `courses/payment_views.py`)
+| Metoda | URL | Opis |
+|---|---|---|
+| GET | `/api/payments/:token/` | Dane do strony płatności (`Enrollment.payment_token`) |
+| POST | `/api/payments/:token/start/` | Rejestracja transakcji w Przelewy24 → adres przekierowania |
+| POST | `/api/payments/:token/fake-confirm/` | Symulacja wyniku płatności (tylko `DEBUG` + `P24_MODE=fake`) |
+| POST | `/api/payments/p24/notify/` | Powiadomienie P24 → weryfikacja → faktura VAT |
 
 ### Panel prowadzącego (konto powiązane z `Instructor.user`)
 | Metoda | URL | Opis |
@@ -144,7 +160,7 @@ Pola: `name`, `course_type` (kpp/recert), `city`, `max_participants`, `price`, `
 Properties: `spots_left`, `is_full`, `instructors_count` (ceil(max_participants/6)).
 
 ### Enrollment
-Pola: `course` (FK), `first_name`, `last_name`, `pesel`, `birth_date`, `email`, `phone`, `zip_code`, `city`, `street`, `house_number`, `apartment_number` (opcjonalne), `photo_consent`, `created_at`, `position`.
+Pola: `course` (FK), `first_name`, `last_name`, `pesel`, `birth_date`, `email`, `phone`, `zip_code`, `city`, `street`, `house_number`, `apartment_number` (opcjonalne), `photo_consent`, `created_at`, `position`, `terms_accepted_at` (data akceptacji regulaminu i polityki prywatności — wymagana przy zapisie przez formularz publiczny i `enroll_me` (`terms_accepted: true`), pusta dla zapisów dodanych przez admina).
 
 `position` — miejsce na liście kursu (domyślna kolejność modelu). Z niej wynika Lp. i numer zaświadczenia we wszystkich dokumentach. Nowy zapis i przeniesienie na inny kurs trafiają na koniec listy (`Enrollment.save`); usunięty uczestnik zachowuje miejsce i po przywróceniu na nie wraca. Admin zmienia kolejność w zakładce Uczestnicy (strzałki, wpisanie numeru, „Ustaw alfabetycznie”).
 
@@ -155,6 +171,22 @@ Egzamin (skala ocen 3; 3,5; 4; 4,5; 5, teoretyczna ocena końcowa także 2):
 - `exam_rko`, `exam_zad1`, `exam_zad2` — wyliczane (średnia zadania od całej komisji), tylko do odczytu; używa ich karta „EGZ praktyczny” w `egzamin.xlsx`.
 
 Po zapisie ocen praktycznych członka komisji serializer wywołuje `Enrollment.recompute_practical_grades(roles)`: średnia jego trzech ocen (zaokrąglona do 0,5, połówki w górę — `round_grade`) trafia do jego kolumny w zbiorczym. Admin może ręcznie poprawić ocenę zbiorczą, ale kolejna zmiana ocen praktycznych tego członka ją nadpisze.
+
+### Płatności i faktury (`courses/billing.py`)
+- Zapis przez formularz publiczny lub `enroll_me` → proforma w Fakturowni (`courses/fakturownia.py`) na pełną cenę kursu, mail z PDF i linkiem „Zapłać online” (`/platnosc/<payment_token>`). Zapis dodany przez admina proformy nie dostaje (przycisk w Płatnościach).
+- Wpłata online (Przelewy24, `courses/przelewy24.py`) albo „Oznacz jako opłacony i wystaw fakturę” w Płatnościach (gotówka / przelew) → `mark_paid_and_invoice`: `payment_status='paid'`, faktura VAT (z proformy), mail z fakturą wysyła Fakturownia (`send_by_email`) + SMS z SMSAPI. Idempotentne — druga faktura nie powstaje.
+- Proformę wysyłamy własnym mailem (PDF + przycisk „Zapłać online”), bo Fakturownia nie wstawi linku do płatności.
+- Modele: `Invoice` (proforma / vat, numer, wysyłka, `send_error`), `Payment` (online / transfer / cash, kwota w groszach). `Enrollment`: dane do faktury na firmę `invoice_company`, `company_*` (NIP sprawdzany sumą kontrolną).
+- Błąd Fakturowni, maila czy SMS-a nie przerywa zapisu ani płatności — widać go w Płatnościach („Wystaw ponownie” / „Wyślij ponownie”).
+- Tryby w `.env`: `P24_MODE` (fake / sandbox / production), `FAKTUROWNIA_MODE` (fake / live), `SMS_MODE` (log / live). Lokalnie: fake / fake / log. Sandbox P24 wymaga publicznego `BACKEND_URL` (ngrok).
+
+### Przypomnienia o recertyfikacji (`notifications/reminders.py`)
+- Certyfikat ważny 3 lata od `Enrollment.cert_date`; od 3 miesięcy przed wygaśnięciem do dnia wygaśnięcia uczestnik dostaje mail (przycisk do `/konto`) i SMS.
+- Wysyła komenda `python manage.py send_recert_reminders`, uruchamiana raz dziennie z crona (job na hostingu).
+- Kanały odnotowywane osobno (`recert_email_sent_at`, `recert_sms_sent_at`): udany się nie powtarza, nieudany ponawia się przy kolejnym uruchomieniu; błąd w `recert_reminder_error`.
+- Pomijane, jeśli ta sama osoba (konto lub e-mail) ma nowszy certyfikat albo zapis na późniejszy kurs.
+- Panel admina `/admin/reminders` („Powiadomienia przypominające”): lista uczestników z datą certyfikatu, przypomnienia i statusem; test wysyłki (`notifications.TestReminder`) — e-mail, telefon, data: cron wyśle przykładowe przypomnienie w tym dniu, „Wyślij teraz” od razu.
+- API (admin): `GET /api/notifications/recert-reminders/`, `POST …/tests/`, `POST …/tests/:id/send/`, `DELETE …/tests/:id/`.
 
 ## Co zostało zrobione
 
@@ -203,7 +235,6 @@ Po zapisie ocen praktycznych członka komisji serializer wywołuje `Enrollment.r
 
 ## Do zrobienia (następne kroki)
 - `users/` – model użytkownika uczestnika, rejestracja konta przy zapisie na kurs
-- `notifications/` – SMS/email przypomnienia o recertyfikacji (3 miesiące przed wygaśnięciem)
 - `documents/` – materiały szkoleniowe, certyfikaty
 - Login uczestnika (oddzielny od admina)
 - Dashboard uczestnika (historia kursów, certyfikat, materiały)

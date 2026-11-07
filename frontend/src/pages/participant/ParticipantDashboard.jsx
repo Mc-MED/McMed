@@ -40,8 +40,8 @@ function formatCourseDays(course) {
 }
 
 const CANCEL_REASONS = [
-  { value: 'forfeit',    label: 'Rezygnacja bez podania przyczyny (zaliczka przepada)' },
-  { value: 'refund',     label: 'Rezygnacja z przyczyn losowych – zwrot zaliczki (wymagany kontakt z organizatorem na min. 7 dni przed rozpoczęciem kursu)' },
+  { value: 'forfeit',    label: 'Rezygnacja bez podania przyczyny (wpłata nie podlega zwrotowi)' },
+  { value: 'refund',     label: 'Rezygnacja z przyczyn losowych – zwrot wpłaty (wymagany kontakt z organizatorem na min. 7 dni przed rozpoczęciem kursu)' },
   { value: 'reschedule', label: 'Rezygnacja z przyczyn losowych – zmiana terminu' },
 ]
 
@@ -759,21 +759,39 @@ export default function ParticipantDashboard() {
         {activeCard === 'certs' && (
           <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-3">
             <h2 className="font-extrabold text-gray-900 text-base mb-1">Twoje certyfikaty</h2>
-            {certEnrollments.map(e => (
-              <div key={e.id} className="flex items-center justify-between gap-4 p-4 rounded-xl border border-gray-100 bg-gray-50">
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">{e.course_name}</p>
-                  <p className="text-xs text-gray-500">{e.course_type_display}{e.course_city ? ` · ${e.course_city}` : ''}</p>
-                </div>
-                <button
-                  onClick={() => handleDownloadCertificate(e.id)}
-                  disabled={downloadingCertId === e.id}
-                  className="shrink-0 text-sm font-semibold px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 transition-colors"
-                >
-                  {downloadingCertId === e.id ? 'Generowanie…' : '↓ Pobierz certyfikat'}
-                </button>
-              </div>
-            ))}
+            <div className="overflow-x-auto rounded-xl border border-gray-100">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+                  <tr>
+                    <th className="text-left font-bold px-4 py-3">Kurs</th>
+                    <th className="text-left font-bold px-4 py-3 whitespace-nowrap">Data wystawienia</th>
+                    <th className="text-left font-bold px-4 py-3 whitespace-nowrap">Nr certyfikatu</th>
+                    <th className="px-4 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {certEnrollments.map(e => (
+                    <tr key={e.id}>
+                      <td className="px-4 py-3">
+                        <p className="font-semibold text-gray-900">{e.course_name}</p>
+                        <p className="text-xs text-gray-500">{e.course_type_display}{e.course_city ? ` · ${e.course_city}` : ''}</p>
+                      </td>
+                      <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{formatDate(e.cert_date)}</td>
+                      <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{e.cert_number || '—'}</td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          onClick={() => handleDownloadCertificate(e.id)}
+                          disabled={downloadingCertId === e.id}
+                          className="whitespace-nowrap text-sm font-semibold px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 transition-colors"
+                        >
+                          {downloadingCertId === e.id ? 'Generowanie…' : '↓ Pobierz certyfikat'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             {certError && <p className="text-sm text-red-600">{certError}</p>}
           </div>
         )}

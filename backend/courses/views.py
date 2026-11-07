@@ -12,13 +12,16 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 
-from .models import PRACTICAL_TASKS, Course, Enrollment, Instructor, practical_field
+from .models import PRACTICAL_TASKS, Course, Enrollment, Instructor, Invoice, Payment, practical_field
+from .billing import issue_proforma, issue_proforma_on_commit, mark_paid_and_invoice, payment_link, retry as retry_invoice
+from . import fakturownia
 from .permissions import IsInstructor
 from .serializers import (
     CourseSerializer, AdminCourseSerializer, EnrollmentSerializer, PublicEnrollmentSerializer,
     AdminEnrollmentCreateSerializer, InstructorSerializer, MyEnrollmentSerializer,
-    InstructorCourseSerializer, InstructorEnrollmentSerializer,
+    InstructorCourseSerializer, InstructorEnrollmentSerializer, COMPANY_FIELDS, TERMS_REQUIRED_MSG, company_errors,
 )
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from rest_framework.exceptions import ValidationError
 from users.emails import send_activation_email, send_course_email, send_instructor_invite_email
@@ -86,9 +89,11 @@ class PublicEnrollView(generics.CreateAPIView):
             enrollment = serializer.save(user=user)
 
         self._send_enrollment_email(enrollment, activation.token)
+        issue_proforma_on_commit(enrollment)
 
         headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        return Response({**serializer.data, 'payment_url': payment_link(enrollment)},
+                        status=status.HTTP_201_CREATED, headers=headers)
 
     def _send_enrollment_email(self, enrollment, token):
         if not enrollment.email:
@@ -111,29 +116,11 @@ class PublicEnrollView(generics.CreateAPIView):
             'Cena':    f'{course.price} zł',
         }
 
-        _MONTHS_PL = ['', 'Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec',
-                      'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień']
-        if course.start_date:
-            month_pl = _MONTHS_PL[course.start_date.month]
-            year = course.start_date.year
-        else:
-            month_pl, year = '', ''
-        course_label = (
-            'Kurs Kwalifikowanej Pierwszej Pomocy'
-            if course.course_type == 'kpp' else
-            'Recertyfikacja KPP'
-        )
-        payment_title = (
-            f'{enrollment.first_name} {enrollment.last_name} '
-            f'{course_label} - zaliczka, {month_pl} - {course.city} {year}'
-        )
-
         send_activation_email(
             to_email=enrollment.email,
             first_name=enrollment.first_name,
             activation_link=f'{frontend_url}/aktywuj/{token}',
             course_info=course_info,
-            payment_title=payment_title,
         )
 
 
@@ -416,6 +403,8 @@ def enroll_me(request):
         return Response({'course': 'Kurs nie istnieje.'}, status=status.HTTP_400_BAD_REQUEST)
     if course.is_full:
         return Response({'course': 'Brak wolnych miejsc na wybranym kursie.'}, status=status.HTTP_400_BAD_REQUEST)
+    if request.data.get('terms_accepted') is not True:
+        return Response({'terms_accepted': TERMS_REQUIRED_MSG}, status=status.HTTP_400_BAD_REQUEST)
 
     today = timezone.now().date()
     active = Enrollment.objects.filter(user=request.user, is_deleted=False).filter(
@@ -458,10 +447,24 @@ def enroll_me(request):
                 {'error': 'Brak danych profilu. Wypełnij formularz zapisu.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        data = {f: getattr(previous, f) for f in fields}
+        data = {f: getattr(previous, f) for f in fields + ['invoice_company', *COMPANY_FIELDS]}
+    data['terms_accepted_at'] = timezone.now()
+
+    # Dane do faktury z formularza; bez nich (szybki zapis) zostają te z poprzedniego zapisu
+    if 'invoice_company' in request.data:
+        company = {f: str(request.data.get(f) or '').strip() for f in COMPANY_FIELDS}
+        company['invoice_company'] = bool(request.data.get('invoice_company'))
+        company['company_nip'] = company['company_nip'].replace('-', '').replace(' ', '')
+        errors = company_errors(company)
+        if errors:
+            return Response(errors, status=status.HTTP_400_BAD_REQUEST)
+        if not company['invoice_company']:
+            company = {f: '' for f in COMPANY_FIELDS} | {'invoice_company': False}
+        data.update(company)
 
     enrollment = Enrollment.objects.create(user=request.user, course=course, **data)
-    return Response({'id': enrollment.id}, status=status.HTTP_201_CREATED)
+    issue_proforma_on_commit(enrollment)
+    return Response({'id': enrollment.id, 'payment_url': payment_link(enrollment)}, status=status.HTTP_201_CREATED)
 
 
 class MyEnrollmentsView(generics.ListAPIView):
@@ -509,12 +512,30 @@ def restore_enrollment(request, pk):
     return Response(EnrollmentSerializer(enrollment).data)
 
 
+# Limit nginx (client_max_body_size) to 20 MB; większość skrzynek przyjmuje do ~25 MB.
+EMAIL_ATTACHMENTS_MAX_SIZE = 15 * 1024 * 1024
+
+
 @api_view(['POST'])
 @permission_classes([IsAdminUser])
 def send_email_to_enrollments(request):
-    enrollment_ids = request.data.get('enrollment_ids', [])
+    # multipart/form-data (z załącznikami) albo JSON
+    if hasattr(request.data, 'getlist'):
+        enrollment_ids = request.data.getlist('enrollment_ids')
+    else:
+        enrollment_ids = request.data.get('enrollment_ids', [])
     subject = request.data.get('subject', '').strip()
     body    = request.data.get('body', '').strip()
+
+    files = request.FILES.getlist('attachments')
+    if sum(f.size for f in files) > EMAIL_ATTACHMENTS_MAX_SIZE:
+        return Response({'detail': f'Załączniki razem mogą mieć najwyżej {EMAIL_ATTACHMENTS_MAX_SIZE // (1024 * 1024)} MB.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+    # Pliki czytamy raz — ten sam załącznik idzie do każdego odbiorcy.
+    attachments = [
+        (f.name, f.read(), f.content_type or 'application/octet-stream')
+        for f in files
+    ]
 
     if not subject:
         return Response({'detail': 'Podaj temat wiadomości.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -556,6 +577,7 @@ def send_email_to_enrollments(request):
                     body=body,
                     course_info=course_info,
                     connection=connection,
+                    attachments=attachments,
                 )
                 sent += 1
             except Exception as exc:
@@ -595,3 +617,96 @@ def send_sms_to_enrollments(request):
             failed.append({'id': enrollment.id, 'name': f'{enrollment.first_name} {enrollment.last_name}', 'error': err})
 
     return Response({'sent': sent, 'failed': failed})
+
+
+# ─── Płatności i faktury (panel admina) ──────────────────────────────
+
+def _invoice_dict(invoice):
+    if invoice is None:
+        return None
+    return {
+        'id':         invoice.id,
+        'number':     invoice.number,
+        'issued':     bool(invoice.fakturownia_id),
+        'amount':     str(invoice.amount_gross),
+        'created_at': invoice.created_at,
+        'email_sent': invoice.email_sent,
+        'sms_sent':   invoice.sms_sent,
+        'error':      invoice.send_error,
+    }
+
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def course_payments(request, pk):
+    course = get_object_or_404(Course, pk=pk)
+    enrollments = (course.enrollments.filter(is_deleted=False)
+                   .prefetch_related('invoices', 'payments').order_by('position', 'created_at'))
+    rows = []
+    for lp, e in enumerate(enrollments, 1):
+        invoices = list(e.invoices.all())
+        payments = list(e.payments.all())
+        paid = next((p for p in reversed(payments) if p.status == Payment.STATUS_PAID), None)
+        pending = any(p.status == Payment.STATUS_PENDING and p.method == Payment.METHOD_ONLINE for p in payments)
+        rows.append({
+            'id':             e.id,
+            'lp':             lp,
+            'first_name':     e.first_name,
+            'last_name':      e.last_name,
+            'email':          e.email,
+            'phone':          e.phone,
+            'invoice_company': e.invoice_company,
+            'company_name':   e.company_name,
+            'company_nip':    e.company_nip,
+            'payment_status': e.payment_status,
+            'paid_method':    paid.method if paid else '',
+            'paid_at':        paid.paid_at if paid else None,
+            'online_pending': pending,
+            'proforma':       _invoice_dict(next((i for i in invoices if i.kind == Invoice.KIND_PROFORMA), None)),
+            'invoice':        _invoice_dict(next((i for i in invoices if i.kind == Invoice.KIND_VAT), None)),
+        })
+    return Response({'course': {'id': course.id, 'name': course.name, 'price': str(course.price)}, 'enrollments': rows})
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def enrollment_mark_paid(request, pk):
+    """Wpłata gotówką lub tradycyjnym przelewem (`method`) → faktura VAT + mail z Fakturowni + SMS."""
+    method = request.data.get('method', Payment.METHOD_CASH)
+    if method not in (Payment.METHOD_CASH, Payment.METHOD_TRANSFER):
+        return Response({'detail': 'Nieznany sposób płatności.'}, status=status.HTTP_400_BAD_REQUEST)
+    enrollment = get_object_or_404(Enrollment, pk=pk, is_deleted=False, course__isnull=False)
+    invoice = mark_paid_and_invoice(enrollment, method)
+    return Response(_invoice_dict(invoice))
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def enrollment_issue_proforma(request, pk):
+    """Proforma dla zapisu, który jej nie ma (np. dodanego ręcznie przez admina)."""
+    enrollment = get_object_or_404(Enrollment, pk=pk, is_deleted=False, course__isnull=False)
+    issue_proforma(enrollment)
+    proforma = enrollment.invoices.filter(kind=Invoice.KIND_PROFORMA).first()
+    return Response(_invoice_dict(proforma))
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def invoice_retry(request, pk):
+    invoice = get_object_or_404(Invoice, pk=pk)
+    return Response(_invoice_dict(retry_invoice(invoice)))
+
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def invoice_pdf(request, pk):
+    invoice = get_object_or_404(Invoice, pk=pk)
+    if not invoice.fakturownia_id:
+        return Response({'detail': 'Dokument nie został wystawiony.'}, status=status.HTTP_404_NOT_FOUND)
+    ok, pdf = fakturownia.download_pdf(invoice.fakturownia_id, invoice.number)
+    if not ok:
+        return Response({'detail': pdf}, status=status.HTTP_502_BAD_GATEWAY)
+    name = f'{invoice.number or invoice.kind}.pdf'.replace('/', '-')
+    response = HttpResponse(pdf, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{name}"'
+    return response

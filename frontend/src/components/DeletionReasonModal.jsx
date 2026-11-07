@@ -1,8 +1,8 @@
 import { useState } from 'react'
 
 const REASONS = [
-  { value: 'forfeit',    label: 'Rezygnacja (bez powodu) – zaliczka przepadła' },
-  { value: 'refund',     label: 'Rezygnacja z przyczyn losowych – zwrot zaliczki' },
+  { value: 'forfeit',    label: 'Rezygnacja (bez powodu) – bez zwrotu wpłaty' },
+  { value: 'refund',     label: 'Rezygnacja z przyczyn losowych – zwrot wpłaty' },
   { value: 'reschedule', label: 'Rezygnacja z przyczyn losowych – zmiana terminu' },
 ]
 
@@ -28,7 +28,7 @@ export default function DeletionReasonModal({ participantName, onConfirm, onClos
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
         </div>
         <p className="text-sm text-gray-600 mb-4">
-          Uczestnik <span className="font-semibold text-gray-900">{participantName}</span> wpłacił zaliczkę.
+          Uczestnik <span className="font-semibold text-gray-900">{participantName}</span> dokonał wpłaty.
           Wybierz powód rezygnacji:
         </p>
         <div className="space-y-2 mb-5">

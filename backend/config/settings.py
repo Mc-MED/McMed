@@ -141,9 +141,30 @@ FIELD_ENCRYPTION_KEY = config('FIELD_ENCRYPTION_KEY', default='')
 # ─── SMS API ─────────────────────────────────────────────────────────
 SMS_API_TOKEN = config('SMS_API_TOKEN', default='')
 SMS_API_SENDER = config('SMS_API_SENDER', default='McMed')
+# log – treść SMS-a tylko w logu (testy lokalne), live – wysyłka przez SMSAPI
+SMS_MODE = config('SMS_MODE', default='live')
+
+# ─── Fakturownia.pl ──────────────────────────────────────────────────
+# live – prawdziwe API, fake – fikcyjne numery i PDF (testy bez konta)
+FAKTUROWNIA_MODE          = config('FAKTUROWNIA_MODE', default='live')
+FAKTUROWNIA_DOMAIN        = config('FAKTUROWNIA_DOMAIN', default='')  # subdomena: <domena>.fakturownia.pl
+FAKTUROWNIA_API_TOKEN     = config('FAKTUROWNIA_API_TOKEN', default='')
+FAKTUROWNIA_TAX           = config('FAKTUROWNIA_TAX', default='zw')   # 'zw' albo stawka, np. '23'
+FAKTUROWNIA_EXEMPT_REASON = config('FAKTUROWNIA_EXEMPT_REASON', default='')
+FAKTUROWNIA_PAYMENT_DAYS  = config('FAKTUROWNIA_PAYMENT_DAYS', default=7, cast=int)
+
+# ─── Przelewy24 ──────────────────────────────────────────────────────
+# fake – lokalna symulacja płatności (tylko DEBUG), sandbox, production
+P24_MODE        = config('P24_MODE', default='fake')
+P24_MERCHANT_ID = config('P24_MERCHANT_ID', default='')
+P24_POS_ID      = config('P24_POS_ID', default='')
+P24_CRC         = config('P24_CRC', default='')
+P24_API_KEY     = config('P24_API_KEY', default='')
 
 # ─── Frontend ────────────────────────────────────────────────────────
 FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3000')
+# Publiczny adres backendu – Przelewy24 wysyła tu powiadomienie o płatności
+BACKEND_URL = config('BACKEND_URL', default='http://localhost:8000')
 
 # ─── Security headers ────────────────────────────────────────────────
 SECURE_CONTENT_TYPE_NOSNIFF = True

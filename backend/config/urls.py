@@ -28,6 +28,7 @@ urlpatterns = [
 
     # Apps
     path('api/courses/',       include('courses.urls')),
+    path('api/payments/',      include('courses.payment_urls')),
     path('api/users/',         include('users.urls')),
     path('api/documents/',     include('documents.urls')),
     path('api/notifications/', include('notifications.urls')),

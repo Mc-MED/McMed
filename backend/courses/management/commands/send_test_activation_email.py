@@ -4,7 +4,7 @@ from users.emails import send_activation_email
 
 
 class Command(BaseCommand):
-    help = 'Wysyła testowy mail aktywacyjny z blokiem zaliczki'
+    help = 'Wysyła testowy mail aktywacyjny'
 
     def add_arguments(self, parser):
         parser.add_argument('email', nargs='?', default=settings.EMAIL_HOST_USER)
@@ -21,6 +21,5 @@ class Command(BaseCommand):
                 'Miejsce': 'Ełk',
                 'Cena':    '600 zł',
             },
-            payment_title='Jan Kowalski Kurs Kwalifikowanej Pierwszej Pomocy - zaliczka, Marzec - Ełk 2025',
         )
         self.stdout.write(self.style.SUCCESS(f'Mail wysłany na: {recipient}'))

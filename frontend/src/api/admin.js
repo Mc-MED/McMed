@@ -68,8 +68,14 @@ export const adminSendPasswordReset = (enrollmentId) =>
 export const adminGenerateResetLink = (enrollmentId) =>
   adminAxios.post('/api/users/admin/generate-reset-link/', { enrollment_id: enrollmentId })
 
-export const adminSendEmail = (enrollmentIds, subject, body) =>
-  adminAxios.post('/api/courses/enrollments/send-email/', { enrollment_ids: enrollmentIds, subject, body })
+export const adminSendEmail = (enrollmentIds, subject, body, attachments = []) => {
+  const form = new FormData()
+  enrollmentIds.forEach(id => form.append('enrollment_ids', id))
+  form.append('subject', subject)
+  form.append('body', body)
+  attachments.forEach(file => form.append('attachments', file))
+  return adminAxios.post('/api/courses/enrollments/send-email/', form)
+}
 
 export const adminSendSms = (enrollmentIds, message) =>
   adminAxios.post('/api/courses/enrollments/send-sms/', { enrollment_ids: enrollmentIds, message })
@@ -157,3 +163,40 @@ export const adminDownloadZaliczeniaZip = async (courseId, docName) => {
   a.click()
   window.URL.revokeObjectURL(url)
 }
+
+// ─── Płatności i faktury ──────────────────────────────────────────────
+export const adminFetchCoursePayments = (courseId) =>
+  adminAxios.get(`/api/courses/admin/${courseId}/payments/`).then(r => r.data)
+
+export const adminMarkPaid = (enrollmentId, method) =>
+  adminAxios.post(`/api/courses/enrollments/${enrollmentId}/mark-paid/`, { method }).then(r => r.data)
+
+export const adminIssueProforma = (enrollmentId) =>
+  adminAxios.post(`/api/courses/enrollments/${enrollmentId}/proforma/`).then(r => r.data)
+
+export const adminRetryInvoice = (invoiceId) =>
+  adminAxios.post(`/api/courses/invoices/${invoiceId}/retry/`).then(r => r.data)
+
+export const adminDownloadInvoicePdf = async (invoice) => {
+  const response = await adminAxios.get(`/api/courses/invoices/${invoice.id}/pdf/`, { responseType: 'blob' })
+  const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${(invoice.number || 'dokument').replaceAll('/', '-')}.pdf`
+  a.click()
+  window.URL.revokeObjectURL(url)
+}
+
+// ─── Powiadomienia przypominające (recertyfikacja) ─────────────────
+
+export const adminFetchRecertReminders = () =>
+  adminAxios.get('/api/notifications/recert-reminders/').then(r => r.data)
+
+export const adminCreateTestReminder = (data) =>
+  adminAxios.post('/api/notifications/recert-reminders/tests/', data).then(r => r.data)
+
+export const adminSendTestReminderNow = (id) =>
+  adminAxios.post(`/api/notifications/recert-reminders/tests/${id}/send/`, {}).then(r => r.data)
+
+export const adminDeleteTestReminder = (id) =>
+  adminAxios.delete(`/api/notifications/recert-reminders/tests/${id}/`)

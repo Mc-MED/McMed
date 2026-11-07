@@ -1,3 +1,4 @@
+from django.utils import timezone
 from rest_framework import serializers
 from .models import COMMITTEE_ROLES, PRACTICAL_FIELDS, PRACTICAL_TASKS, Course, Enrollment, Instructor, practical_field
 
@@ -163,10 +164,35 @@ for _field in PRACTICAL_FIELDS:
     setattr(ExamScoreValidationMixin, f'validate_{_field}', ExamScoreValidationMixin._validate_exam_score)
 
 
+TERMS_REQUIRED_MSG = 'Akceptacja regulaminu i polityki prywatności jest wymagana.'
+
+COMPANY_FIELDS = ['company_name', 'company_nip', 'company_zip_code', 'company_city', 'company_street']
+
+
+def nip_valid(nip):
+    if len(nip) != 10 or not nip.isdigit():
+        return False
+    weights = [6, 5, 7, 2, 3, 4, 5, 6, 7]
+    return sum(int(d) * w for d, w in zip(nip, weights)) % 11 == int(nip[9])
+
+
+def company_errors(data):
+    """Dane do faktury na firmę: przy zaznaczonym invoice_company wymagane wszystkie pola i poprawny NIP."""
+    if not data.get('invoice_company'):
+        return {}
+    errors = {f: 'To pole jest wymagane.' for f in COMPANY_FIELDS if not str(data.get(f) or '').strip()}
+    nip = str(data.get('company_nip') or '')
+    if nip and not nip_valid(nip):
+        errors['company_nip'] = 'Niepoprawny NIP (10 cyfr, bez kresek).'
+    return errors
+
+
 class EnrollmentSerializer(ExamScoreValidationMixin, serializers.ModelSerializer):
     course_name            = serializers.SerializerMethodField()
     exam_date              = serializers.SerializerMethodField()
     deletion_reason_display = serializers.SerializerMethodField()
+    # NIP z kreskami/spacjami jest normalizowany w validate_company_nip, dopiero potem ma 10 cyfr
+    company_nip             = serializers.CharField(max_length=20, required=False, allow_blank=True)
 
     def get_course_name(self, obj):
         return obj.course.name if obj.course_id else None
@@ -188,11 +214,12 @@ class EnrollmentSerializer(ExamScoreValidationMixin, serializers.ModelSerializer
             'photo_consent', 'payment_status', 'exam_rko', 'exam_zad1', 'exam_zad2', *PRACTICAL_FIELDS,
             'exam_theory_attempt1', 'exam_theory_attempt2', 'exam_theory_grade',
             'exam_committee_chair', 'exam_committee_member1', 'exam_committee_member2',
-            'certificate_visible', 'created_at', 'position',
+            'certificate_visible', 'created_at', 'position', 'terms_accepted_at',
             'is_deleted', 'deleted_at', 'deletion_reason', 'deletion_reason_display',
+            'invoice_company', *COMPANY_FIELDS,
         ]
         read_only_fields = [
-            'id', 'course_name', 'exam_date', 'created_at', 'position', 'is_deleted', 'deleted_at', 'deletion_reason', 'deletion_reason_display',
+            'id', 'course_name', 'exam_date', 'created_at', 'position', 'terms_accepted_at', 'is_deleted', 'deleted_at', 'deletion_reason', 'deletion_reason_display',
             'exam_rko', 'exam_zad1', 'exam_zad2',
         ]
 
@@ -201,12 +228,19 @@ class EnrollmentSerializer(ExamScoreValidationMixin, serializers.ModelSerializer
             raise serializers.ValidationError('PESEL musi składać się z 11 cyfr.')
         return value
 
+    def validate_company_nip(self, value):
+        return value.replace('-', '').replace(' ', '')
+
     def validate(self, data):
         course = data.get('course')
         if course and course.is_full:
             raise serializers.ValidationError(
                 {'course': 'Brak wolnych miejsc na wybranym kursie.'}
             )
+        merged = {f: data.get(f, getattr(self.instance, f, '')) for f in ['invoice_company', *COMPANY_FIELDS]}
+        errors = company_errors(merged)
+        if errors:
+            raise serializers.ValidationError(errors)
         return data
 
 
@@ -258,17 +292,29 @@ class InstructorEnrollmentSerializer(ExamScoreValidationMixin, serializers.Model
 class PublicEnrollmentSerializer(EnrollmentSerializer):
     """Publiczny zapis na kurs — tylko pola z formularza. Płatność, oceny i soft-delete ustawia wyłącznie admin."""
     course = serializers.PrimaryKeyRelatedField(queryset=Course.objects.filter(is_active=True))
+    terms_accepted = serializers.BooleanField(write_only=True, default=False)
 
     class Meta(EnrollmentSerializer.Meta):
         fields = [
-            'id', 'course',
+            'id', 'course', 'terms_accepted',
             'first_name', 'last_name', 'pesel', 'birth_date',
             'email', 'phone',
             'zip_code', 'city', 'street', 'house_number', 'apartment_number',
             'cert_number', 'cert_date',
             'photo_consent',
+            'invoice_company', *COMPANY_FIELDS,
         ]
         read_only_fields = ['id']
+
+    def validate_terms_accepted(self, value):
+        if not value:
+            raise serializers.ValidationError(TERMS_REQUIRED_MSG)
+        return value
+
+    def create(self, validated_data):
+        validated_data.pop('terms_accepted')
+        validated_data['terms_accepted_at'] = timezone.now()
+        return super().create(validated_data)
 
 
 class AdminEnrollmentCreateSerializer(ExamScoreValidationMixin, serializers.ModelSerializer):
@@ -374,5 +420,6 @@ class MyEnrollmentSerializer(serializers.ModelSerializer):
             'id', 'course', 'course_name', 'course_type', 'course_type_display',
             'course_city', 'start_date', 'end_date', 'exam_date', 'exam_location',
             'price', 'course_days', 'whatsapp_link',
-            'first_name', 'last_name', 'payment_status', 'photo_consent', 'certificate_visible', 'created_at',
+            'first_name', 'last_name', 'payment_status', 'photo_consent', 'certificate_visible',
+            'cert_number', 'cert_date', 'created_at',
         ]

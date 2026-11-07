@@ -15,4 +15,5 @@ class EnrollmentAdmin(admin.ModelAdmin):
     list_display  = ['last_name', 'first_name', 'pesel', 'course', 'city', 'created_at']
     list_filter   = ['course']
     search_fields = ['last_name', 'first_name', 'pesel']
-    readonly_fields = ['created_at']
+    readonly_fields = ['created_at', 'terms_accepted_at', 'recert_email_sent_at', 'recert_sms_sent_at',
+                       'recert_reminder_error']

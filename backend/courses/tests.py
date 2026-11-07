@@ -2,12 +2,14 @@ from datetime import timedelta
 from unittest import mock
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.core import mail
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
 from users.models import PasswordResetToken
-from .models import Course, Enrollment, Instructor
+from .billing import mark_paid_and_invoice
+from .models import Course, Enrollment, Instructor, Invoice, Payment
 
 User = get_user_model()
 
@@ -231,3 +233,196 @@ class EnrollmentPositionTests(TestCase):
         self.reorder(self.c, self.a, self.b)
         self.client.patch(f'/api/courses/enrollments/{self.c.pk}/', {'exam_chair_rko': '5'}, format='json')
         self.assertEqual(self.active(), ['C', 'A', 'B'])
+
+
+@override_settings(DEBUG=True, P24_MODE='fake', FAKTUROWNIA_MODE='fake', SMS_MODE='log',
+                   EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+class BillingTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.course = Course.objects.create(name='KPP Ełk', price='1200.00', max_participants=10)
+        self.admin = User.objects.create_user('admin', 'admin@example.com', 'haslo12345', is_staff=True)
+
+    def enroll_public(self, **extra):
+        data = dict(
+            course=self.course.pk, first_name='Jan', last_name='Kowalski', pesel='90010112345',
+            birth_date='1990-01-01', email='jan@example.com', phone='500600700', zip_code='30-001',
+            city='Kraków', street='Długa', house_number='1', password='haslo12345', terms_accepted=True,
+        )
+        data.update(extra)
+        with self.captureOnCommitCallbacks(execute=True):
+            return self.client.post('/api/courses/enrollments/', data, format='json')
+
+    def test_enrollment_issues_proforma_and_online_payment_issues_vat(self):
+        resp = self.enroll_public()
+        self.assertEqual(resp.status_code, 201, resp.data)
+        enrollment = Enrollment.objects.get()
+        proforma = enrollment.invoices.get()
+        self.assertEqual(proforma.kind, Invoice.KIND_PROFORMA)
+        self.assertTrue(proforma.email_sent)
+        self.assertIn(str(enrollment.payment_token), resp.data['payment_url'])
+        proforma_mail = mail.outbox[-1]
+        self.assertIn(str(enrollment.payment_token), proforma_mail.body)
+        self.assertEqual(proforma_mail.attachments[-1][2], 'application/pdf')
+
+        token = enrollment.payment_token
+        start = self.client.post(f'/api/payments/{token}/start/')
+        session = start.data['redirect_url'].split('session=')[1]
+        self.client.post(f'/api/payments/{token}/fake-confirm/', {'session': session, 'success': True}, format='json')
+        self.client.post(f'/api/payments/{token}/fake-confirm/', {'session': session, 'success': True}, format='json')
+
+        enrollment.refresh_from_db()
+        self.assertEqual(enrollment.payment_status, 'paid')
+        vat = enrollment.invoices.get(kind=Invoice.KIND_VAT)  # tylko jedna mimo dwóch potwierdzeń
+        self.assertTrue(vat.email_sent and vat.sms_sent)
+        self.assertEqual(len(mail.outbox), 2)  # aktywacja + proforma; fakturę VAT wysyła Fakturownia
+        self.assertTrue(self.client.get(f'/api/payments/{token}/').data['paid'])
+
+    def test_company_data_requires_valid_nip(self):
+        resp = self.enroll_public(invoice_company=True, company_name='Firma', company_nip='1234567890',
+                                  company_zip_code='00-001', company_city='Warszawa', company_street='Prosta 1')
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('company_nip', resp.data)
+        resp = self.enroll_public(invoice_company=True, company_name='Firma', company_nip='526-025-09-95',
+                                  company_zip_code='00-001', company_city='Warszawa', company_street='Prosta 1')
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertEqual(Enrollment.objects.get().company_nip, '5260250995')
+
+    def test_admin_marks_transfer_paid_without_proforma(self):
+        enrollment = make_enrollment(self.course)
+        self.client.force_authenticate(self.admin)
+        resp = self.client.post(f'/api/courses/enrollments/{enrollment.pk}/mark-paid/', {'method': 'transfer'}, format='json')
+        self.assertTrue(resp.data['issued'])
+        rows = self.client.get(f'/api/courses/admin/{self.course.pk}/payments/').data['enrollments']
+        self.assertEqual(rows[0]['paid_method'], Payment.METHOD_TRANSFER)
+        self.assertIsNone(rows[0]['proforma'])
+        pdf = self.client.get(f'/api/courses/invoices/{resp.data["id"]}/pdf/')
+        self.assertTrue(pdf.content.startswith(b'%PDF'))
+
+    def test_admin_marks_cash_paid_by_default(self):
+        enrollment = make_enrollment(self.course)
+        self.client.force_authenticate(self.admin)
+        self.assertEqual(self.client.post(f'/api/courses/enrollments/{enrollment.pk}/mark-paid/',
+                                          {'method': 'karta'}, format='json').status_code, 400)
+        self.client.post(f'/api/courses/enrollments/{enrollment.pk}/mark-paid/')
+        self.assertEqual(enrollment.payments.get().method, Payment.METHOD_CASH)
+
+    @override_settings(FAKTUROWNIA_MODE='live', FAKTUROWNIA_DOMAIN='mcmed', FAKTUROWNIA_API_TOKEN='tok')
+    def test_company_enrollment_gets_company_proforma_and_invoice(self):
+        def created(n):
+            return mock.Mock(status_code=201, json=lambda: {'id': n, 'number': f'DOK {n}', 'view_url': ''})
+        ok = mock.Mock(status_code=200, content=b'%PDF-1.4')
+        with mock.patch('courses.fakturownia.requests.post', side_effect=[created(1), created(2), ok]) as post, \
+             mock.patch('courses.fakturownia.requests.get', return_value=ok):
+            resp = self.enroll_public(invoice_company=True, company_name='Szpital Sp. z o.o.', company_nip='526-025-09-95',
+                                      company_zip_code='00-001', company_city='Warszawa', company_street='Prosta 1')
+            self.assertEqual(resp.status_code, 201, resp.data)
+            mark_paid_and_invoice(Enrollment.objects.get(), Payment.METHOD_CASH)
+        proforma, vat = (c.kwargs['json']['invoice'] for c in post.call_args_list[:2])
+        for doc in (proforma, vat):
+            self.assertTrue(doc['buyer_company'])
+            self.assertEqual(doc['buyer_name'], 'Szpital Sp. z o.o.')
+            self.assertEqual(doc['buyer_tax_no'], '5260250995')
+            self.assertEqual((doc['buyer_post_code'], doc['buyer_city'], doc['buyer_street']),
+                             ('00-001', 'Warszawa', 'Prosta 1'))
+        self.assertEqual((proforma['kind'], vat['kind'], vat['from_invoice_id']), ('proforma', 'vat', '1'))
+
+    @override_settings(FAKTUROWNIA_MODE='live', FAKTUROWNIA_DOMAIN='mcmed', FAKTUROWNIA_API_TOKEN='tok')
+    def test_vat_invoice_email_sent_by_fakturownia(self):
+        enrollment = make_enrollment(self.course)
+        created = mock.Mock(status_code=201, json=lambda: {'id': 77, 'number': 'FV 1/2026', 'view_url': ''})
+        with mock.patch('courses.fakturownia.requests.post', side_effect=[created, mock.Mock(status_code=200)]) as post:
+            mark_paid_and_invoice(enrollment, Payment.METHOD_CASH)
+        invoice_body = post.call_args_list[0].kwargs['json']['invoice']
+        self.assertEqual(invoice_body['payment_type'], 'cash')
+        send = post.call_args_list[1]
+        self.assertEqual(send.args[0], 'https://mcmed.fakturownia.pl/invoices/77/send_by_email.json')
+        self.assertEqual(send.kwargs['params']['email_to'], enrollment.email)
+        self.assertTrue(enrollment.invoices.get().email_sent)
+        self.assertEqual(mail.outbox, [])
+
+    @override_settings(DEBUG=False)
+    def test_fake_confirm_disabled_outside_debug(self):
+        enrollment = make_enrollment(self.course)
+        resp = self.client.post(f'/api/payments/{enrollment.payment_token}/fake-confirm/', {'session': 'x'})
+        self.assertEqual(resp.status_code, 404)
+
+
+class TermsAcceptanceTests(TestCase):
+    """Zapis na kurs wymaga akceptacji regulaminu; data akceptacji trafia do bazy."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.course = Course.objects.create(name='KPP Ełk', price='1200.00', max_participants=10)
+
+    def enroll_public(self, **extra):
+        data = dict(
+            course=self.course.pk, first_name='Jan', last_name='Kowalski', pesel='90010112345',
+            birth_date='1990-01-01', email='jan@example.com', phone='500600700', zip_code='30-001',
+            city='Kraków', street='Długa', house_number='1', password='haslo12345',
+        )
+        data.update(extra)
+        return self.client.post('/api/courses/enrollments/', data, format='json')
+
+    def test_public_enrollment_requires_terms(self):
+        resp = self.enroll_public()
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('terms_accepted', resp.data)
+        self.assertEqual(self.enroll_public(terms_accepted=False).status_code, 400)
+        self.assertFalse(Enrollment.objects.exists())
+
+    def test_public_enrollment_stores_acceptance_time(self):
+        resp = self.enroll_public(terms_accepted=True)
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertNotIn('terms_accepted', resp.data)
+        self.assertIsNotNone(Enrollment.objects.get().terms_accepted_at)
+
+    def test_enroll_me_requires_terms(self):
+        user = User.objects.create_user('jan@example.com', 'jan@example.com', 'haslo12345')
+        old_course = Course.objects.create(name='Stary', price='1000.00', course_days=['2025-01-10', '2025-01-11'])
+        make_enrollment(old_course, user=user)  # zakończony kurs — szybki zapis bierze z niego dane
+        self.client.force_authenticate(user)
+        resp = self.client.post('/api/courses/enroll-me/', {'course': self.course.pk}, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('terms_accepted', resp.data)
+        with self.captureOnCommitCallbacks(execute=True):
+            resp = self.client.post('/api/courses/enroll-me/', {'course': self.course.pk, 'terms_accepted': True}, format='json')
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertIsNotNone(Enrollment.objects.get(course=self.course).terms_accepted_at)
+
+    def test_admin_added_enrollment_has_no_acceptance(self):
+        self.assertIsNone(make_enrollment(self.course).terms_accepted_at)
+
+
+class SendEmailAttachmentsTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.client.force_authenticate(User.objects.create_user('admin', 'admin@example.com', 'x', is_staff=True))
+        course = Course.objects.create(name='Kurs')
+        self.first = make_enrollment(course, email='a@example.com')
+        self.second = make_enrollment(course, email='b@example.com')
+
+    def test_attachments_go_to_every_recipient(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        res = self.client.post('/api/courses/enrollments/send-email/', {
+            'enrollment_ids': [self.first.id, self.second.id],
+            'subject': 'Materiały',
+            'body': 'W załączniku materiały.',
+            'attachments': [
+                SimpleUploadedFile('plan.pdf', b'%PDF-1.4 plan', content_type='application/pdf'),
+                SimpleUploadedFile('lista.txt', b'lista', content_type='text/plain'),
+            ],
+        }, format='multipart')
+        self.assertEqual(res.status_code, 200, res.data)
+        self.assertEqual(res.data['sent'], 2)
+        self.assertEqual(len(mail.outbox), 2)
+        for msg in mail.outbox:
+            files = [a for a in msg.attachments if isinstance(a, tuple)]
+            self.assertEqual([(n, c) for n, c, _ in files], [('plan.pdf', b'%PDF-1.4 plan'), ('lista.txt', 'lista')])
+
+    def test_json_without_attachments_still_works(self):
+        res = self.client.post('/api/courses/enrollments/send-email/', {
+            'enrollment_ids': [self.first.id], 'subject': 'Temat', 'body': 'Treść',
+        }, format='json')
+        self.assertEqual(res.status_code, 200, res.data)
+        self.assertEqual(res.data['sent'], 1)

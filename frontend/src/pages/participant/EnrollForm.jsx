@@ -26,6 +26,29 @@ const EMPTY = {
   schedule_consent: false,
   cert_validity_consent: false,
   employment_consent: false,
+  invoice_company: false,
+  company_name: '',
+  company_nip: '',
+  company_zip_code: '',
+  company_city: '',
+  company_street: '',
+}
+
+const COMPANY_KEYS = ['invoice_company', 'company_name', 'company_nip', 'company_zip_code', 'company_city', 'company_street']
+
+function companyData(form) {
+  return Object.fromEntries(COMPANY_KEYS.map(k => [k, form[k]]))
+}
+
+function validateCompany(form) {
+  const e = {}
+  if (!form.invoice_company) return e
+  if (!form.company_name.trim())   e.company_name = 'Podaj nazwę firmy.'
+  if (!/^\d{10}$/.test(form.company_nip.replace(/[-\s]/g, ''))) e.company_nip = 'NIP musi mieć 10 cyfr.'
+  if (!/^\d{2}-\d{3}$/.test(form.company_zip_code)) e.company_zip_code = 'Format: XX-XXX'
+  if (!form.company_city.trim())   e.company_city = 'Podaj miejscowość.'
+  if (!form.company_street.trim()) e.company_street = 'Podaj ulicę i numer.'
+  return e
 }
 
 export default function EnrollForm() {
@@ -38,6 +61,7 @@ export default function EnrollForm() {
   const [enrolledEmail, setEnrolledEmail] = useState('')
   const [resendState, setResendState] = useState('idle') // idle | loading | sent | error
   const [emailExists, setEmailExists] = useState(null)  // null | {active: bool}
+  const [paymentUrl, setPaymentUrl]   = useState('')
 
   // Zalogowany uczestnik
   const [isLoggedIn, setIsLoggedIn]   = useState(() => !!localStorage.getItem('participant_access_token'))
@@ -133,7 +157,7 @@ export default function EnrollForm() {
       if (!form.cert_validity_consent) e.cert_validity_consent = 'To oświadczenie jest wymagane.'
       if (!form.employment_consent)    e.employment_consent    = 'To oświadczenie jest wymagane.'
     }
-    return e
+    return { ...e, ...validateCompany(form) }
   }
 
   async function handleSubmit(e) {
@@ -147,11 +171,12 @@ export default function EnrollForm() {
     setEmailExists(null)
 
     try {
-      await submitEnrollment({
+      const { data } = await submitEnrollment({
         ...form,
         birth_date: form.birth_date || null,
         cert_date:  form.cert_date  || null,
       })
+      setPaymentUrl(data.payment_url || '')
       setEnrolledEmail(form.email)
       setStatus('success')
     } catch (err) {
@@ -193,6 +218,21 @@ export default function EnrollForm() {
             <span className="text-3xl">✓</span>
           </div>
           <h2 className="text-2xl font-extrabold text-gray-900 mb-3">Zapisano!</h2>
+
+          {paymentUrl && (
+            <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-4 text-left mb-6">
+              <p className="text-sm text-gray-700 leading-relaxed mb-3">
+                Na Twój e-mail wysłaliśmy fakturę proforma. Za kurs możesz zapłacić od razu online –
+                po zaksięgowaniu wpłaty otrzymasz fakturę VAT.
+              </p>
+              <a
+                href={paymentUrl}
+                className="block text-center bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-2.5 rounded-lg transition-colors text-sm"
+              >
+                Zapłać teraz
+              </a>
+            </div>
+          )}
 
           {isLoggedIn ? (
             <>
@@ -269,18 +309,23 @@ export default function EnrollForm() {
       if (!form.cert_validity_consent) errs.cert_validity_consent = 'To oświadczenie jest wymagane.'
       if (!form.employment_consent)    errs.employment_consent    = 'To oświadczenie jest wymagane.'
     }
+    Object.assign(errs, validateCompany(form))
     if (Object.keys(errs).length) { setErrors(errs); return }
 
     setQuickError('')
     setStatus('loading')
     try {
-      await enrollMe(quickCourse, { cert_number: form.cert_number, cert_date: form.cert_date || null })
+      const { data } = await enrollMe(quickCourse, {
+        terms_accepted: form.terms_accepted,
+        cert_number: form.cert_number, cert_date: form.cert_date || null, ...companyData(form),
+      })
+      setPaymentUrl(data.payment_url || '')
       setEnrolledEmail(profile?.email || '')
       setStatus('success')
     } catch (err) {
       setStatus('idle')
       const data = err.response?.data
-      setQuickError(data?.course || data?.error || 'Wystąpił błąd. Spróbuj ponownie.')
+      setQuickError(data?.course || data?.terms_accepted || data?.error || 'Wystąpił błąd. Spróbuj ponownie.')
     }
   }
 
@@ -309,11 +354,13 @@ export default function EnrollForm() {
       if (!form.cert_validity_consent) errs.cert_validity_consent = 'To oświadczenie jest wymagane.'
       if (!form.employment_consent)    errs.employment_consent    = 'To oświadczenie jest wymagane.'
     }
+    Object.assign(errs, validateCompany(form))
     if (Object.keys(errs).length) { setErrors(errs); return }
 
     setStatus('loading')
     try {
-      await enrollMe(form.course, {
+      const { data } = await enrollMe(form.course, {
+        terms_accepted: form.terms_accepted,
         first_name: form.first_name, last_name: form.last_name,
         pesel: form.pesel, birth_date: form.birth_date,
         email: form.email, phone: form.phone,
@@ -323,7 +370,9 @@ export default function EnrollForm() {
         photo_consent: form.photo_consent,
         cert_number: form.cert_number,
         cert_date: form.cert_date || null,
+        ...companyData(form),
       })
+      setPaymentUrl(data.payment_url || '')
       setEnrolledEmail(form.email || accountEmail)
       setStatus('success')
     } catch (err) {
@@ -396,6 +445,8 @@ export default function EnrollForm() {
               <Info label="Adres" value={`${profile.street} ${profile.house_number}${profile.apartment_number ? `/${profile.apartment_number}` : ''}, ${profile.zip_code} ${profile.city}`} />
             </div>
           </section>
+
+          <InvoiceSection form={form} errors={errors} onChange={handleChange} />
 
           <section className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
             <h2 className="text-base font-bold text-gray-900 mb-4">Zgody</h2>
@@ -553,6 +604,8 @@ export default function EnrollForm() {
           </div>
         </section>
 
+        <InvoiceSection form={form} errors={errors} onChange={handleChange} />
+
         {/* Konto – tylko dla niezalogowanych */}
         {!isLoggedIn && (
           <section className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
@@ -657,6 +710,34 @@ export default function EnrollForm() {
         </button>
       </form>
     </div>
+  )
+}
+
+function InvoiceSection({ form, errors, onChange }) {
+  return (
+    <section className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+      <h2 className="text-base font-bold text-gray-900 mb-4">Dane do faktury</h2>
+      <ConsentCheckbox
+        name="invoice_company" checked={form.invoice_company} onChange={onChange}
+        label="Chcę fakturę na firmę (np. kurs opłaca pracodawca)"
+      />
+      {!form.invoice_company && (
+        <p className="text-xs text-gray-400 mt-2 ml-7">Bez zaznaczenia faktura zostanie wystawiona na Twoje imię i nazwisko.</p>
+      )}
+      {form.invoice_company && (
+        <div className="mt-4 space-y-4">
+          <Field label="Nazwa firmy" name="company_name" value={form.company_name} onChange={onChange} error={errors.company_name} />
+          <Field label="NIP" name="company_nip" value={form.company_nip} onChange={onChange} error={errors.company_nip} inputMode="numeric" placeholder="0000000000" maxLength={13} />
+          <div className="grid grid-cols-3 gap-4">
+            <Field label="Kod pocztowy" name="company_zip_code" value={form.company_zip_code} onChange={onChange} error={errors.company_zip_code} placeholder="00-000" maxLength={6} />
+            <div className="col-span-2">
+              <Field label="Miejscowość" name="company_city" value={form.company_city} onChange={onChange} error={errors.company_city} />
+            </div>
+          </div>
+          <Field label="Ulica i numer" name="company_street" value={form.company_street} onChange={onChange} error={errors.company_street} />
+        </div>
+      )}
+    </section>
   )
 }
 

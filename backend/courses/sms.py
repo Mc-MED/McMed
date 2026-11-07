@@ -1,8 +1,11 @@
+import logging
 import re
 import requests
 from django.conf import settings
 
 SMSAPI_URL = 'https://api.smsapi.pl/sms.do'
+
+logger = logging.getLogger(__name__)
 
 
 def _normalize_phone(phone: str) -> str | None:
@@ -24,6 +27,10 @@ def send_sms(phone: str, message: str) -> tuple[bool, str]:
     Wysyła SMS przez SMSAPI.pl.
     Zwraca (sukces: bool, komunikat: str).
     """
+    if getattr(settings, 'SMS_MODE', 'live') == 'log':
+        logger.warning('SMS (tryb testowy, nie wysłano) do %s: %s', phone, message)
+        return True, 'ok (tryb testowy)'
+
     token = getattr(settings, 'SMS_API_TOKEN', '')
     if not token:
         return False, 'Brak tokenu SMS_API_TOKEN w konfiguracji.'

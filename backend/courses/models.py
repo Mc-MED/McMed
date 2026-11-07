@@ -1,4 +1,5 @@
 import math
+import uuid
 import datetime
 from django.db import models
 from django.utils import timezone
@@ -221,7 +222,14 @@ class Enrollment(models.Model):
     apartment_number = models.CharField(max_length=20, blank=True)
     cert_number      = models.CharField(max_length=100, blank=True, default='')
     cert_date        = models.DateField(null=True, blank=True)
+    # Przypomnienie o recertyfikacji 3 miesiące przed wygaśnięciem certyfikatu (notifications/reminders.py)
+    recert_email_sent_at  = models.DateTimeField(null=True, blank=True)
+    recert_sms_sent_at    = models.DateTimeField(null=True, blank=True)
+    recert_reminder_error = models.TextField(blank=True, default='')
     photo_consent    = models.BooleanField(default=False)
+    # Akceptacja regulaminu i polityki prywatności przy zapisie (formularz publiczny / enroll_me);
+    # puste dla zapisów dodanych przez admina
+    terms_accepted_at = models.DateTimeField(null=True, blank=True)
     # Egzamin praktyczny — średnie z ocen członków komisji (liczone w recompute_practical_grades)
     exam_rko         = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     exam_zad1        = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
@@ -250,6 +258,15 @@ class Enrollment(models.Model):
         choices=[('none', 'Brak'), ('deposit', 'Zaliczka'), ('paid', 'Opłacony')],
         default='none',
     )
+    # Dane do faktury na firmę (opcjonalne, z formularza zapisu)
+    invoice_company  = models.BooleanField(default=False)
+    company_name     = models.CharField(max_length=300, blank=True, default='')
+    company_nip      = models.CharField(max_length=10, blank=True, default='')
+    company_zip_code = models.CharField(max_length=6, blank=True, default='')
+    company_city     = models.CharField(max_length=100, blank=True, default='')
+    company_street   = models.CharField(max_length=200, blank=True, default='')
+    # Publiczny link do płatności online: /platnosc/<payment_token>
+    payment_token    = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     created_at       = models.DateTimeField(auto_now_add=True)
     # Miejsce na liście kursu — z niego wynika Lp. w dokumentach. Usunięty uczestnik je zachowuje,
     # więc po przywróceniu wraca na to samo miejsce.
@@ -259,8 +276,8 @@ class Enrollment(models.Model):
     is_deleted      = models.BooleanField(default=False)
     deleted_at      = models.DateTimeField(null=True, blank=True)
     deletion_reason = models.CharField(max_length=15, blank=True, choices=[
-        ('forfeit',    'Rezygnacja (bez powodu) – zaliczka przepadła'),
-        ('refund',     'Rezygnacja z przyczyn losowych – zwrot zaliczki'),
+        ('forfeit',    'Rezygnacja (bez powodu) – bez zwrotu wpłaty'),
+        ('refund',     'Rezygnacja z przyczyn losowych – zwrot wpłaty'),
         ('reschedule', 'Rezygnacja z przyczyn losowych – zmiana terminu'),
     ])
 
@@ -297,3 +314,51 @@ class Enrollment(models.Model):
         for task in PRACTICAL_TASKS:
             setattr(self, f'exam_{task}',
                     round_grade(getattr(self, practical_field(r, task)) for r in COMMITTEE_ROLES))
+
+
+class Invoice(models.Model):
+    """Dokument sprzedaży wystawiony w Fakturowni dla zapisu na kurs."""
+    KIND_PROFORMA = 'proforma'
+    KIND_VAT      = 'vat'
+
+    enrollment     = models.ForeignKey(Enrollment, on_delete=models.CASCADE, related_name='invoices')
+    kind           = models.CharField(max_length=10, choices=[(KIND_PROFORMA, 'Proforma'), (KIND_VAT, 'Faktura VAT')])
+    fakturownia_id = models.CharField(max_length=50, blank=True, default='')
+    number         = models.CharField(max_length=100, blank=True, default='')
+    amount_gross   = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    view_url       = models.CharField(max_length=500, blank=True, default='')
+    created_at     = models.DateTimeField(auto_now_add=True)
+    email_sent     = models.BooleanField(default=False)
+    sms_sent       = models.BooleanField(default=False)
+    send_error     = models.TextField(blank=True, default='')
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f'{self.get_kind_display()} {self.number}'
+
+
+class Payment(models.Model):
+    """Wpłata za kurs: online (Przelewy24) albo oznaczona przez admina (gotówka / przelew tradycyjny)."""
+    STATUS_PENDING = 'pending'
+    STATUS_PAID    = 'paid'
+    STATUS_FAILED  = 'failed'
+    METHOD_ONLINE   = 'online'
+    METHOD_TRANSFER = 'transfer'
+    METHOD_CASH     = 'cash'
+
+    enrollment   = models.ForeignKey(Enrollment, on_delete=models.CASCADE, related_name='payments')
+    session_id   = models.CharField(max_length=100, unique=True)
+    amount       = models.PositiveIntegerField()  # w groszach
+    status       = models.CharField(max_length=10, default=STATUS_PENDING, choices=[
+                       (STATUS_PENDING, 'Oczekuje'), (STATUS_PAID, 'Opłacona'), (STATUS_FAILED, 'Odrzucona')])
+    method       = models.CharField(max_length=10, default=METHOD_ONLINE, choices=[
+                       (METHOD_ONLINE, 'Online (Przelewy24)'), (METHOD_TRANSFER, 'Przelew tradycyjny'),
+                       (METHOD_CASH, 'Gotówka')])
+    p24_order_id = models.CharField(max_length=50, blank=True, default='')
+    created_at   = models.DateTimeField(auto_now_add=True)
+    paid_at      = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['created_at']
