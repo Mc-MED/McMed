@@ -179,6 +179,7 @@ Po zapisie ocen praktycznych członka komisji serializer wywołuje `Enrollment.r
 - Modele: `Invoice` (proforma / vat, numer, wysyłka, `send_error`), `Payment` (online / transfer / cash, kwota w groszach). `Enrollment`: dane do faktury na firmę `invoice_company`, `company_*` (NIP sprawdzany sumą kontrolną).
 - Błąd Fakturowni, maila czy SMS-a nie przerywa zapisu ani płatności — widać go w Płatnościach („Wystaw ponownie” / „Wyślij ponownie”).
 - Tryby w `.env`: `P24_MODE` (fake / sandbox / production), `FAKTUROWNIA_MODE` (fake / live), `SMS_MODE` (log / live). Lokalnie: fake / fake / log. Sandbox P24 wymaga publicznego `BACKEND_URL` (ngrok).
+- `P24_MODE=sandbox` na produkcji (do czasu weryfikacji konta P24): wpłata kończy się statusem `test` — zapis zostaje nieopłacony, faktura nie powstaje, strona płatności proponuje przelew lub gotówkę.
 
 ### Przypomnienia o recertyfikacji (`notifications/reminders.py`)
 - Certyfikat ważny 3 lata od `Enrollment.cert_date`; od 3 miesięcy przed wygaśnięciem do dnia wygaśnięcia uczestnik dostaje mail (przycisk do `/konto`) i SMS.

@@ -341,6 +341,24 @@ class BillingTests(TestCase):
         self.assertTrue(enrollment.invoices.get().email_sent)
         self.assertEqual(mail.outbox, [])
 
+    @override_settings(P24_MODE='sandbox', P24_MERCHANT_ID='1', P24_CRC='crc', P24_API_KEY='key')
+    def test_sandbox_payment_does_not_mark_paid_or_invoice(self):
+        enrollment = make_enrollment(self.course)
+        payment = Payment.objects.create(enrollment=enrollment, session_id='s1', amount=120000)
+        with mock.patch('courses.przelewy24.notification_valid', return_value=True), \
+             mock.patch('courses.przelewy24.verify', return_value=(True, '')):
+            resp = self.client.post('/api/payments/p24/notify/',
+                                    {'sessionId': 's1', 'amount': 120000, 'orderId': 9}, format='json')
+        self.assertEqual(resp.status_code, 200)
+        payment.refresh_from_db()
+        enrollment.refresh_from_db()
+        self.assertEqual(payment.status, Payment.STATUS_TEST)
+        self.assertNotEqual(enrollment.payment_status, 'paid')
+        self.assertFalse(enrollment.invoices.exists())
+        info = self.client.get(f'/api/payments/{enrollment.payment_token}/').data
+        self.assertTrue(info['test_payment'])
+        self.assertFalse(info['paid'])
+
     @override_settings(DEBUG=False)
     def test_fake_confirm_disabled_outside_debug(self):
         enrollment = make_enrollment(self.course)

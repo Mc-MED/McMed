@@ -28,6 +28,7 @@ def payment_info(request, token):
     enrollment = _enrollment(token)
     proforma = enrollment.invoices.filter(kind=Invoice.KIND_PROFORMA).exclude(fakturownia_id='').first()
     invoice  = enrollment.invoices.filter(kind=Invoice.KIND_VAT).exclude(fakturownia_id='').first()
+    last_online = enrollment.payments.filter(method=Payment.METHOD_ONLINE).order_by('created_at').last()
     return Response({
         'first_name':      enrollment.first_name,
         'last_name':       enrollment.last_name,
@@ -38,6 +39,7 @@ def payment_info(request, token):
         'invoice_number':  invoice.number if invoice else '',
         'paid':            enrollment.payment_status == 'paid',
         'pending':         enrollment.payments.filter(status=Payment.STATUS_PENDING, method=Payment.METHOD_ONLINE).exists(),
+        'test_payment':    bool(last_online and last_online.status == Payment.STATUS_TEST),
     })
 
 
@@ -118,6 +120,13 @@ def p24_notify(request):
         logger.error('Przelewy24: weryfikacja %s nieudana: %s', payment.session_id, msg)
         return Response(status=status.HTTP_502_BAD_GATEWAY)
     payment.p24_order_id = str(data['orderId'])
+    if przelewy24.mode() == 'sandbox':
+        # Sandbox na żywej stronie (np. na czas weryfikacji konta P24): pieniądze nie wpłynęły,
+        # więc zapis zostaje nieopłacony i nie powstaje faktura VAT.
+        logger.warning('Przelewy24 sandbox: płatność testowa %s — bez faktury', payment.session_id)
+        payment.status = Payment.STATUS_TEST
+        payment.save(update_fields=['p24_order_id', 'status'])
+        return Response({'ok': True})
     payment.save(update_fields=['p24_order_id'])
     mark_paid_and_invoice(payment.enrollment, Payment.METHOD_ONLINE, payment)
     return Response({'ok': True})

@@ -20,7 +20,7 @@ export default function Payment({ view = 'summary' }) {
 
   // Po powrocie z bramki potwierdzenie przychodzi z P24 osobno — odpytujemy przez ok. minutę
   useEffect(() => {
-    if (view !== 'status' || !info || info.paid || checks >= 20) return
+    if (view !== 'status' || !info || info.paid || info.test_payment || checks >= 20) return
     const t = setTimeout(() => {
       fetchPayment(token).then(setInfo).catch(() => {})
       setChecks(c => c + 1)
@@ -102,6 +102,11 @@ export default function Payment({ view = 'summary' }) {
                     Płatność odrzucona
                   </button>
                 </div>
+              </div>
+            ) : view === 'status' && info.test_payment ? (
+              <div className="mt-6 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-900 leading-relaxed">
+                Płatności online są w trakcie uruchamiania – ta płatność była testowa i nie pobrano żadnych pieniędzy.
+                Kurs możesz opłacić przelewem na podstawie proformy z wiadomości e-mail lub gotówką.
               </div>
             ) : view === 'status' && checks < 20 && info.pending ? (
               <p className="mt-6 text-sm text-gray-500 text-center">Czekamy na potwierdzenie płatności…</p>

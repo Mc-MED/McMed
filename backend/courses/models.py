@@ -344,6 +344,7 @@ class Payment(models.Model):
     STATUS_PENDING = 'pending'
     STATUS_PAID    = 'paid'
     STATUS_FAILED  = 'failed'
+    STATUS_TEST    = 'test'  # wpłata w sandboxie P24 — bez pieniędzy, bez faktury
     METHOD_ONLINE   = 'online'
     METHOD_TRANSFER = 'transfer'
     METHOD_CASH     = 'cash'
@@ -352,7 +353,8 @@ class Payment(models.Model):
     session_id   = models.CharField(max_length=100, unique=True)
     amount       = models.PositiveIntegerField()  # w groszach
     status       = models.CharField(max_length=10, default=STATUS_PENDING, choices=[
-                       (STATUS_PENDING, 'Oczekuje'), (STATUS_PAID, 'Opłacona'), (STATUS_FAILED, 'Odrzucona')])
+                       (STATUS_PENDING, 'Oczekuje'), (STATUS_PAID, 'Opłacona'), (STATUS_FAILED, 'Odrzucona'),
+                       (STATUS_TEST, 'Testowa (sandbox P24)')])
     method       = models.CharField(max_length=10, default=METHOD_ONLINE, choices=[
                        (METHOD_ONLINE, 'Online (Przelewy24)'), (METHOD_TRANSFER, 'Przelew tradycyjny'),
                        (METHOD_CASH, 'Gotówka')])
