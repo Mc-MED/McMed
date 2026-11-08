@@ -8,6 +8,7 @@ python-docx>=1.1
 docxtpl>=0.20
 requests>=2.31
 Pillow>=10.0
+pypdfium2>=4.30
 openpyxl>=3.1
 gunicorn>=22.0
 whitenoise>=6.7

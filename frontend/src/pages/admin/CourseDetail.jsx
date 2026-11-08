@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { adminFetchCourse, adminUpdateCourse, adminDeleteCourse, adminFetchEnrollments, adminReorderEnrollments, adminDeleteEnrollment, adminUpdateEnrollment, adminAnonymizeEnrollment, adminSoftDeleteEnrollment, adminFetchCourses, adminDownloadDocument, adminDownloadDocumentPdf, adminDownloadXlsx, adminDownloadAttendanceXlsx, adminFetchInstructors, adminSendEmail, adminSendSms, adminCreateEnrollment, adminDownloadCertificate, adminDownloadCertificatesZip, adminDownloadZaliczeniaZip } from '../../api/admin'
 import DeletionReasonModal from '../../components/DeletionReasonModal'
+import { DOCUMENT_ACCEPT, DOCUMENT_KINDS, adminDeleteDocument, adminDownloadStatement, adminOpenDocument, adminUploadDocument, checkDocumentFile, uploadErrorMessage } from '../../api/enrollmentDocuments'
 import { adminGetCourseFiles, adminUploadCourseFile, adminDownloadCourseFile, adminDeleteCourseFile } from '../../api/documents'
 import * as XLSX from 'xlsx'
 
@@ -297,7 +298,95 @@ function exportToExcel(enrollments, courseName) {
 
 // ─── Zakładka: Uczestnicy ─────────────────────────────────────────────
 
-function EditEnrollmentModal({ enrollment, courseType, onSave, onClose }) {
+// Skan certyfikatu i podpisane oświadczenie (recertyfikacja): podgląd w tabeli uczestników
+function DocumentBadges({ enrollment }) {
+  const docs = enrollment.documents || {}
+  return (
+    <div className="flex gap-1 mt-1" onClick={ev => ev.stopPropagation()}>
+      {DOCUMENT_KINDS.map(({ kind, label }) => {
+        const doc = docs[kind]
+        const short = kind === 'certificate' ? 'Cert.' : 'Ośw.'
+        return doc ? (
+          <button
+            key={kind}
+            onClick={() => adminOpenDocument(enrollment.id, kind).catch(() => alert('Nie udało się otworzyć pliku.'))}
+            title={`${label}: ${doc.original_name} – otwórz`}
+            className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+          >{short} ✓</button>
+        ) : (
+          <span key={kind} title={`${label}: brak`} className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 text-gray-400">{short} –</span>
+        )
+      })}
+    </div>
+  )
+}
+
+// Dodawanie / podmiana / usuwanie dokumentów w oknie edycji uczestnika
+function EnrollmentDocumentsEditor({ enrollment, onChange }) {
+  const [docs, setDocs]   = useState(enrollment.documents || {})
+  const [busy, setBusy]   = useState('')
+  const [error, setError] = useState('')
+
+  async function run(kind, action) {
+    setBusy(kind)
+    setError('')
+    try {
+      const next = await action()
+      setDocs(next)
+      onChange(next)
+    } catch (err) {
+      setError(uploadErrorMessage(err))
+    } finally {
+      setBusy('')
+    }
+  }
+
+  function upload(kind, file) {
+    if (!file) return
+    const msg = checkDocumentFile(file)
+    if (msg) { setError(msg); return }
+    run(kind, () => adminUploadDocument(enrollment.id, kind, file))
+  }
+
+  return (
+    <div className="mt-4 space-y-2">
+      {DOCUMENT_KINDS.map(({ kind, label }) => {
+        const doc = docs[kind]
+        return (
+          <div key={kind} className="flex items-center justify-between gap-3 text-sm">
+            <div className="min-w-0">
+              <span className="text-gray-700">{label}: </span>
+              {doc ? (
+                <button type="button" onClick={() => adminOpenDocument(enrollment.id, kind).catch(() => setError('Nie udało się otworzyć pliku.'))} className="text-blue-600 hover:underline break-all">
+                  {doc.original_name || 'plik'}
+                </button>
+              ) : <span className="text-gray-400">brak</span>}
+              {doc && (
+                <span className="text-xs text-gray-400"> · {new Date(doc.uploaded_at).toLocaleDateString('pl-PL')}{doc.uploaded_by_admin ? ' (admin)' : ''}</span>
+              )}
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              {doc && (
+                <button type="button" disabled={busy === kind} onClick={() => run(kind, () => adminDeleteDocument(enrollment.id, kind))} className="text-xs text-gray-400 hover:text-red-600 disabled:opacity-50">Usuń</button>
+              )}
+              <label className={`text-xs font-semibold text-blue-600 hover:underline ${busy === kind ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}>
+                {busy === kind ? 'Wysyłanie…' : doc ? 'Zmień' : 'Dodaj'}
+                <input type="file" accept={DOCUMENT_ACCEPT} className="hidden" disabled={busy === kind}
+                  onChange={e => { upload(kind, e.target.files[0]); e.target.value = '' }} />
+              </label>
+            </div>
+          </div>
+        )
+      })}
+      <button type="button" onClick={() => adminDownloadStatement(enrollment.id).catch(() => setError('Nie udało się pobrać oświadczenia.'))} className="text-xs text-blue-600 hover:underline">
+        Pobierz oświadczenie do podpisu (z danymi uczestnika)
+      </button>
+      {error && <p className="text-red-600 text-xs">{error}</p>}
+    </div>
+  )
+}
+
+function EditEnrollmentModal({ enrollment, courseType, onSave, onDocuments, onClose }) {
   const [form, setForm] = useState({
     first_name: enrollment.first_name,
     last_name: enrollment.last_name,
@@ -421,6 +510,7 @@ function EditEnrollmentModal({ enrollment, courseType, onSave, onClose }) {
                   <input type="date" name="cert_date" value={form.cert_date} onChange={set} className="field-input" />
                 </div>
               </div>
+              <EnrollmentDocumentsEditor enrollment={enrollment} onChange={onDocuments} />
             </div>
           )}
           <div className="border-t border-gray-100 pt-4 flex items-center gap-8">
@@ -893,6 +983,9 @@ function EnrollmentTable({ courseId, courseName, examDate, startDate, courseType
             setEnrollments(prev => prev.map(e => e.id === updated.id ? updated : e))
             setEditingEnrollment(null)
           }}
+          onDocuments={documents => {
+            setEnrollments(prev => prev.map(e => e.id === editingEnrollment.id ? { ...e, documents } : e))
+          }}
           onClose={() => setEditingEnrollment(null)}
         />
       )}
@@ -1210,6 +1303,7 @@ function EnrollmentTable({ courseId, courseName, examDate, startDate, courseType
                       {e.cert_date && <div className="text-gray-400">{formatDate(e.cert_date)}</div>}
                     </>
                   ) : <span className="text-gray-300">—</span>}
+                  {courseType === 'recert' && <DocumentBadges enrollment={e} />}
                 </td>
                 <td className="px-5 py-4">
                   <button

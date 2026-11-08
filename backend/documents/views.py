@@ -24,6 +24,7 @@ from docxtpl import DocxTemplate
 import openpyxl
 
 from courses.models import Course, Enrollment, Instructor
+from .stamps import add_stamps, course_stamps, stamps_cache_key
 from .models import Topic, TopicFile, TopicFileProgress, QuizProgress, CourseFile, TopicQuestion, TopicAnswerChoice, TopicQuizAttempt
 
 TEMPLATES_DIR = Path(__file__).parent / 'templates'
@@ -74,23 +75,25 @@ def _docx_to_pdf(docx_path, outdir, timeout=60):
     return proc.returncode == 0 and os.path.exists(pdf_path)
 
 
-def _render_pdf(tpl_path, context):
+def _render_pdf(tpl_path, context, stamps=None, cache=True):
     """Wypełniony szablon jako PDF (bajty) albo None.
 
     Gotowe PDF-y trafiają do backend/pdf_cache (poza /media — nginx go nie serwuje): kolejne pobranie tego samego dokumentu
     z tymi samymi danymi nie uruchamia LibreOffice. Zmiana danych lub szablonu → nowy klucz.
     """
     stat = os.stat(tpl_path)
-    key_src = json.dumps([str(tpl_path), stat.st_mtime_ns, stat.st_size, context], sort_keys=True, default=str)
+    key_src = json.dumps([str(tpl_path), stat.st_mtime_ns, stat.st_size, context, stamps_cache_key(stamps or [])],
+                         sort_keys=True, default=str)
     key = hashlib.sha256(key_src.encode()).hexdigest()
     cache_dir = os.path.join(settings.BASE_DIR, 'pdf_cache')
     cached = os.path.join(cache_dir, f'{key}.pdf')
-    if os.path.exists(cached):
+    if cache and os.path.exists(cached):
         with open(cached, 'rb') as f:
             return f.read()
 
     tpl = DocxTemplate(tpl_path)
     tpl.render(context)
+    add_stamps(tpl.docx, stamps)
     with tempfile.TemporaryDirectory() as tmpdir:
         docx_path = os.path.join(tmpdir, 'dokument.docx')
         tpl.save(docx_path)
@@ -99,6 +102,8 @@ def _render_pdf(tpl_path, context):
         with open(os.path.join(tmpdir, 'dokument.pdf'), 'rb') as f:
             pdf_bytes = f.read()
 
+    if not cache:
+        return pdf_bytes
     try:
         os.makedirs(cache_dir, exist_ok=True)
         tmp = f'{cached}.{os.getpid()}.tmp'
@@ -686,6 +691,7 @@ def download_certificate(request, enrollment_id, doc_name):
 
     tpl = DocxTemplate(tpl_path)
     tpl.render(_build_certificate_context(enrollment))
+    add_stamps(tpl.docx, course_stamps(enrollment.course))
 
     buf = BytesIO()
     tpl.save(buf)
@@ -717,7 +723,7 @@ def participant_certificate(request, enrollment_id):
     if not tpl_path.exists():
         return Response({'detail': 'Brak pliku szablonu certyfikatu.'}, status=404)
 
-    pdf_bytes = _render_pdf(tpl_path, _build_certificate_context(enrollment))
+    pdf_bytes = _render_pdf(tpl_path, _build_certificate_context(enrollment), course_stamps(enrollment.course))
     if pdf_bytes is None:
         return Response({'detail': 'Nie udało się wygenerować certyfikatu. Skontaktuj się z organizatorem.'}, status=500)
 
@@ -831,11 +837,13 @@ def download_certificates_zip(request, course_id):
     if not tpl_path.exists():
         return Response({'detail': 'Brak pliku szablonu certyfikatu.'}, status=404)
 
+    stamps = course_stamps(course)
     buf = BytesIO()
     with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
         for enrollment in enrollments:
             tpl = DocxTemplate(tpl_path)
             tpl.render(_build_certificate_context(enrollment))
+            add_stamps(tpl.docx, stamps)
             doc_buf = BytesIO()
             tpl.save(doc_buf)
             safe = f'{enrollment.last_name}_{enrollment.first_name}'.replace(' ', '_')

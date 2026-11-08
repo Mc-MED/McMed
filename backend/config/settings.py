@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from decouple import config
 
@@ -87,6 +88,8 @@ WHITENOISE_INDEX_FILE = True
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = config('MEDIA_ROOT', default=str(BASE_DIR / 'media'))
+# Pliki z danymi osobowymi (skany certyfikatów, oświadczenia) — wydawane tylko przez API, nginx ich nie serwuje
+PRIVATE_MEDIA_ROOT = config('PRIVATE_MEDIA_ROOT', default=os.path.join(MEDIA_ROOT, 'private'))
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

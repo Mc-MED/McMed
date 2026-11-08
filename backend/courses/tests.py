@@ -445,3 +445,250 @@ class SendEmailAttachmentsTests(TestCase):
         }, format='json')
         self.assertEqual(res.status_code, 200, res.data)
         self.assertEqual(res.data['sent'], 1)
+
+
+class EnrollmentDocumentsTests(TestCase):
+    """Skan certyfikatu i podpisane oświadczenie przy zapisie na recertyfikację."""
+
+    def setUp(self):
+        import tempfile
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        override = override_settings(PRIVATE_MEDIA_ROOT=self._tmp.name)
+        override.enable()
+        self.addCleanup(override.disable)
+
+        self.client = APIClient()
+        self.user = User.objects.create_user('uczestnik@example.com', 'uczestnik@example.com', 'haslo12345')
+        self.other = User.objects.create_user('inny@example.com', 'inny@example.com', 'haslo12345')
+        self.admin = User.objects.create_user('admin', 'admin@example.com', 'haslo12345', is_staff=True)
+        self.recert = Course.objects.create(name='Recert', course_type=Course.TYPE_RECERT, max_participants=10,
+                                            exam_date=timezone.now().date() + timedelta(days=30))
+        self.kpp = Course.objects.create(name='KPP')
+        self.enrollment = make_enrollment(self.recert, user=self.user, cert_number='KPP/1')
+
+    def upload(self, url, name='cert.pdf', content=b'%PDF-1.4 skan', kind='certificate'):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        return self.client.post(url, {'kind': kind, 'file': SimpleUploadedFile(name, content)}, format='multipart')
+
+    def test_participant_uploads_downloads_and_replaces(self):
+        from .models import EnrollmentDocument
+        self.client.force_authenticate(self.user)
+        url = f'/api/courses/my-enrollments/{self.enrollment.id}/documents/'
+        res = self.upload(url)
+        self.assertEqual(res.status_code, 201, res.data)
+        self.assertEqual(res.data['certificate']['original_name'], 'cert.pdf')
+        self.assertIsNone(res.data['statement'])
+        first = EnrollmentDocument.objects.get().file.name
+
+        res = self.upload(url, name='zdjecie.jpg', content=b'\xff\xd8\xff\xe0 jpeg')
+        self.assertEqual(res.status_code, 201, res.data)
+        doc = EnrollmentDocument.objects.get()
+        self.assertFalse(doc.file.storage.exists(first))
+
+        res = self.client.get(f'{url}certificate/')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(b''.join(res.streaming_content), b'\xff\xd8\xff\xe0 jpeg')
+
+        listed = self.client.get('/api/courses/my-enrollments/').data[0]['documents']
+        self.assertEqual(listed['certificate']['original_name'], 'zdjecie.jpg')
+
+        res = self.client.delete(f'{url}certificate/')
+        self.assertEqual(res.status_code, 200)
+        self.assertFalse(doc.file.storage.exists(doc.file.name))
+
+    def test_rejects_bad_files(self):
+        self.client.force_authenticate(self.user)
+        url = f'/api/courses/my-enrollments/{self.enrollment.id}/documents/'
+        self.assertEqual(self.upload(url, name='a.exe', content=b'MZ').status_code, 400)
+        self.assertEqual(self.upload(url, name='a.pdf', content=b'<html>').status_code, 400)
+        self.assertEqual(self.upload(url, kind='inne').status_code, 400)
+        kpp = make_enrollment(self.kpp, user=self.user)
+        self.assertEqual(self.upload(f'/api/courses/my-enrollments/{kpp.id}/documents/').status_code, 400)
+
+    def test_other_participant_has_no_access(self):
+        self.client.force_authenticate(self.user)
+        self.upload(f'/api/courses/my-enrollments/{self.enrollment.id}/documents/')
+        self.client.force_authenticate(self.other)
+        base = f'/api/courses/my-enrollments/{self.enrollment.id}/'
+        self.assertEqual(self.client.get(f'{base}documents/certificate/').status_code, 404)
+        self.assertEqual(self.upload(f'{base}documents/').status_code, 404)
+        self.assertEqual(self.client.get(f'/api/courses/enrollments/{self.enrollment.id}/documents/certificate/').status_code, 403)
+
+    def test_upload_by_token_only_shortly_after_enrollment(self):
+        url = f'/api/courses/enrollments/upload/{self.enrollment.payment_token}/'
+        res = self.upload(url)
+        self.assertEqual(res.status_code, 201, res.data)
+        self.assertEqual(res.data, {'ok': True})
+        self.assertEqual(self.upload(url).status_code, 400)          # bez podmiany przez link
+        self.assertEqual(self.upload(url, kind='statement').status_code, 201)
+        Enrollment.objects.filter(pk=self.enrollment.pk).update(created_at=timezone.now() - timedelta(days=2))
+        self.assertEqual(self.upload(url).status_code, 404)
+
+    def test_admin_sees_uploads_and_anonymize_removes_them(self):
+        from .models import EnrollmentDocument
+        self.client.force_authenticate(self.admin)
+        res = self.upload(f'/api/courses/enrollments/{self.enrollment.id}/documents/', kind='statement')
+        self.assertEqual(res.status_code, 201, res.data)
+        self.assertTrue(res.data['statement']['uploaded_by_admin'])
+        listed = self.client.get(f'/api/courses/enrollments/list/?course={self.recert.id}').data
+        self.assertIsNotNone(listed[0]['documents']['statement'])
+        res = self.client.get(f'/api/courses/enrollments/{self.enrollment.id}/documents/statement/')
+        self.assertEqual(res.status_code, 200)
+        path = EnrollmentDocument.objects.get().file.name
+        import os
+        from django.conf import settings
+        self.assertTrue(os.path.exists(os.path.join(settings.PRIVATE_MEDIA_ROOT, path)))   # katalog z testu, nie prawdziwy
+        self.client.post(f'/api/courses/enrollments/{self.enrollment.id}/anonymize/', {})
+        self.assertFalse(EnrollmentDocument.objects.exists())
+        from .models import private_storage
+        self.assertFalse(private_storage().exists(path))
+
+    def test_statement_is_generated(self):
+        self.client.force_authenticate(self.user)
+        res = self.client.get(f'/api/courses/my-enrollments/{self.enrollment.id}/statement/')
+        self.assertEqual(res.status_code, 200)
+        self.assertIn('oswiadczenie', res['Content-Disposition'])
+
+    def test_enroll_me_saves_cert_number(self):
+        self.client.force_authenticate(self.other)
+        res = self.client.post('/api/courses/enroll-me/', {
+            'course': self.recert.id, 'terms_accepted': True,
+            'first_name': 'Ewa', 'last_name': 'Nowak', 'pesel': '90010112345', 'birth_date': '1990-01-01',
+            'phone': '500600700', 'zip_code': '30-001', 'city': 'Kraków', 'street': 'Długa', 'house_number': '1',
+            'cert_number': 'KPP/2023/7', 'cert_date': '2023-05-01',
+        }, format='json')
+        self.assertEqual(res.status_code, 201, res.data)
+        e = Enrollment.objects.get(pk=res.data['id'])
+        self.assertEqual((e.cert_number, str(e.cert_date)), ('KPP/2023/7', '2023-05-01'))
+
+    def test_enroll_me_requires_valid_cert_data(self):
+        self.client.force_authenticate(self.other)
+        base = {
+            'course': self.recert.id, 'terms_accepted': True,
+            'first_name': 'Ewa', 'last_name': 'Nowak', 'pesel': '90010112345', 'birth_date': '1990-01-01',
+            'phone': '500600700', 'zip_code': '30-001', 'city': 'Kraków', 'street': 'Długa', 'house_number': '1',
+        }
+        res = self.client.post('/api/courses/enroll-me/', {**base, 'cert_date': '2023-05-01'}, format='json')
+        self.assertIn('cert_number', res.data)
+        res = self.client.post('/api/courses/enroll-me/', {**base, 'cert_number': 'X', 'cert_date': '2999-01-01'}, format='json')
+        self.assertIn('cert_date', res.data)
+
+    def test_download_name_with_polish_letters(self):
+        Enrollment.objects.filter(pk=self.enrollment.pk).update(last_name='Ślązak')
+        self.client.force_authenticate(self.user)
+        self.assertEqual(self.upload(f'/api/courses/my-enrollments/{self.enrollment.id}/documents/').status_code, 201)
+        res = self.client.get(f'/api/courses/my-enrollments/{self.enrollment.id}/documents/certificate/')
+        self.assertIn("filename*=utf-8''certyfikat_%C5%9Al%C4%85zak", res['Content-Disposition'])
+
+
+class InstructorStampTests(TestCase):
+    """Skan pieczątki prowadzącego i wstawianie pieczątek na certyfikat."""
+
+    def setUp(self):
+        import tempfile
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        override = override_settings(PRIVATE_MEDIA_ROOT=self._tmp.name)
+        override.enable()
+        self.addCleanup(override.disable)
+        self.client = APIClient()
+        self.client.force_authenticate(User.objects.create_user('admin', 'a@example.com', 'haslo12345', is_staff=True))
+        self.chair = Instructor.objects.create(first_name='Anna', last_name='Nowak', title='lek.')
+        self.member = Instructor.objects.create(first_name='Piotr', last_name='Zając')
+
+    def stamp_upload(self, fmt='JPEG', white=False):
+        from io import BytesIO
+        from PIL import Image, ImageDraw
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        img = Image.new('RGB', (400, 200), 'white')
+        if not white:
+            ImageDraw.Draw(img).rectangle([50, 50, 350, 150], outline=(20, 30, 150), width=10)
+        buf = BytesIO()
+        img.save(buf, fmt)
+        return SimpleUploadedFile('pieczatka.jpg', buf.getvalue())
+
+    def test_upload_makes_transparent_trimmed_png(self):
+        from PIL import Image
+        res = self.client.post(f'/api/courses/instructors/{self.chair.id}/stamp/', {'file': self.stamp_upload()}, format='multipart')
+        self.assertEqual(res.status_code, 200, res.data)
+        self.assertTrue(res.data['has_stamp'])
+        self.chair.refresh_from_db()
+        with Image.open(self.chair.stamp.path) as img:
+            self.assertEqual(img.mode, 'RGBA')
+            self.assertLess(img.size[0], 400)          # białe marginesy przycięte
+            self.assertEqual(img.getpixel((img.size[0] // 2, img.size[1] // 2))[3], 0)  # środek przezroczysty
+        res = self.client.get(f'/api/courses/instructors/{self.chair.id}/stamp/')
+        self.assertEqual(res['Content-Type'], 'image/png')
+
+    def test_rejects_non_images_and_blank_scans(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        url = f'/api/courses/instructors/{self.chair.id}/stamp/'
+        res = self.client.post(url, {'file': SimpleUploadedFile('a.pdf', b'%PDF-1.4 uszkodzony')}, format='multipart')
+        self.assertEqual(res.status_code, 400)
+        res = self.client.post(url, {'file': SimpleUploadedFile('a.txt', b'tekst')}, format='multipart')
+        self.assertEqual(res.status_code, 400)
+        res = self.client.post(url, {'file': self.stamp_upload(white=True)}, format='multipart')
+        self.assertEqual(res.status_code, 400)
+
+    def test_pdf_scan_uses_first_page(self):
+        from PIL import Image
+        res = self.client.post(f'/api/courses/instructors/{self.chair.id}/stamp/',
+                               {'file': self.stamp_upload(fmt='PDF')}, format='multipart')
+        self.assertEqual(res.status_code, 200, res.data)
+        self.chair.refresh_from_db()
+        with Image.open(self.chair.stamp.path) as img:
+            self.assertEqual(img.mode, 'RGBA')
+            self.assertEqual(img.getpixel((img.size[0] // 2, img.size[1] // 2))[3], 0)
+
+    def test_replace_and_delete_remove_old_files(self):
+        url = f'/api/courses/instructors/{self.chair.id}/stamp/'
+        self.client.post(url, {'file': self.stamp_upload()}, format='multipart')
+        self.chair.refresh_from_db()
+        first = self.chair.stamp.path
+        self.client.post(url, {'file': self.stamp_upload(fmt='PNG')}, format='multipart')
+        self.chair.refresh_from_db()
+        import os
+        self.assertFalse(os.path.exists(first))
+        second = self.chair.stamp.path
+        res = self.client.delete(url)
+        self.assertFalse(res.data['has_stamp'])
+        self.assertFalse(os.path.exists(second))
+
+    def test_certificate_gets_stamps_of_director_and_committee(self):
+        from docx import Document
+        from io import BytesIO
+        for inst in (self.chair, self.member):
+            self.client.post(f'/api/courses/instructors/{inst.id}/stamp/', {'file': self.stamp_upload()}, format='multipart')
+        course = Course.objects.create(name='KPP', committee_chair='lek. Anna Nowak',
+                                       committee_member1='Piotr Zając', entity_director='Ktoś Inny')
+        enrollment = make_enrollment(course)
+        res = self.client.get(f'/api/documents/enrollments/{enrollment.id}/certyfikat/')
+        self.assertEqual(res.status_code, 200)
+        xml = Document(BytesIO(res.content)).element.xml
+        self.assertEqual(xml.count('name="Pieczatka'), 2)
+
+    def test_director_stamp_used_for_entity_director_only(self):
+        from docx import Document
+        from io import BytesIO
+        from documents.stamps import course_stamps
+        url = f'/api/courses/instructors/{self.chair.id}/stamp/'
+        self.client.post(url, {'file': self.stamp_upload()}, format='multipart')
+        res = self.client.post(url + '?kind=director', {'file': self.stamp_upload(fmt='PNG')}, format='multipart')
+        self.assertEqual(res.status_code, 200, res.data)
+        self.assertTrue(res.data['has_stamp'] and res.data['has_director_stamp'])
+        self.chair.refresh_from_db()
+        self.assertNotEqual(self.chair.stamp.name, self.chair.director_stamp.name)
+        course = Course.objects.create(name='KPP', committee_chair='lek. Anna Nowak', entity_director='Anna Nowak')
+        paths = [p for _, _, p in course_stamps(course)]
+        self.assertEqual(paths, [self.chair.director_stamp.path, self.chair.stamp.path])
+        self.assertEqual(self.client.get(url + '?kind=director')['Content-Type'], 'image/png')
+        # bez pieczątki kierownika → zwykła
+        res = self.client.delete(url + '?kind=director')
+        self.assertFalse(res.data['has_director_stamp'])
+        self.assertTrue(res.data['has_stamp'])
+        self.chair.refresh_from_db()
+        self.assertEqual([p for _, _, p in course_stamps(course)], [self.chair.stamp.path] * 2)
+        enrollment = make_enrollment(course)
+        doc = self.client.get(f'/api/documents/enrollments/{enrollment.id}/certyfikat/')
+        self.assertEqual(Document(BytesIO(doc.content)).element.xml.count('name="Pieczatka'), 2)

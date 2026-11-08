@@ -1,5 +1,6 @@
 from django.utils import timezone
 from rest_framework import serializers
+from .enrollment_documents import documents_dict
 from .models import COMMITTEE_ROLES, PRACTICAL_FIELDS, PRACTICAL_TASKS, Course, Enrollment, Instructor, practical_field
 
 
@@ -12,11 +13,20 @@ class InstructorSerializer(serializers.ModelSerializer):
     def get_has_account(self, obj):
         return obj.user_id is not None
 
+    has_stamp            = serializers.SerializerMethodField()
+    has_director_stamp   = serializers.SerializerMethodField()
+
+    def get_has_stamp(self, obj):
+        return bool(obj.stamp)
+
+    def get_has_director_stamp(self, obj):
+        return bool(obj.director_stamp)
+
     class Meta:
         model  = Instructor
         fields = [
             'id', 'first_name', 'last_name', 'title', 'profession',
-            'years_experience', 'email', 'has_account',
+            'years_experience', 'email', 'has_account', 'has_stamp', 'has_director_stamp',
             'full_name', 'specializations', 'specializations_str',
             'spec_L', 'spec_P', 'spec_Ps', 'spec_R', 'spec_Rt',
             'spec_Rch', 'spec_Re', 'spec_Rwo', 'spec_Rwy',
@@ -188,6 +198,11 @@ def company_errors(data):
 
 
 class EnrollmentSerializer(ExamScoreValidationMixin, serializers.ModelSerializer):
+    documents = serializers.SerializerMethodField()
+
+    def get_documents(self, obj):
+        return documents_dict(obj)
+
     course_name            = serializers.SerializerMethodField()
     exam_date              = serializers.SerializerMethodField()
     deletion_reason_display = serializers.SerializerMethodField()
@@ -216,7 +231,7 @@ class EnrollmentSerializer(ExamScoreValidationMixin, serializers.ModelSerializer
             'exam_committee_chair', 'exam_committee_member1', 'exam_committee_member2',
             'certificate_visible', 'created_at', 'position', 'terms_accepted_at',
             'is_deleted', 'deleted_at', 'deletion_reason', 'deletion_reason_display',
-            'invoice_company', *COMPANY_FIELDS,
+            'invoice_company', *COMPANY_FIELDS, 'documents',
         ]
         read_only_fields = [
             'id', 'course_name', 'exam_date', 'created_at', 'position', 'terms_accepted_at', 'is_deleted', 'deleted_at', 'deletion_reason', 'deletion_reason_display',
@@ -413,6 +428,10 @@ class MyEnrollmentSerializer(serializers.ModelSerializer):
         return obj.course.whatsapp_link if obj.course else ''
 
     whatsapp_link = serializers.SerializerMethodField()
+    documents     = serializers.SerializerMethodField()
+
+    def get_documents(self, obj):
+        return documents_dict(obj)
 
     class Meta:
         model  = Enrollment
@@ -421,5 +440,5 @@ class MyEnrollmentSerializer(serializers.ModelSerializer):
             'course_city', 'start_date', 'end_date', 'exam_date', 'exam_location',
             'price', 'course_days', 'whatsapp_link',
             'first_name', 'last_name', 'payment_status', 'photo_consent', 'certificate_visible',
-            'cert_number', 'cert_date', 'created_at',
+            'cert_number', 'cert_date', 'created_at', 'documents',
         ]

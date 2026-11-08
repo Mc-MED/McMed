@@ -1,7 +1,12 @@
 import math
+import os
 import uuid
 import datetime
+from django.conf import settings
+from django.core.files.storage import FileSystemStorage
 from django.db import models
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from .fields import EncryptedCharField
@@ -19,6 +24,27 @@ SPECIALIZATION_LABELS = {
     'Rwo': 'Rwo – specjalista z zakresu ratownictwa wodnego',
     'Rwy': 'Rwy – specjalista z zakresu ratownictwa wysokościowego',
 }
+
+
+class PrivateStorage(FileSystemStorage):
+    """Katalog czytany z ustawień przy każdym użyciu, nie raz przy starcie."""
+
+    @property
+    def base_location(self):
+        return settings.PRIVATE_MEDIA_ROOT
+
+    @property
+    def location(self):
+        return os.path.abspath(self.base_location)
+
+
+def private_storage():
+    """Pliki wydawane tylko przez API (nginx blokuje /media/private/)."""
+    return PrivateStorage()
+
+
+def stamp_path(instance, filename):
+    return f'stamps/{uuid.uuid4().hex}.png'
 
 
 # Członkowie komisji egzaminacyjnej — każdy wystawia własne oceny z egzaminu praktycznego
@@ -65,6 +91,12 @@ class Instructor(models.Model):
         get_user_model(), on_delete=models.SET_NULL,
         null=True, blank=True, related_name='instructor_profile',
     )
+
+    # Skan pieczątki (PNG z przezroczystym tłem) — wstawiany na certyfikaty, gdy prowadzący jest
+    # kierownikiem podmiotu albo w komisji egzaminacyjnej kursu
+    stamp = models.FileField(upload_to=stamp_path, storage=private_storage, blank=True)
+    # Osobna pieczątka do roli kierownika podmiotu (brak → zwykła `stamp`)
+    director_stamp = models.FileField(upload_to=stamp_path, storage=private_storage, blank=True)
 
     class Meta:
         ordering = ['last_name', 'first_name']
@@ -364,3 +396,43 @@ class Payment(models.Model):
 
     class Meta:
         ordering = ['created_at']
+
+
+def enrollment_document_path(instance, filename):
+    ext = os.path.splitext(filename)[1].lower()
+    return f'enrollment_documents/{uuid.uuid4().hex}{ext}'
+
+
+class EnrollmentDocument(models.Model):
+    """Plik dołączony do zapisu na recertyfikację: skan certyfikatu KPP albo podpisane oświadczenie.
+    Jeden plik danego rodzaju na zapis — nowy zastępuje poprzedni."""
+    KIND_CERTIFICATE = 'certificate'
+    KIND_STATEMENT   = 'statement'
+    KINDS = [(KIND_CERTIFICATE, 'Certyfikat KPP'), (KIND_STATEMENT, 'Oświadczenie')]
+
+    enrollment    = models.ForeignKey(Enrollment, on_delete=models.CASCADE, related_name='documents')
+    kind          = models.CharField(max_length=15, choices=KINDS)
+    file          = models.FileField(upload_to=enrollment_document_path, storage=private_storage)
+    original_name = models.CharField(max_length=255, blank=True, default='')
+    size          = models.PositiveIntegerField(default=0)
+    uploaded_by_admin = models.BooleanField(default=False)
+    uploaded_at   = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['enrollment', 'kind'], name='unique_enrollment_document_kind')]
+
+    def __str__(self):
+        return f'{self.get_kind_display()} – {self.enrollment}'
+
+
+@receiver(post_delete, sender=EnrollmentDocument)
+def _delete_document_file(sender, instance, **kwargs):
+    if instance.file:
+        instance.file.storage.delete(instance.file.name)
+
+
+@receiver(post_delete, sender=Instructor)
+def _delete_stamp_file(sender, instance, **kwargs):
+    for f in (instance.stamp, instance.director_stamp):
+        if f:
+            f.storage.delete(f.name)

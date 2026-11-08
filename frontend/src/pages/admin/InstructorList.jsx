@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { adminFetchInstructors, adminCreateInstructor, adminUpdateInstructor, adminDeleteInstructor, adminInviteInstructor } from '../../api/admin'
+import { adminFetchInstructors, adminCreateInstructor, adminUpdateInstructor, adminDeleteInstructor, adminInviteInstructor, adminUploadStamp, adminDeleteStamp, adminFetchStamp } from '../../api/admin'
 
 const SPECS = [
   { key: 'spec_L',   label: 'L',   title: 'lekarz systemu' },
@@ -120,6 +120,7 @@ export default function InstructorList() {
                 <th className="text-left px-5 py-3 font-semibold text-gray-600">Specjalizacje</th>
                 <th className="text-left px-5 py-3 font-semibold text-gray-600">Staż (lata)</th>
                 <th className="text-left px-5 py-3 font-semibold text-gray-600">Panel prowadzącego</th>
+                <th className="text-left px-5 py-3 font-semibold text-gray-600" title="Wstawiane na certyfikaty. Pieczątka kierownika podmiotu jest używana, gdy ratownik jest kierownikiem podmiotu kursu; bez niej wstawiana jest zwykła.">Pieczątki</th>
                 <th className="px-5 py-3"></th>
               </tr>
             </thead>
@@ -160,6 +161,19 @@ export default function InstructorList() {
                           {inviting === inst.id ? 'Wysyłanie…' : invited[inst.id] ? 'Wysłano ✓' : inst.has_account ? 'Wyślij ponownie' : 'Wyślij dostęp'}
                         </button>
                       </div>
+                    </div>
+                  </td>
+                  <td className="px-5 py-3">
+                    <div className="flex flex-col gap-3">
+                      {[['stamp', 'Prowadzący / komisja'], ['director', 'Kierownik podmiotu']].map(([kind, label]) => (
+                        <StampCell
+                          key={kind}
+                          kind={kind}
+                          label={label}
+                          instructor={inst}
+                          onChange={updated => setInstructors(prev => prev.map(i => i.id === updated.id ? updated : i))}
+                        />
+                      ))}
                     </div>
                   </td>
                   <td className="px-5 py-3">
@@ -254,6 +268,65 @@ export default function InstructorList() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// Podgląd i wgrywanie skanu pieczątki (białe tło usuwa serwer)
+function StampCell({ instructor, kind, label, onChange }) {
+  const hasStamp = kind === 'director' ? instructor.has_director_stamp : instructor.has_stamp
+  const [url, setUrl]       = useState('')
+  const [busy, setBusy]     = useState(false)
+  const [error, setError]   = useState('')
+  const [version, setVersion] = useState(0)
+
+  useEffect(() => {
+    if (!hasStamp) { setUrl(''); return }
+    let objectUrl = ''
+    let active = true
+    adminFetchStamp(instructor.id, kind)
+      .then(blob => { if (active) { objectUrl = URL.createObjectURL(blob); setUrl(objectUrl) } })
+      .catch(() => {})
+    return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl) }
+  }, [instructor.id, kind, hasStamp, version])
+
+  async function run(action) {
+    setBusy(true)
+    setError('')
+    try {
+      onChange(await action())
+      setVersion(v => v + 1)
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Nie udało się zapisać pieczątki.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function upload(file) {
+    if (!file) return
+    if (!/\.(jpe?g|png|pdf)$/i.test(file.name)) { setError('Dozwolone pliki: JPG, PNG, PDF.'); return }
+    run(() => adminUploadStamp(instructor.id, file, kind))
+  }
+
+  return (
+    <div className="flex flex-col items-start gap-1 min-w-[120px]">
+      <span className="text-[11px] text-gray-400">{label}</span>
+      {hasStamp && url && (
+        <img src={url} alt={`Pieczątka – ${instructor.full_name}`} className="h-10 max-w-[140px] object-contain" />
+      )}
+      <div className="flex items-center gap-2">
+        <label className={`text-xs font-semibold text-red-600 hover:underline ${busy ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}>
+          {busy ? 'Wysyłanie…' : hasStamp ? 'Zmień' : 'Dodaj skan'}
+          <input type="file" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" className="hidden" disabled={busy}
+            onChange={e => { upload(e.target.files[0]); e.target.value = '' }} />
+        </label>
+        {hasStamp && (
+          <button onClick={() => run(() => adminDeleteStamp(instructor.id, kind))} disabled={busy}
+            className="text-xs text-gray-400 hover:text-red-600 disabled:opacity-50">Usuń</button>
+        )}
+      </div>
+      {error && <p className="text-red-500 text-xs max-w-[180px]">{error}</p>}
     </div>
   )
 }

@@ -200,3 +200,19 @@ export const adminSendTestReminderNow = (id) =>
 
 export const adminDeleteTestReminder = (id) =>
   adminAxios.delete(`/api/notifications/recert-reminders/tests/${id}/`)
+
+// Skan pieczątki prowadzącego (na certyfikaty)
+// kind: 'stamp' (prowadzący / komisja) albo 'director' (kierownik podmiotu)
+const stampUrl = (id, kind) => `/api/courses/instructors/${id}/stamp/${kind === 'director' ? '?kind=director' : ''}`
+
+export const adminUploadStamp = (id, file, kind = 'stamp') => {
+  const data = new FormData()
+  data.append('file', file)
+  return adminAxios.post(stampUrl(id, kind), data).then(r => r.data)
+}
+
+export const adminDeleteStamp = (id, kind = 'stamp') =>
+  adminAxios.delete(stampUrl(id, kind)).then(r => r.data)
+
+export const adminFetchStamp = (id, kind = 'stamp') =>
+  adminAxios.get(stampUrl(id, kind), { responseType: 'blob' }).then(r => r.data)

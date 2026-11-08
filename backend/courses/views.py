@@ -1,3 +1,4 @@
+import datetime
 import logging
 from datetime import timedelta
 
@@ -12,9 +13,10 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 
-from .models import PRACTICAL_TASKS, Course, Enrollment, Instructor, Invoice, Payment, practical_field
+from .models import PRACTICAL_TASKS, Course, Enrollment, EnrollmentDocument, Instructor, Invoice, Payment, practical_field
 from .billing import issue_proforma, issue_proforma_on_commit, mark_paid_and_invoice, payment_link, retry as retry_invoice
 from . import fakturownia
+from . import enrollment_documents as edocs
 from .permissions import IsInstructor
 from .serializers import (
     CourseSerializer, AdminCourseSerializer, EnrollmentSerializer, PublicEnrollmentSerializer,
@@ -92,7 +94,8 @@ class PublicEnrollView(generics.CreateAPIView):
         issue_proforma_on_commit(enrollment)
 
         headers = self.get_success_headers(serializer.data)
-        return Response({**serializer.data, 'payment_url': payment_link(enrollment)},
+        return Response({**serializer.data, 'payment_url': payment_link(enrollment),
+                         'documents_token': str(enrollment.payment_token)},
                         status=status.HTTP_201_CREATED, headers=headers)
 
     def _send_enrollment_email(self, enrollment, token):
@@ -155,7 +158,7 @@ class AdminEnrollmentListView(generics.ListAPIView):
     serializer_class   = EnrollmentSerializer
 
     def get_queryset(self):
-        qs = Enrollment.objects.select_related('course')
+        qs = Enrollment.objects.select_related('course').prefetch_related('documents')
         deleted    = self.request.query_params.get('deleted')
         unassigned = self.request.query_params.get('unassigned')
         course_id  = self.request.query_params.get('course')
@@ -339,7 +342,7 @@ def reorder_enrollments(request, pk):
             target = enrollment if enrollment.is_deleted else by_id[next(new_active)]
             target.position = position
         Enrollment.objects.bulk_update(enrollments, ['position'])
-    active = course.enrollments.filter(is_deleted=False).select_related('course')
+    active = course.enrollments.filter(is_deleted=False).select_related('course').prefetch_related('documents')
     return Response(EnrollmentSerializer(active, many=True).data)
 
 
@@ -358,6 +361,8 @@ def anonymize_enrollment(request, pk):
     )
     if not updated:
         return Response(status=status.HTTP_404_NOT_FOUND)
+    # Skany certyfikatu i oświadczenia też zawierają dane osobowe
+    EnrollmentDocument.objects.filter(enrollment_id=pk).delete()
     enrollment = Enrollment.objects.select_related('course').get(pk=pk)
     return Response(EnrollmentSerializer(enrollment).data)
 
@@ -449,6 +454,17 @@ def enroll_me(request):
             )
         data = {f: getattr(previous, f) for f in fields + ['invoice_company', *COMPANY_FIELDS]}
     data['terms_accepted_at'] = timezone.now()
+    if course.course_type == Course.TYPE_RECERT:
+        data['cert_number'] = str(request.data.get('cert_number') or '').strip()[:100]
+        if not data['cert_number']:
+            return Response({'cert_number': 'Podaj numer certyfikatu.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            cert_date = datetime.date.fromisoformat(str(request.data.get('cert_date') or ''))
+        except ValueError:
+            return Response({'cert_date': 'Podaj datę wydania certyfikatu.'}, status=status.HTTP_400_BAD_REQUEST)
+        if cert_date > timezone.localdate():
+            return Response({'cert_date': 'Data wydania nie może być z przyszłości.'}, status=status.HTTP_400_BAD_REQUEST)
+        data['cert_date'] = cert_date
 
     # Dane do faktury z formularza; bez nich (szybki zapis) zostają te z poprzedniego zapisu
     if 'invoice_company' in request.data:
@@ -476,6 +492,7 @@ class MyEnrollmentsView(generics.ListAPIView):
             Enrollment.objects
             .filter(user=self.request.user, is_deleted=False)
             .select_related('course')
+            .prefetch_related('documents')
             .order_by('-created_at')
         )
 
@@ -710,3 +727,118 @@ def invoice_pdf(request, pk):
     response = HttpResponse(pdf, content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="{name}"'
     return response
+
+
+# ─── Dokumenty do recertyfikacji: skan certyfikatu i podpisane oświadczenie ───
+
+def _my_enrollment(request, pk):
+    return get_object_or_404(Enrollment.objects.select_related('course'), pk=pk, user=request.user, is_deleted=False)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def my_enrollment_documents(request, pk):
+    return edocs.upload_response(_my_enrollment(request, pk), request)
+
+
+@api_view(['GET', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def my_enrollment_document(request, pk, kind):
+    enrollment = _my_enrollment(request, pk)
+    if request.method == 'DELETE':
+        return edocs.delete_response(enrollment, kind)
+    return edocs.file_response(enrollment, kind)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def my_enrollment_statement(request, pk):
+    enrollment = _my_enrollment(request, pk)
+    if not edocs.is_recert(enrollment):
+        return Response(status=status.HTTP_404_NOT_FOUND)
+    return edocs.statement_response(enrollment)
+
+
+# Dosłanie skanu zaraz po zapisie przez formularz publiczny (konto nieaktywne, bez JWT).
+# Token z odpowiedzi na zapis; działa tylko przez dobę i tylko na dodanie pliku.
+DOCUMENTS_TOKEN_TTL = timedelta(hours=24)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def enrollment_documents_by_token(request, token):
+    enrollment = get_object_or_404(
+        Enrollment.objects.select_related('course'), payment_token=token, is_deleted=False,
+        created_at__gte=timezone.now() - DOCUMENTS_TOKEN_TTL,
+    )
+    if enrollment.documents.filter(kind=request.data.get('kind')).exists():
+        return Response({'detail': 'Ten dokument jest już dodany. Podmienisz go na swoim koncie.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+    response = edocs.upload_response(enrollment, request)
+    if response.status_code == status.HTTP_201_CREATED:
+        response.data = {'ok': True}
+    return response
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def admin_enrollment_documents(request, pk):
+    enrollment = get_object_or_404(Enrollment.objects.select_related('course'), pk=pk)
+    return edocs.upload_response(enrollment, request, by_admin=True)
+
+
+@api_view(['GET', 'DELETE'])
+@permission_classes([IsAdminUser])
+def admin_enrollment_document(request, pk, kind):
+    enrollment = get_object_or_404(Enrollment, pk=pk)
+    if request.method == 'DELETE':
+        return edocs.delete_response(enrollment, kind)
+    return edocs.file_response(enrollment, kind)
+
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def admin_enrollment_statement(request, pk):
+    enrollment = get_object_or_404(Enrollment.objects.select_related('course'), pk=pk)
+    if not edocs.is_recert(enrollment):
+        return Response(status=status.HTTP_404_NOT_FOUND)
+    return edocs.statement_response(enrollment)
+
+
+# ─── Pieczątki prowadzących (na certyfikaty) ───
+
+@api_view(['GET', 'POST', 'DELETE'])
+@permission_classes([IsAdminUser])
+def instructor_stamp(request, pk):
+    from django.core.files.base import ContentFile
+    from django.http import FileResponse
+    from documents.stamps import StampError, prepare_stamp
+
+    instructor = get_object_or_404(Instructor, pk=pk)
+    # ?kind=director — pieczątka kierownika podmiotu, inaczej zwykła
+    field = 'director_stamp' if request.query_params.get('kind') == 'director' else 'stamp'
+    stamp = getattr(instructor, field)
+    if request.method == 'GET':
+        if not stamp:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        try:
+            return FileResponse(stamp.open('rb'), content_type='image/png')
+        except (FileNotFoundError, OSError):
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+    old = stamp.name if stamp else None
+    if request.method == 'DELETE':
+        setattr(instructor, field, '')
+    else:
+        upload = request.FILES.get('file')
+        if upload is None:
+            return Response({'detail': 'Wybierz plik.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            png = prepare_stamp(upload)
+        except StampError as e:
+            return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        stamp.save('pieczatka.png', ContentFile(png), save=False)
+    instructor.save(update_fields=[field])
+    if old:
+        stamp.storage.delete(old)
+    return Response(InstructorSerializer(instructor).data)

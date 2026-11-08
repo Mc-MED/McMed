@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { fetchMyEnrollments, cancelMyEnrollment, downloadMyCertificate } from '../../api/participant'
+import { DOCUMENT_ACCEPT, DOCUMENT_KINDS, checkDocumentFile, deleteMyDocument, downloadMyStatement, openMyDocument, uploadErrorMessage, uploadMyDocument } from '../../api/enrollmentDocuments'
 import { fetchCourses } from '../../api/courses'
 import { fetchTopics, fetchTopicFileBlob, fetchProgress, toggleFileProgress, fetchTopicQuiz, submitTopicQuiz, fetchTopicQuizResults } from '../../api/documents'
 import PdfViewer from '../../components/PdfViewer'
@@ -45,7 +46,7 @@ const CANCEL_REASONS = [
   { value: 'reschedule', label: 'Rezygnacja z przyczyn losowych – zmiana terminu' },
 ]
 
-function CourseCard({ enrollment, onCancelled }) {
+function CourseCard({ enrollment, onCancelled, onDocuments }) {
   const c = enrollment
   const end = c.end_date ? new Date(c.end_date + 'T00:00:00') : null
   const isPast = end && end < new Date()
@@ -111,6 +112,8 @@ function CourseCard({ enrollment, onCancelled }) {
         )}
       </div>
 
+      {c.course_type === 'recert' && <RecertDocuments enrollment={c} onChange={onDocuments} />}
+
 
       {!isPast && (
         <div className="px-6 pb-5">
@@ -160,6 +163,134 @@ function CourseCard({ enrollment, onCancelled }) {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+function formatUploaded(iso) {
+  const d = new Date(iso)
+  return d.toLocaleDateString('pl-PL')
+}
+
+// Skan certyfikatu KPP i podpisane oświadczenie do recertyfikacji
+function RecertDocuments({ enrollment, onChange }) {
+  const [docs, setDocsState]  = useState(enrollment.documents || {})
+  function setDocs(next) {
+    setDocsState(next)
+    onChange?.(enrollment.id, next)
+  }
+  const [busy, setBusy]       = useState('')   // kind w trakcie wysyłki / usuwania
+  const [errors, setErrors]   = useState({})
+  const [statementError, setStatementError] = useState('')
+
+  async function handleUpload(kind, file) {
+    if (!file) return
+    const error = checkDocumentFile(file)
+    if (error) { setErrors(e => ({ ...e, [kind]: error })); return }
+    setBusy(kind)
+    setErrors(e => ({ ...e, [kind]: '' }))
+    try {
+      setDocs(await uploadMyDocument(enrollment.id, kind, file))
+    } catch (err) {
+      setErrors(e => ({ ...e, [kind]: uploadErrorMessage(err) }))
+    } finally {
+      setBusy('')
+    }
+  }
+
+  async function handleDelete(kind) {
+    setBusy(kind)
+    try {
+      setDocs(await deleteMyDocument(enrollment.id, kind))
+    } catch {
+      setErrors(e => ({ ...e, [kind]: 'Nie udało się usunąć pliku.' }))
+    } finally {
+      setBusy('')
+    }
+  }
+
+  async function handleOpen(kind) {
+    try {
+      await openMyDocument(enrollment.id, kind)
+    } catch {
+      setErrors(e => ({ ...e, [kind]: 'Nie udało się otworzyć pliku.' }))
+    }
+  }
+
+  async function handleStatement() {
+    setStatementError('')
+    try {
+      await downloadMyStatement(enrollment.id)
+    } catch {
+      setStatementError('Nie udało się pobrać oświadczenia. Spróbuj ponownie.')
+    }
+  }
+
+  const missing = DOCUMENT_KINDS.filter(({ kind }) => !docs[kind]).length
+
+  return (
+    <div className="px-6 pb-5">
+      <div className="border border-gray-200 rounded-xl overflow-hidden">
+        <div className="px-4 py-3 bg-gray-50 flex items-center justify-between gap-3">
+          <h4 className="text-sm font-bold text-gray-900">Dokumenty do recertyfikacji</h4>
+          <span className={`text-xs font-semibold ${missing ? 'text-orange-500' : 'text-emerald-600'}`}>
+            {missing ? `Brakuje: ${missing}` : 'Komplet'}
+          </span>
+        </div>
+        <div className="divide-y divide-gray-100">
+          {DOCUMENT_KINDS.map(({ kind, label }) => {
+            const doc = docs[kind]
+            return (
+              <div key={kind} className="px-4 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-gray-800">{label}</div>
+                    {doc ? (
+                      <button onClick={() => handleOpen(kind)} className="text-xs text-blue-600 hover:underline break-all text-left">
+                        {doc.original_name || 'plik'} · {formatUploaded(doc.uploaded_at)}
+                      </button>
+                    ) : kind === 'statement' ? (
+                      <div className="text-xs text-gray-500">
+                        <button onClick={handleStatement} className="text-blue-600 hover:underline">Pobierz oświadczenie</button>
+                        , wydrukuj, podpisz i dodaj skan lub zdjęcie.
+                      </div>
+                    ) : (
+                      <div className="text-xs text-gray-500">Skan lub zdjęcie certyfikatu, nr {enrollment.cert_number || '—'}.</div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    {doc && (
+                      <button onClick={() => handleDelete(kind)} disabled={busy === kind} className="text-xs text-gray-400 hover:text-red-600 disabled:opacity-50">
+                        Usuń
+                      </button>
+                    )}
+                    <label className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
+                      busy === kind ? 'opacity-50 cursor-wait' : 'cursor-pointer'
+                    } ${doc ? 'border border-gray-300 text-gray-700 hover:border-gray-400' : 'bg-red-600 hover:bg-red-700 text-white'}`}>
+                      {busy === kind ? 'Wysyłanie…' : doc ? 'Zmień plik' : 'Dodaj plik'}
+                      <input
+                        type="file"
+                        accept={DOCUMENT_ACCEPT}
+                        className="hidden"
+                        disabled={busy === kind}
+                        onChange={e => { handleUpload(kind, e.target.files[0]); e.target.value = '' }}
+                      />
+                    </label>
+                  </div>
+                </div>
+                {errors[kind] && <p className="text-red-500 text-xs mt-1">{errors[kind]}</p>}
+                {kind === 'statement' && statementError && <p className="text-red-500 text-xs mt-1">{statementError}</p>}
+              </div>
+            )
+          })}
+        </div>
+        {docs.statement && (
+          <div className="px-4 py-2 border-t border-gray-100 text-xs text-gray-400">
+            Puste oświadczenie: <button onClick={handleStatement} className="text-blue-600 hover:underline">pobierz ponownie</button>
+          </div>
+        )}
+        <div className="px-4 py-2 border-t border-gray-100 text-xs text-gray-400">PDF, JPG lub PNG, maks. 10 MB.</div>
+      </div>
     </div>
   )
 }
@@ -407,6 +538,10 @@ export default function ParticipantDashboard() {
     navigate('/zaloguj-sie')
   }
 
+  function handleDocuments(id, documents) {
+    setEnrollments(prev => prev.map(e => e.id === id ? { ...e, documents } : e))
+  }
+
   function handleCancelled(id) {
     setEnrollments(prev => prev.filter(e => e.id !== id))
   }
@@ -427,6 +562,8 @@ export default function ParticipantDashboard() {
 
   const upcoming = enrollments.filter(e => !e.end_date || new Date(e.end_date + 'T00:00:00') >= new Date())
   const past     = enrollments.filter(e => e.end_date && new Date(e.end_date + 'T00:00:00') < new Date())
+  // Nadchodzące zapisy na recertyfikację — dokumenty do dosłania
+  const myRecerts = upcoming.filter(e => e.course_type === 'recert')
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -796,6 +933,21 @@ export default function ParticipantDashboard() {
           </div>
         )}
 
+        {activeCard === 'recert' && myRecerts.length > 0 && (
+          <div className="space-y-4 mb-8">
+            <p className="text-xs text-gray-400 uppercase tracking-widest font-bold">Twoje zapisy — dokumenty</p>
+            {myRecerts.map(e => (
+              <div key={e.id} className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+                <div className="px-6 pt-5 pb-3">
+                  <p className="font-bold text-gray-900">{e.course_name}</p>
+                  <p className="text-xs text-gray-500">{[e.course_city, formatCourseDays(e)].filter(Boolean).join(' · ')}</p>
+                </div>
+                <RecertDocuments enrollment={e} onChange={handleDocuments} />
+              </div>
+            ))}
+          </div>
+        )}
+
         {activeCard === 'recert' && (
           recertLoading ? (
             <div className="text-center text-gray-400 py-10 text-sm">Ładowanie…</div>
@@ -830,13 +982,13 @@ export default function ParticipantDashboard() {
               {upcoming.length > 0 && (
                 <section>
                   <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Nadchodzące</h2>
-                  <div className="space-y-4">{upcoming.map(e => <CourseCard key={e.id} enrollment={e} onCancelled={handleCancelled} />)}</div>
+                  <div className="space-y-4">{upcoming.map(e => <CourseCard key={e.id} enrollment={e} onCancelled={handleCancelled} onDocuments={handleDocuments} />)}</div>
                 </section>
               )}
               {past.length > 0 && (
                 <section>
                   <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Zakończone</h2>
-                  <div className="space-y-4">{past.map(e => <CourseCard key={e.id} enrollment={e} onCancelled={handleCancelled} />)}</div>
+                  <div className="space-y-4">{past.map(e => <CourseCard key={e.id} enrollment={e} onCancelled={handleCancelled} onDocuments={handleDocuments} />)}</div>
                 </section>
               )}
             </div>

@@ -114,11 +114,15 @@ McMed/
 | DELETE | `/api/courses/enrollments/:id/` | Usuń zapis uczestnika |
 | POST | `/api/courses/admin/:id/enrollments/reorder/` | Nowa kolejność uczestników kursu: `{"order": [id, …]}` (wszyscy aktywni) |
 | POST | `/api/courses/instructors/:id/invite/` | Załóż konto prowadzącego i wyślij link do ustawienia hasła (72 h) |
+| GET/POST/DELETE | `/api/courses/instructors/:id/stamp/` | Skan pieczątki prowadzącego (podgląd PNG / wgranie JPG/PNG/PDF `file` / usunięcie; `?kind=director` — pieczątka kierownika podmiotu) |
 | GET | `/api/courses/admin/:id/payments/` | Uczestnicy kursu: proforma, wpłata, faktura, wysyłka mail/SMS |
 | POST | `/api/courses/enrollments/:id/mark-paid/` | Wpłata gotówką / przelewem (`{"method": "cash"\|"transfer"}`) → faktura VAT + mail z Fakturowni + SMS |
 | POST | `/api/courses/enrollments/:id/proforma/` | Proforma dla zapisu bez niej (np. dodanego przez admina) |
 | POST | `/api/courses/invoices/:id/retry/` | Niewystawiony dokument → wystaw ponownie; wystawiony → wyślij ponownie |
 | GET | `/api/courses/invoices/:id/pdf/` | PDF z Fakturowni |
+| POST | `/api/courses/enrollments/:id/documents/` | Dokument do recertyfikacji (multipart `kind` = `certificate`\|`statement`, `file`) |
+| GET/DELETE | `/api/courses/enrollments/:id/documents/:kind/` | Podgląd / usunięcie dokumentu |
+| GET | `/api/courses/enrollments/:id/statement/` | Oświadczenie do podpisu z danymi uczestnika (PDF) |
 
 ### Płatności (publiczne, `courses/payment_views.py`)
 | Metoda | URL | Opis |
@@ -150,7 +154,9 @@ Linki w mailach (zaproszenie prowadzącego, reset hasła) budowane są z `FRONTE
 ## Modele Django
 
 ### Instructor
-Pola: `first_name`, `last_name`, `title`, `profession`, specjalizacje `spec_*`, `years_experience`, `email`, `user` (OneToOne → konto w panelu prowadzącego, `related_name='instructor_profile'`).
+Pola: `first_name`, `last_name`, `title`, `profession`, specjalizacje `spec_*`, `years_experience`, `email`, `user` (OneToOne → konto w panelu prowadzącego, `related_name='instructor_profile'`), `stamp` (skan pieczątki w `PRIVATE_MEDIA_ROOT/stamps`), `director_stamp` (osobna pieczątka do roli kierownika podmiotu; brak → `stamp`).
+
+Pieczątki (`documents/stamps.py`): z PDF-a brana jest pierwsza strona; przy wgraniu białe tło staje się przezroczyste, marginesy są przycinane (PNG). Certyfikaty (`certyfikat.docx` / `certyfikat.r.docx`, docx admina, ZIP i PDF uczestnika) dostają pieczątki kierownika podmiotu, przewodniczącego i członków komisji — dopasowanie po imieniu i nazwisku jak w `committee_roles`. Obrazy są wstawiane nad akapitem z kropkowanymi liniami podpisów (pozycje w `SLOTS`), nie przesuwają układu. Brak pieczątki → puste miejsce.
 
 Metody: `panel_courses()` — kursy, w których jest prowadzącym lub w komisji; `committee_roles(course)` — role w komisji kursu (`chair` / `member1` / `member2`). Komisja w `Course` to tekst, więc dopasowanie jest po imieniu i nazwisku (z tytułem lub bez).
 
@@ -180,6 +186,13 @@ Po zapisie ocen praktycznych członka komisji serializer wywołuje `Enrollment.r
 - Błąd Fakturowni, maila czy SMS-a nie przerywa zapisu ani płatności — widać go w Płatnościach („Wystaw ponownie” / „Wyślij ponownie”).
 - Tryby w `.env`: `P24_MODE` (fake / sandbox / production), `FAKTUROWNIA_MODE` (fake / live), `SMS_MODE` (log / live). Lokalnie: fake / fake / log. Sandbox P24 wymaga publicznego `BACKEND_URL` (ngrok).
 - `P24_MODE=sandbox` na produkcji (do czasu weryfikacji konta P24): wpłata kończy się statusem `test` — zapis zostaje nieopłacony, faktura nie powstaje, strona płatności proponuje przelew lub gotówkę.
+
+### Dokumenty do recertyfikacji (`courses/enrollment_documents.py`)
+- `EnrollmentDocument`: skan certyfikatu KPP (`certificate`) i podpisane oświadczenie (`statement`), jeden plik danego rodzaju na zapis — nowy zastępuje stary. PDF / JPG / PNG do 10 MB (sprawdzana też zawartość pliku).
+- Pliki w `PRIVATE_MEDIA_ROOT` (domyślnie `MEDIA_ROOT/private`, nginx blokuje `/media/private/`), wydawane tylko przez API: uczestnikowi własne, adminowi wszystkie. Prowadzący ich nie widzi. Anonimizacja zapisu usuwa pliki.
+- Formularz zapisu: opcjonalny skan certyfikatu, wysyłany zaraz po zapisie (`POST /api/courses/enrollments/upload/<documents_token>/` dla zapisu publicznego — token z odpowiedzi, ważny 24 h, tylko dodanie pliku; zalogowany → `my-enrollments`).
+- Konto (`/konto`, karta kursu recertyfikacji w „Moje kursy” oraz nadchodzące zapisy na górze kafelka „Recertyfikacje”): pobranie oświadczenia do podpisu (szablon `documents/templates/oswiadczenie-recert.docx`), dodanie / podmiana / usunięcie obu plików. API: `POST /api/courses/my-enrollments/:id/documents/`, `GET/DELETE …/documents/:kind/`, `GET …/statement/`.
+- Admin: w zakładce Uczestnicy znaczniki „Cert.” / „Ośw.” (klik otwiera plik), w oknie edycji uczestnika dodawanie / podmiana / usuwanie. Brak dokumentów niczego nie blokuje.
 
 ### Przypomnienia o recertyfikacji (`notifications/reminders.py`)
 - Certyfikat ważny 3 lata od `Enrollment.cert_date`; od 3 miesięcy przed wygaśnięciem do dnia wygaśnięcia uczestnik dostaje mail (przycisk do `/konto`) i SMS.

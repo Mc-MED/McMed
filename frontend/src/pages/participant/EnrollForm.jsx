@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { fetchCourses, submitEnrollment, resendActivation } from '../../api/courses'
 import { fetchMyProfile, enrollMe } from '../../api/participant'
+import { DOCUMENT_ACCEPT, checkDocumentFile, uploadDocumentByToken, uploadMyDocument } from '../../api/enrollmentDocuments'
 
 const EMPTY = {
   course: '',
@@ -62,6 +63,10 @@ export default function EnrollForm() {
   const [resendState, setResendState] = useState('idle') // idle | loading | sent | error
   const [emailExists, setEmailExists] = useState(null)  // null | {active: bool}
   const [paymentUrl, setPaymentUrl]   = useState('')
+  // Skan certyfikatu (recertyfikacja, opcjonalny) — wysyłany osobno zaraz po zapisie
+  const [certFile, setCertFile]       = useState(null)
+  const [enrolledRecert, setEnrolledRecert] = useState(false)
+  const [certUploadFailed, setCertUploadFailed] = useState(false)
 
   // Zalogowany uczestnik
   const [isLoggedIn, setIsLoggedIn]   = useState(() => !!localStorage.getItem('participant_access_token'))
@@ -176,6 +181,7 @@ export default function EnrollForm() {
         birth_date: form.birth_date || null,
         cert_date:  form.cert_date  || null,
       })
+      await afterEnroll(courseMeta?.course_type, file => uploadDocumentByToken(data.documents_token, 'certificate', file))
       setPaymentUrl(data.payment_url || '')
       setEnrolledEmail(form.email)
       setStatus('success')
@@ -200,6 +206,25 @@ export default function EnrollForm() {
     }
   }
 
+  function handleCertFile(file) {
+    const error = checkDocumentFile(file)
+    setErrors(er => ({ ...er, cert_file: error }))
+    setCertFile(error ? null : file)
+  }
+
+  // Po udanym zapisie: dosłanie skanu. Błąd nie psuje zapisu — plik można dodać na koncie.
+  async function afterEnroll(courseType, upload) {
+    const recert = courseType === 'recert'
+    setEnrolledRecert(recert)
+    setCertUploadFailed(false)
+    if (!recert || !certFile) return
+    try {
+      await upload(certFile)
+    } catch {
+      setCertUploadFailed(true)
+    }
+  }
+
   async function handleResend() {
     setResendState('loading')
     try {
@@ -218,6 +243,18 @@ export default function EnrollForm() {
             <span className="text-3xl">✓</span>
           </div>
           <h2 className="text-2xl font-extrabold text-gray-900 mb-3">Zapisano!</h2>
+
+          {enrolledRecert && (
+            <div className={`${certUploadFailed ? 'bg-amber-50 border-amber-200' : 'bg-blue-50 border-blue-100'} border rounded-xl px-4 py-3 text-left mb-6`}>
+              {certUploadFailed && (
+                <p className="text-sm text-amber-900 font-semibold mb-1">Nie udało się przesłać skanu certyfikatu.</p>
+              )}
+              <p className="text-sm text-gray-700 leading-relaxed">
+                Na swoim koncie pobierzesz oświadczenie do podpisu i dodasz skan lub zdjęcie
+                {certFile && !certUploadFailed ? ' podpisanego oświadczenia.' : ' certyfikatu KPP i podpisanego oświadczenia.'}
+              </p>
+            </div>
+          )}
 
           {paymentUrl && (
             <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-4 text-left mb-6">
@@ -319,6 +356,7 @@ export default function EnrollForm() {
         terms_accepted: form.terms_accepted,
         cert_number: form.cert_number, cert_date: form.cert_date || null, ...companyData(form),
       })
+      await afterEnroll(courseMeta?.course_type, file => uploadMyDocument(data.id, 'certificate', file))
       setPaymentUrl(data.payment_url || '')
       setEnrolledEmail(profile?.email || '')
       setStatus('success')
@@ -372,6 +410,7 @@ export default function EnrollForm() {
         cert_date: form.cert_date || null,
         ...companyData(form),
       })
+      await afterEnroll(courseMeta?.course_type, file => uploadMyDocument(data.id, 'certificate', file))
       setPaymentUrl(data.payment_url || '')
       setEnrolledEmail(form.email || accountEmail)
       setStatus('success')
@@ -466,6 +505,9 @@ export default function EnrollForm() {
               <div className="border-t border-gray-100 pt-4 mt-4 grid grid-cols-2 gap-4">
                 <Field label="Numer certyfikatu" name="cert_number" value={form.cert_number} onChange={handleChange} error={errors.cert_number} placeholder="np. KPP/2021/00123" />
                 <Field label="Data wydania certyfikatu" name="cert_date" value={form.cert_date} onChange={handleChange} error={errors.cert_date} type="date" />
+                <div className="col-span-2">
+                  <CertFileField file={certFile} onChange={handleCertFile} error={errors.cert_file} />
+                </div>
               </div>
             )}
           {selectedCourse?.course_type === 'recert' && (
@@ -581,6 +623,9 @@ export default function EnrollForm() {
             <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-100">
               <Field label="Numer certyfikatu" name="cert_number" value={form.cert_number} onChange={handleChange} error={errors.cert_number} placeholder="np. KPP/2021/00123" />
               <Field label="Data wydania certyfikatu" name="cert_date" value={form.cert_date} onChange={handleChange} error={errors.cert_date} type="date" />
+              <div className="col-span-2">
+                <CertFileField file={certFile} onChange={handleCertFile} error={errors.cert_file} />
+              </div>
             </div>
           )}
 
@@ -848,6 +893,36 @@ function Field({ label, name, value, onChange, error, required = true, type = 't
         }`}
         {...rest}
       />
+      {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
+    </div>
+  )
+}
+
+function CertFileField({ file, onChange, error }) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1.5">
+        Skan lub zdjęcie certyfikatu <span className="font-normal text-gray-400">(opcjonalnie)</span>
+      </label>
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="cursor-pointer border border-gray-300 hover:border-red-400 rounded-lg px-3 py-2 text-sm text-gray-700 transition-colors">
+          {file ? 'Zmień plik' : 'Wybierz plik'}
+          <input
+            type="file"
+            accept={DOCUMENT_ACCEPT}
+            className="hidden"
+            onChange={e => { onChange(e.target.files[0] || null); e.target.value = '' }}
+          />
+        </label>
+        {file ? (
+          <span className="text-sm text-gray-700 break-all">
+            {file.name}
+            <button type="button" onClick={() => onChange(null)} className="ml-2 text-xs text-gray-400 hover:text-red-600 underline">usuń</button>
+          </span>
+        ) : (
+          <span className="text-xs text-gray-400">PDF, JPG lub PNG, maks. 10 MB. Możesz dodać go później na koncie.</span>
+        )}
+      </div>
       {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
     </div>
   )
