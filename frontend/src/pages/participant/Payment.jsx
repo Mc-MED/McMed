@@ -122,6 +122,15 @@ export default function Payment({ view = 'summary' }) {
                   className="mt-6 w-full bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-bold py-3 rounded-xl text-sm">
                   {loading ? 'Przekierowanie…' : 'Zapłać przez Przelewy24'}
                 </button>
+                <div className="mt-3 flex items-center justify-between gap-3 text-xs text-gray-500">
+                  <span>
+                    Płatność zgodnie z{' '}
+                    <a href="https://mcmed.pl/regulamin.html" target="_blank" rel="noopener noreferrer"
+                      className="text-red-600 underline hover:text-red-700">Regulaminem</a>
+                    {' '}(§ 4). Płatności obsługuje Przelewy24.
+                  </span>
+                  <img src="/przelewy24.svg" alt="Przelewy24" className="h-6 w-auto shrink-0" />
+                </div>
                 {info.sandbox && (
                   <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-900 leading-relaxed">
                     <span className="font-bold">Uwaga: płatności online są w trakcie uruchamiania.</span>{' '}

@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { fetchCourses, submitEnrollment, resendActivation } from '../../api/courses'
 import { fetchMyProfile, enrollMe } from '../../api/participant'
 import { DOCUMENT_ACCEPT, checkDocumentFile, uploadDocumentByToken, uploadMyDocument } from '../../api/enrollmentDocuments'
+import { startPayment } from '../../api/payments'
 
 const EMPTY = {
   course: '',
@@ -63,6 +64,7 @@ export default function EnrollForm() {
   const [resendState, setResendState] = useState('idle') // idle | loading | sent | error
   const [emailExists, setEmailExists] = useState(null)  // null | {active: bool}
   const [paymentUrl, setPaymentUrl]   = useState('')
+  const [paymentMethod, setPaymentMethod] = useState('online') // online | cash (jak w § 4 regulaminu)
   // Skan certyfikatu (recertyfikacja, opcjonalny) — wysyłany osobno zaraz po zapisie
   const [certFile, setCertFile]       = useState(null)
   const [enrolledRecert, setEnrolledRecert] = useState(false)
@@ -182,9 +184,7 @@ export default function EnrollForm() {
         cert_date:  form.cert_date  || null,
       })
       await afterEnroll(courseMeta?.course_type, file => uploadDocumentByToken(data.documents_token, 'certificate', file))
-      setPaymentUrl(data.payment_url || '')
-      setEnrolledEmail(form.email)
-      setStatus('success')
+      await finishEnroll(data, form.email)
     } catch (err) {
       const data = err.response?.data
       if (data?.email_exists) {
@@ -225,6 +225,22 @@ export default function EnrollForm() {
     }
   }
 
+  // Płatność online: od razu przekierowanie do Przelewy24. Gdy się nie uda — ekran sukcesu z przyciskiem „Zapłać teraz”.
+  async function finishEnroll(data, email) {
+    const url = data.payment_url || ''
+    setPaymentUrl(url)
+    setEnrolledEmail(email)
+    const token = url.split('/platnosc/')[1]
+    if (paymentMethod === 'online' && token) {
+      try {
+        const { redirect_url } = await startPayment(token)
+        window.location.href = redirect_url
+        return
+      } catch {}
+    }
+    setStatus('success')
+  }
+
   async function handleResend() {
     setResendState('loading')
     try {
@@ -259,8 +275,9 @@ export default function EnrollForm() {
           {paymentUrl && (
             <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-4 text-left mb-6">
               <p className="text-sm text-gray-700 leading-relaxed mb-3">
-                Na Twój e-mail wysłaliśmy fakturę proforma. Za kurs możesz zapłacić od razu online –
-                po zaksięgowaniu wpłaty otrzymasz fakturę VAT.
+                {paymentMethod === 'cash'
+                  ? 'Na Twój e-mail wysłaliśmy fakturę proforma. Za kurs zapłacisz gotówką u Organizatora, najpóźniej w dniu rozpoczęcia kursu. Możesz też zapłacić od razu online – po zaksięgowaniu wpłaty otrzymasz fakturę VAT.'
+                  : 'Na Twój e-mail wysłaliśmy fakturę proforma. Za kurs możesz zapłacić od razu online – po zaksięgowaniu wpłaty otrzymasz fakturę VAT.'}
               </p>
               <a
                 href={paymentUrl}
@@ -357,9 +374,7 @@ export default function EnrollForm() {
         cert_number: form.cert_number, cert_date: form.cert_date || null, ...companyData(form),
       })
       await afterEnroll(courseMeta?.course_type, file => uploadMyDocument(data.id, 'certificate', file))
-      setPaymentUrl(data.payment_url || '')
-      setEnrolledEmail(profile?.email || '')
-      setStatus('success')
+      await finishEnroll(data, profile?.email || '')
     } catch (err) {
       setStatus('idle')
       const data = err.response?.data
@@ -411,9 +426,7 @@ export default function EnrollForm() {
         ...companyData(form),
       })
       await afterEnroll(courseMeta?.course_type, file => uploadMyDocument(data.id, 'certificate', file))
-      setPaymentUrl(data.payment_url || '')
-      setEnrolledEmail(form.email || accountEmail)
-      setStatus('success')
+      await finishEnroll(data, form.email || accountEmail)
     } catch (err) {
       setStatus('idle')
       const data = err.response?.data
@@ -487,6 +500,8 @@ export default function EnrollForm() {
 
           <InvoiceSection form={form} errors={errors} onChange={handleChange} />
 
+          <PaymentSection course={selectedCourse} term={formatCourseDays(selectedCourse)} method={paymentMethod} onChange={setPaymentMethod} />
+
           <section className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
             <h2 className="text-base font-bold text-gray-900 mb-4">Zgody</h2>
             <div className="space-y-4">
@@ -526,7 +541,7 @@ export default function EnrollForm() {
             disabled={status === 'loading'}
             className="w-full bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-bold py-3.5 rounded-xl transition-colors text-sm"
           >
-            {status === 'loading' ? 'Wysyłanie…' : 'Wyślij zgłoszenie'}
+            {status === 'loading' ? 'Wysyłanie…' : submitLabel(paymentMethod)}
           </button>
         </form>
       </div>
@@ -651,6 +666,8 @@ export default function EnrollForm() {
 
         <InvoiceSection form={form} errors={errors} onChange={handleChange} />
 
+        <PaymentSection course={selectedCourse} term={formatCourseDays(selectedCourse)} method={paymentMethod} onChange={setPaymentMethod} />
+
         {/* Konto – tylko dla niezalogowanych */}
         {!isLoggedIn && (
           <section className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
@@ -751,10 +768,81 @@ export default function EnrollForm() {
           disabled={status === 'loading'}
           className="w-full bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-bold py-3.5 rounded-xl transition-colors text-sm"
         >
-          {status === 'loading' ? 'Wysyłanie…' : 'Wyślij zgłoszenie'}
+          {status === 'loading' ? 'Wysyłanie…' : submitLabel(paymentMethod)}
         </button>
       </form>
     </div>
+  )
+}
+
+// Przycisk zamówienia zgodnie z ustawą o prawach konsumenta: „z obowiązkiem zapłaty”
+function submitLabel(method) {
+  return method === 'online'
+    ? 'Zamawiam z obowiązkiem zapłaty – przejdź do płatności'
+    : 'Zamawiam z obowiązkiem zapłaty'
+}
+
+function formatPrice(price) {
+  return Number(price).toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' zł'
+}
+
+// „Koszyk”: kurs, cena i sposób płatności — tuż przed akceptacją regulaminu i przyciskiem zamówienia
+function PaymentSection({ course, term, method, onChange }) {
+  const options = [
+    {
+      value: 'online',
+      title: 'Płatność online – Przelewy24',
+      desc: 'Szybki przelew, BLIK lub karta płatnicza. Po złożeniu zamówienia przejdziesz od razu do płatności.',
+      logo: true,
+    },
+    {
+      value: 'cash',
+      title: 'Gotówka u Organizatora',
+      desc: 'Płatność najpóźniej w dniu rozpoczęcia kursu. Fakturę proforma wyślemy e-mailem.',
+    },
+  ]
+  return (
+    <section className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+      <h2 className="text-base font-bold text-gray-900 mb-4">Podsumowanie i płatność</h2>
+      {course ? (
+        <div className="flex items-start justify-between gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200 text-sm">
+          <div>
+            <div className="font-semibold text-gray-900">{course.name}</div>
+            <div className="text-gray-500 mt-0.5">{term}{course.city ? ` · ${course.city}` : ''}</div>
+          </div>
+          <div className="text-right shrink-0">
+            <div className="text-xs text-gray-500">Do zapłaty</div>
+            <div className="text-lg font-extrabold text-gray-900">{formatPrice(course.price)}</div>
+            <div className="text-xs text-gray-500">cena brutto</div>
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-gray-400">Wybierz kurs, aby zobaczyć cenę.</p>
+      )}
+
+      <p className="text-sm font-semibold text-gray-900 mt-5 mb-2">Sposób płatności</p>
+      <div className="space-y-2">
+        {options.map(o => (
+          <label
+            key={o.value}
+            className={`flex items-start gap-3 p-4 rounded-lg border cursor-pointer transition-colors ${method === o.value ? 'border-red-500 bg-red-50' : 'border-gray-200 hover:bg-gray-50'}`}
+          >
+            <input
+              type="radio" name="payment_method" value={o.value}
+              checked={method === o.value} onChange={() => onChange(o.value)}
+              className="mt-0.5 accent-red-600"
+            />
+            <span className="flex-1">
+              <span className="flex items-center justify-between gap-3">
+                <span className="text-sm font-medium text-gray-900">{o.title}</span>
+                {o.logo && <img src="/przelewy24.svg" alt="Przelewy24" className="h-6 w-auto" />}
+              </span>
+              <span className="block text-xs text-gray-500 mt-1 leading-relaxed">{o.desc}</span>
+            </span>
+          </label>
+        ))}
+      </div>
+    </section>
   )
 }
 
