@@ -76,12 +76,12 @@ export default function CourseCreate() {
     if (!form.committee_chair.trim())   e.committee_chair   = 'Podaj przewodniczącego komisji.'
     if (!form.committee_member1.trim()) e.committee_member1 = 'Podaj pierwszego członka komisji.'
     if (!form.committee_member2.trim()) e.committee_member2 = 'Podaj drugiego członka komisji.'
+    if (!form.entity_director.trim())   e.entity_director   = 'Podaj kierownika podmiotu.'
     if (!form.max_participants || parseInt(form.max_participants) < 1)
       e.max_participants = 'Podaj liczbę kursantów.'
     if (!isRecert) {
       const filledDays = form.course_days.filter(d => d)
       if (filledDays.length !== 6) e.course_days = 'Uzupełnij wszystkie 6 dni kursu.'
-      if (!form.entity_director.trim())   e.entity_director   = 'Podaj kierownika podmiotu.'
       if (!form.academic_director.trim()) e.academic_director = 'Podaj kierownika merytorycznego.'
     }
     return e
@@ -210,14 +210,14 @@ export default function CourseCreate() {
         </Section>
 
         {/* ── Organizacja ── */}
-        {!isRecert && (
-          <Section title="Organizacja kursu">
-            <InstSelect label="Kierownik podmiotu" name="entity_director" value={form.entity_director}
-              onChange={handleChange} error={errors.entity_director} instructors={allInstructors} />
+        <Section title={isRecert ? 'Organizacja' : 'Organizacja kursu'}>
+          <InstSelect label="Kierownik podmiotu" name="entity_director" value={form.entity_director}
+            onChange={handleChange} error={errors.entity_director} instructors={allInstructors} />
+          {!isRecert && (
             <InstSelect label="Kierownik merytoryczny kursu" name="academic_director" value={form.academic_director}
               onChange={handleChange} error={errors.academic_director} instructors={allInstructors} />
-          </Section>
-        )}
+          )}
+        </Section>
 
         {/* ── Prowadzący ── */}
         {!isRecert && (

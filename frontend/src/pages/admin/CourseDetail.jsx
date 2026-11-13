@@ -186,12 +186,12 @@ function CourseForm({ initial, onSaved }) {
         </div>
       </Section>
 
-      {!isRecert && (
-        <Section title="Organizacja kursu">
-          <InstSelect label="Kierownik podmiotu" name="entity_director" value={form.entity_director} onChange={handleChange} instructors={allInstructors} />
+      <Section title={isRecert ? 'Organizacja' : 'Organizacja kursu'}>
+        <InstSelect label="Kierownik podmiotu" name="entity_director" value={form.entity_director} onChange={handleChange} instructors={allInstructors} />
+        {!isRecert && (
           <InstSelect label="Kierownik merytoryczny kursu" name="academic_director" value={form.academic_director} onChange={handleChange} instructors={allInstructors} />
-        </Section>
-      )}
+        )}
+      </Section>
 
       {!isRecert && (
         <Section
