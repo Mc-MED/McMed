@@ -29,8 +29,9 @@ const STATUS = {
 }
 
 const FILTERS = [
-  { key: 'upcoming', label: 'Nadchodzące', match: s => ['planned', 'due', 'error'].includes(s) },
-  { key: 'sent',     label: 'Wysłane',     match: s => s === 'sent' },
+  // Certyfikat wygasa w ciągu najbliższych 3 miesięcy (od daty przypomnienia do dnia wygaśnięcia)
+  { key: 'upcoming', label: 'Nadchodzące', match: (r, today) => r.reminder_date <= today && today < r.expiry_date },
+  { key: 'sent',     label: 'Wysłane',     match: r => r.status === 'sent' },
   { key: 'all',      label: 'Wszystkie',   match: () => true },
 ]
 
@@ -88,7 +89,8 @@ export default function Reminders() {
     }
   }
 
-  const rows = (data?.rows || []).filter(FILTERS.find(f => f.key === filter).match)
+  const matchFilter = FILTERS.find(f => f.key === filter).match
+  const rows = (data?.rows || []).filter(r => matchFilter(r, data.today))
   const tests = data?.tests || []
 
   return (
@@ -200,7 +202,10 @@ export default function Reminders() {
         {!data && !error && <p className="text-sm text-gray-400">Ładowanie…</p>}
         {data && rows.length === 0 && (
           <p className="text-sm text-gray-400">
-            Brak uczestników w tym widoku. Przypomnienia liczą się od daty certyfikatu wpisanej przy uczestniku kursu.
+            {filter === 'upcoming'
+              ? 'Żaden certyfikat nie wygasa w ciągu najbliższych 3 miesięcy. '
+              : 'Brak uczestników w tym widoku. '}
+            Przypomnienia liczą się od daty certyfikatu wpisanej przy uczestniku kursu.
           </p>
         )}
 

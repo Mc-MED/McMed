@@ -666,6 +666,8 @@ def _build_certificate_context(enrollment):
         'p_address':          full_address,
         'p_cert_number':      enrollment.cert_number or '',
         'p_cert_date':        fmt(enrollment.cert_date),
+        # Wypełniane tylko przy certyfikacie pobieranym przez uczestnika (participant_certificate)
+        'duplikat':           '',
     })
     return ctx
 
@@ -723,7 +725,10 @@ def participant_certificate(request, enrollment_id):
     if not tpl_path.exists():
         return Response({'detail': 'Brak pliku szablonu certyfikatu.'}, status=404)
 
-    pdf_bytes = _render_pdf(tpl_path, _build_certificate_context(enrollment), course_stamps(enrollment.course))
+    ctx = _build_certificate_context(enrollment)
+    ctx['duplikat'] = f'Duplikat utworzono: {timezone.localtime().strftime("%d.%m.%Y %H:%M")}'
+    # Data i godzina są inne przy każdym pobraniu — bez cache, żeby nie zapełniać pdf_cache
+    pdf_bytes = _render_pdf(tpl_path, ctx, course_stamps(enrollment.course), cache=False)
     if pdf_bytes is None:
         return Response({'detail': 'Nie udało się wygenerować certyfikatu. Skontaktuj się z organizatorem.'}, status=500)
 

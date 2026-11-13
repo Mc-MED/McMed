@@ -8,6 +8,8 @@ function formatDate(iso) {
   return `${d}.${m}.${y}`
 }
 
+const isKpp = c => c.course_type === 'kpp'
+
 function isPast(c) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -160,6 +162,21 @@ export default function CourseList() {
     </div>
   )
 
+  const renderGroup = (title, rows, emptyText, muted = false) => (
+    <div className="mb-8 last:mb-0">
+      <h2 className="text-sm font-bold uppercase tracking-wide text-gray-500 mb-3">
+        {title} <span className="text-gray-400 font-semibold">({rows.length})</span>
+      </h2>
+      {rows.length > 0
+        ? <CourseTable rows={rows} muted={muted} />
+        : (
+          <div className="bg-white rounded-xl border border-gray-200 p-6 text-center text-gray-400 text-sm">
+            {emptyText}
+          </div>
+        )}
+    </div>
+  )
+
   return (
     <div className="p-8">
       <div className="flex items-center justify-between mb-8">
@@ -195,14 +212,11 @@ export default function CourseList() {
         </div>
       )}
 
-      {!loading && !error && upcoming.length > 0 && (
-        <CourseTable rows={upcoming} />
-      )}
-
-      {!loading && !error && upcoming.length === 0 && courses.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400 text-sm">
-          Brak nadchodzących kursów.
-        </div>
+      {!loading && !error && courses.length > 0 && (
+        <>
+          {renderGroup('Kursy KPP', upcoming.filter(isKpp), 'Brak nadchodzących kursów KPP.')}
+          {renderGroup('Recertyfikacje', upcoming.filter(c => !isKpp(c)), 'Brak nadchodzących recertyfikacji.')}
+        </>
       )}
 
       {!loading && !error && past.length > 0 && (
@@ -214,7 +228,12 @@ export default function CourseList() {
             <span className={`transition-transform ${showPast ? 'rotate-90' : ''}`}>▶</span>
             Zakończone ({past.length})
           </button>
-          {showPast && <CourseTable rows={past} muted />}
+          {showPast && (
+            <>
+              {renderGroup('Kursy KPP', past.filter(isKpp), 'Brak zakończonych kursów KPP.', true)}
+              {renderGroup('Recertyfikacje', past.filter(c => !isKpp(c)), 'Brak zakończonych recertyfikacji.', true)}
+            </>
+          )}
         </div>
       )}
     </div>
