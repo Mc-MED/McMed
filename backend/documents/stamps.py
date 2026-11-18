@@ -20,13 +20,14 @@ PDF_DPI = 300
 
 # (pole kursu, lewa krawędź pola od marginesu w cm, szerokość pola w cm). Treść strony ma 16 cm:
 # linia kierownika podmiotu 0–4,8 cm, napis „Przewodniczący komisji” na środku, linia członków komisji 7,6–16 cm.
+# Pieczątki członków komisji mogą wchodzić na prawy margines (2,5 cm).
 SLOTS = [
-    ('entity_director',   0.1, 4.6),
-    ('committee_chair',   5.3, 3.9),
-    ('committee_member1', 9.4, 3.3),
-    ('committee_member2', 12.7, 3.3),
+    ('entity_director',  -0.3, 5.4),
+    ('committee_chair',   5.1, 4.6),
+    ('committee_member1', 9.7, 3.8),
+    ('committee_member2', 13.5, 4.0),
 ]
-BOX_HEIGHT = 1.5   # cm
+BOX_HEIGHT = 2.4   # cm
 LINE_OFFSET = 0.3  # cm — dół pieczątki tuż nad kropkami linii podpisu
 
 EMU_PER_CM = 360000
@@ -111,7 +112,7 @@ def course_stamps(course):
 
 def stamps_cache_key(stamps):
     """Do klucza cache PDF-ów — nowa pieczątka ma nową nazwę pliku."""
-    return [path for _, _, path in stamps]
+    return [path for _, _, path in stamps] + ([SLOTS, BOX_HEIGHT, LINE_OFFSET] if stamps else [])
 
 
 def _signature_paragraph(document):
