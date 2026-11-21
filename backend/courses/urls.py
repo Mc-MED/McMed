@@ -30,6 +30,7 @@ urlpatterns = [
     path('admin/<int:pk>/payments/', views.course_payments, name='admin-course-payments'),
     path('enrollments/<int:pk>/mark-paid/', views.enrollment_mark_paid, name='enrollment-mark-paid'),
     path('enrollments/<int:pk>/proforma/', views.enrollment_issue_proforma, name='enrollment-issue-proforma'),
+    path('payments/<int:pk>/refunded/', views.payment_mark_refunded, name='payment-mark-refunded'),
     path('invoices/<int:pk>/retry/', views.invoice_retry, name='invoice-retry'),
     path('invoices/<int:pk>/pdf/', views.invoice_pdf, name='invoice-pdf'),
     path('instructors/', views.InstructorListCreateView.as_view(), name='instructor-list'),

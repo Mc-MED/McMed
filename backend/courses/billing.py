@@ -6,6 +6,8 @@ Błąd Fakturowni, maila czy SMS-a nigdy nie przerywa zapisu ani potwierdzenia p
 trafia do Invoice.send_error i jest widoczny w panelu admina (Płatności).
 """
 import logging
+from datetime import timedelta
+from decimal import Decimal
 
 from django.conf import settings
 from django.db import transaction
@@ -18,6 +20,32 @@ from .models import Course, Enrollment, Invoice, Payment
 from .sms import send_sms
 
 logger = logging.getLogger(__name__)
+
+
+# Płatność online starsza niż to okno bez potwierdzenia z P24 nie jest już pokazywana jako „w toku”
+PENDING_WINDOW = timedelta(minutes=30)
+
+
+def amount_due(enrollment):
+    """Kwota do zapłaty: z wystawionej proformy (to ją dostał klient), bez proformy — aktualna cena kursu."""
+    proforma = enrollment.invoices.filter(kind=Invoice.KIND_PROFORMA).exclude(fakturownia_id='').first()
+    return proforma.amount_gross if proforma else enrollment.course.price
+
+
+def to_grosze(amount):
+    return int((Decimal(amount) * 100).quantize(Decimal('1')))
+
+
+def is_recent_pending(payment, now=None):
+    return (payment.method == Payment.METHOD_ONLINE and payment.status == Payment.STATUS_PENDING
+            and payment.created_at >= (now or timezone.now()) - PENDING_WINDOW)
+
+
+def overpayment(payments):
+    """Wpłaty ponad pierwszą opłaconą (np. dwie płatności online albo online + gotówka) — do zwrotu."""
+    paid = sorted((p for p in payments if p.status == Payment.STATUS_PAID),
+                  key=lambda p: (p.paid_at or p.created_at, p.created_at))
+    return paid[1:]
 
 
 def payment_link(enrollment):
@@ -134,6 +162,8 @@ def mark_paid_and_invoice(enrollment, method, payment=None):
     """Opłacenie zapisu: status, faktura VAT (z proformy, jeśli jest), mail + SMS.
 
     Idempotentne — gdy faktura VAT już istnieje, niczego nie wystawia ponownie.
+    Faktura jest na kwotę faktycznej wpłaty (online: z P24, ręcznie: z proformy / ceny kursu).
+    Kolejna wpłata za opłacony zapis zostaje zapisana — panel Płatności pokazuje ją jako nadpłatę.
     """
     with transaction.atomic():
         enrollment = Enrollment.objects.select_for_update().get(pk=enrollment.pk)
@@ -141,9 +171,13 @@ def mark_paid_and_invoice(enrollment, method, payment=None):
             payment = Payment.objects.create(
                 enrollment=enrollment,
                 session_id=f'{method}-{enrollment.pk}-{timezone.now():%Y%m%d%H%M%S%f}',
-                amount=int(enrollment.course.price * 100),
+                amount=to_grosze(amount_due(enrollment)),
                 method=method,
             )
+        already_paid = enrollment.payments.filter(status=Payment.STATUS_PAID).exclude(pk=payment.pk).exists()
+        if already_paid and payment.status != Payment.STATUS_PAID:
+            logger.warning('Nadpłata: zapis %s był już opłacony, kolejna wpłata %s (%s gr) — do zwrotu',
+                           enrollment.pk, payment.session_id, payment.amount)
         if payment.status != Payment.STATUS_PAID:
             payment.status = Payment.STATUS_PAID
             payment.paid_at = timezone.now()
@@ -156,12 +190,16 @@ def mark_paid_and_invoice(enrollment, method, payment=None):
         if existing:
             return existing
 
+        # Faktura na pierwszą opłaconą wpłatę (przy ponowieniu nieudanego wystawienia też na nią)
+        first_paid = enrollment.payments.filter(status=Payment.STATUS_PAID).order_by('paid_at', 'created_at').first()
+        amount = (Decimal(first_paid.amount) / 100).quantize(Decimal('0.01'))
         proforma = enrollment.invoices.filter(kind=Invoice.KIND_PROFORMA).exclude(fakturownia_id='').first()
-        ok, data = fakturownia.create_vat(enrollment, method, proforma.fakturownia_id if proforma else '')
+        ok, data = fakturownia.create_vat(enrollment, first_paid.method, proforma.fakturownia_id if proforma else '',
+                                          amount=amount)
         # Poprzednia nieudana próba wystawienia faktury — nadpisujemy ją zamiast dokładać kolejną
         invoice = enrollment.invoices.filter(kind=Invoice.KIND_VAT).first() or Invoice(
             enrollment=enrollment, kind=Invoice.KIND_VAT)
-        invoice.amount_gross = enrollment.course.price
+        invoice.amount_gross = amount
         if not ok:
             logger.error('Faktura VAT dla zapisu %s: %s', enrollment.pk, data)
             invoice.send_error = data
@@ -177,6 +215,17 @@ def mark_paid_and_invoice(enrollment, method, payment=None):
     return invoice
 
 
+def mark_refunded(payment):
+    """Admin zwrócił nadpłatę. Pierwsza opłacona wpłata zapisu (ta pod fakturą) nie może zostać zwrócona."""
+    with transaction.atomic():
+        enrollment = Enrollment.objects.select_for_update().get(pk=payment.enrollment_id)
+        if payment not in overpayment(enrollment.payments.all()):
+            return False
+        payment.status = Payment.STATUS_REFUNDED
+        payment.save(update_fields=['status'])
+        return True
+
+
 def retry(invoice):
     """Przycisk „Wyślij ponownie”: dokument niewystawiony → ponowne wystawienie, wystawiony → ponowna wysyłka."""
     if invoice.fakturownia_id:
@@ -184,7 +233,7 @@ def retry(invoice):
     elif invoice.kind == Invoice.KIND_PROFORMA:
         issue_proforma(invoice.enrollment)
     else:
-        payment = invoice.enrollment.payments.filter(status=Payment.STATUS_PAID).last()
+        payment = invoice.enrollment.payments.filter(status=Payment.STATUS_PAID).first()
         mark_paid_and_invoice(invoice.enrollment, payment.method if payment else Payment.METHOD_TRANSFER, payment)
     invoice.refresh_from_db()
     return invoice

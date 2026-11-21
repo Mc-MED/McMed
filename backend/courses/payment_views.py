@@ -4,13 +4,14 @@ import uuid
 
 from django.conf import settings
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, authentication_classes, permission_classes, throttle_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from . import przelewy24
-from .billing import mark_paid_and_invoice
+from .billing import PENDING_WINDOW, amount_due, mark_paid_and_invoice, to_grosze
 from .models import Enrollment, Invoice, Payment
 
 logger = logging.getLogger(__name__)
@@ -34,11 +35,13 @@ def payment_info(request, token):
         'last_name':       enrollment.last_name,
         'course_name':     enrollment.course.name,
         'course_type':     enrollment.course.course_type,
-        'amount':          str(enrollment.course.price),
+        'amount':          str(amount_due(enrollment)),
         'proforma_number': proforma.number if proforma else '',
         'invoice_number':  invoice.number if invoice else '',
         'paid':            enrollment.payment_status == 'paid',
-        'pending':         enrollment.payments.filter(status=Payment.STATUS_PENDING, method=Payment.METHOD_ONLINE).exists(),
+        'pending':         enrollment.payments.filter(
+                               status=Payment.STATUS_PENDING, method=Payment.METHOD_ONLINE,
+                               created_at__gte=timezone.now() - PENDING_WINDOW).exists(),
         'test_payment':    bool(last_online and last_online.status == Payment.STATUS_TEST),
         'sandbox':         przelewy24.mode() == 'sandbox',
     })
@@ -50,13 +53,18 @@ def payment_start(request, token):
     enrollment = _enrollment(token)
     if enrollment.payment_status == 'paid':
         return Response({'detail': 'Kurs jest już opłacony.'}, status=status.HTTP_400_BAD_REQUEST)
-    if enrollment.course.price <= 0:
+    amount = amount_due(enrollment)
+    if amount <= 0:
         return Response({'detail': 'Ten kurs nie ma ustalonej ceny.'}, status=status.HTTP_400_BAD_REQUEST)
 
+    # Nowa próba = poprzednie niedokończone są porzucone. Gdyby któraś jednak została opłacona,
+    # powiadomienie z P24 i tak ją zaksięguje (p24_notify nie patrzy na ten status).
+    enrollment.payments.filter(status=Payment.STATUS_PENDING, method=Payment.METHOD_ONLINE).update(
+        status=Payment.STATUS_ABANDONED)
     payment = Payment.objects.create(
         enrollment=enrollment,
         session_id=uuid.uuid4().hex,
-        amount=int(enrollment.course.price * 100),
+        amount=to_grosze(amount),
         method=Payment.METHOD_ONLINE,
     )
     return_url = f'{settings.FRONTEND_URL}/platnosc/{token}/status'
@@ -113,7 +121,7 @@ def p24_notify(request):
     if int(data['amount']) != payment.amount:
         logger.error('Przelewy24: kwota %s ≠ %s dla %s', data['amount'], payment.amount, payment.session_id)
         return Response(status=status.HTTP_400_BAD_REQUEST)
-    if payment.status == Payment.STATUS_PAID:
+    if payment.status in (Payment.STATUS_PAID, Payment.STATUS_REFUNDED):
         return Response({'ok': True})
 
     ok, msg = przelewy24.verify(payment, data['orderId'])

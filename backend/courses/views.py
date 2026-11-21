@@ -14,7 +14,10 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 
 from .models import PRACTICAL_TASKS, Course, Enrollment, EnrollmentDocument, Instructor, Invoice, Payment, practical_field
-from .billing import issue_proforma, issue_proforma_on_commit, mark_paid_and_invoice, payment_link, retry as retry_invoice
+from .billing import (
+    is_recent_pending, issue_proforma, issue_proforma_on_commit, mark_paid_and_invoice, mark_refunded, overpayment,
+    payment_link, retry as retry_invoice,
+)
 from . import fakturownia
 from . import enrollment_documents as edocs
 from .permissions import IsInstructor
@@ -660,11 +663,13 @@ def course_payments(request, pk):
     enrollments = (course.enrollments.filter(is_deleted=False)
                    .prefetch_related('invoices', 'payments').order_by('position', 'created_at'))
     rows = []
+    now = timezone.now()
     for lp, e in enumerate(enrollments, 1):
         invoices = list(e.invoices.all())
         payments = list(e.payments.all())
-        paid = next((p for p in reversed(payments) if p.status == Payment.STATUS_PAID), None)
-        pending = any(p.status == Payment.STATUS_PENDING and p.method == Payment.METHOD_ONLINE for p in payments)
+        extra = overpayment(payments)
+        paid = next((p for p in payments if p.status == Payment.STATUS_PAID and p not in extra), None)
+        pending = any(is_recent_pending(p, now) for p in payments)
         rows.append({
             'id':             e.id,
             'lp':             lp,
@@ -679,6 +684,11 @@ def course_payments(request, pk):
             'paid_method':    paid.method if paid else '',
             'paid_at':        paid.paid_at if paid else None,
             'online_pending': pending,
+            # Wpłaty ponad pierwszą (podwójna płatność online, online + gotówka…) — do zwrotu
+            'overpayments':   [{'id': p.id, 'method': p.method, 'amount': f'{p.amount / 100:.2f}', 'paid_at': p.paid_at}
+                               for p in extra],
+            'refunded':       [{'id': p.id, 'method': p.method, 'amount': f'{p.amount / 100:.2f}'}
+                               for p in payments if p.status == Payment.STATUS_REFUNDED],
             'proforma':       _invoice_dict(next((i for i in invoices if i.kind == Invoice.KIND_PROFORMA), None)),
             'invoice':        _invoice_dict(next((i for i in invoices if i.kind == Invoice.KIND_VAT), None)),
         })
@@ -695,6 +705,17 @@ def enrollment_mark_paid(request, pk):
     enrollment = get_object_or_404(Enrollment, pk=pk, is_deleted=False, course__isnull=False)
     invoice = mark_paid_and_invoice(enrollment, method)
     return Response(_invoice_dict(invoice))
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def payment_mark_refunded(request, pk):
+    """Nadpłata zwrócona klientowi (zwrot robi admin w P24 / przelewem) — znika z „do zwrotu”."""
+    payment = get_object_or_404(Payment, pk=pk)
+    if not mark_refunded(payment):
+        return Response({'detail': 'Tę wpłatę można oznaczyć jako zwróconą tylko, gdy jest nadpłatą.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+    return Response({'ok': True})
 
 
 @api_view(['POST'])

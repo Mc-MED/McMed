@@ -1,4 +1,5 @@
 from datetime import timedelta
+from decimal import Decimal
 from unittest import mock
 
 from django.contrib.auth import get_user_model
@@ -8,6 +9,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from users.models import PasswordResetToken
+from . import fakturownia
 from .billing import mark_paid_and_invoice
 from .models import Course, Enrollment, Instructor, Invoice, Payment
 
@@ -359,6 +361,84 @@ class BillingTests(TestCase):
         self.assertTrue(info['test_payment'])
         self.assertTrue(info['sandbox'])
         self.assertFalse(info['paid'])
+
+    def notify(self, payment):
+        with mock.patch('courses.przelewy24.notification_valid', return_value=True), \
+             mock.patch('courses.przelewy24.verify', return_value=(True, '')), \
+             mock.patch('courses.przelewy24.mode', return_value='production'):
+            return self.client.post('/api/payments/p24/notify/',
+                                    {'sessionId': payment.session_id, 'amount': payment.amount, 'orderId': 9},
+                                    format='json')
+
+    @override_settings(FAKTUROWNIA_MODE='live', FAKTUROWNIA_DOMAIN='mcmed', FAKTUROWNIA_API_TOKEN='tok')
+    def test_price_change_after_proforma_keeps_proforma_amount(self):
+        def created(n):
+            return mock.Mock(status_code=201, json=lambda: {'id': n, 'number': f'DOK {n}', 'view_url': ''})
+        ok = mock.Mock(status_code=200, content=b'%PDF-1.4')
+        with mock.patch('courses.fakturownia.requests.post', side_effect=[created(1), created(2), ok]) as post, \
+             mock.patch('courses.fakturownia.requests.get', return_value=ok):
+            self.enroll_public()
+            Course.objects.filter(pk=self.course.pk).update(price='1500.00')
+            enrollment = Enrollment.objects.get()
+            token = enrollment.payment_token
+            self.assertEqual(self.client.get(f'/api/payments/{token}/').data['amount'], '1200.00')
+            self.client.post(f'/api/payments/{token}/start/')
+            payment = enrollment.payments.get()
+            self.assertEqual(payment.amount, 120000)
+            mark_paid_and_invoice(enrollment, Payment.METHOD_ONLINE, payment)
+        vat = post.call_args_list[1].kwargs['json']['invoice']
+        self.assertEqual((vat['positions'][0]['total_price_gross'], vat['paid']), ('1200.00', '1200.00'))
+        self.assertEqual(enrollment.invoices.get(kind=Invoice.KIND_VAT).amount_gross, Decimal('1200.00'))
+
+    def test_vat_invoice_uses_paid_amount(self):
+        enrollment = make_enrollment(self.course)
+        payment = Payment.objects.create(enrollment=enrollment, session_id='s1', amount=99900)
+        with mock.patch('courses.fakturownia.create_vat', wraps=fakturownia.create_vat) as create_vat:
+            self.notify(payment)
+        self.assertEqual(create_vat.call_args.kwargs['amount'], Decimal('999'))
+
+    def test_new_attempt_abandons_previous_and_pending_expires(self):
+        enrollment = make_enrollment(self.course)
+        token = enrollment.payment_token
+        self.client.post(f'/api/payments/{token}/start/')
+        self.assertTrue(self.client.get(f'/api/payments/{token}/').data['pending'])
+        self.client.post(f'/api/payments/{token}/start/')
+        first, second = enrollment.payments.all()
+        self.assertEqual((first.status, second.status), (Payment.STATUS_ABANDONED, Payment.STATUS_PENDING))
+        Payment.objects.filter(pk=second.pk).update(created_at=timezone.now() - timedelta(minutes=31))
+        self.assertFalse(self.client.get(f'/api/payments/{token}/').data['pending'])
+        self.client.force_authenticate(self.admin)
+        row = self.client.get(f'/api/courses/admin/{self.course.pk}/payments/').data['enrollments'][0]
+        self.assertFalse(row['online_pending'])
+        # Porzucona próba, która jednak została opłacona, i tak się księguje
+        self.notify(first)
+        enrollment.refresh_from_db()
+        self.assertEqual(enrollment.payment_status, 'paid')
+
+    def test_double_payment_is_shown_as_overpayment_and_can_be_refunded(self):
+        enrollment = make_enrollment(self.course)
+        token = enrollment.payment_token
+        self.client.post(f'/api/payments/{token}/start/')
+        self.client.post(f'/api/payments/{token}/start/')
+        first, second = enrollment.payments.all()
+        self.notify(second)
+        self.notify(first)
+        self.assertEqual(enrollment.invoices.filter(kind=Invoice.KIND_VAT).count(), 1)
+
+        self.client.force_authenticate(self.admin)
+        url = f'/api/courses/admin/{self.course.pk}/payments/'
+        row = self.client.get(url).data['enrollments'][0]
+        self.assertEqual([p['id'] for p in row['overpayments']], [first.pk])
+        self.assertEqual(row['overpayments'][0]['amount'], '1200.00')
+        # Wpłaty pod fakturą nie da się oznaczyć jako zwróconej
+        self.assertEqual(self.client.post(f'/api/courses/payments/{second.pk}/refunded/').status_code, 400)
+        self.assertEqual(self.client.post(f'/api/courses/payments/{first.pk}/refunded/').status_code, 200)
+        row = self.client.get(url).data['enrollments'][0]
+        self.assertEqual((row['overpayments'], [p['id'] for p in row['refunded']]), ([], [first.pk]))
+        # Powtórzone powiadomienie P24 nie przywraca zwróconej wpłaty
+        self.notify(first)
+        first.refresh_from_db()
+        self.assertEqual(first.status, Payment.STATUS_REFUNDED)
 
     @override_settings(DEBUG=False)
     def test_fake_confirm_disabled_outside_debug(self):

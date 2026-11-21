@@ -64,7 +64,7 @@ def _buyer(enrollment):
     }
 
 
-def _document(kind, enrollment, **extra):
+def _document(kind, enrollment, amount=None, **extra):
     today = datetime.date.today()
     doc = {
         'kind':       kind,
@@ -74,7 +74,7 @@ def _document(kind, enrollment, **extra):
             'name':              _position_name(enrollment.course),
             'quantity':          1,
             'tax':               settings.FAKTUROWNIA_TAX,
-            'total_price_gross': str(enrollment.course.price),
+            'total_price_gross': str(enrollment.course.price if amount is None else amount),
         }],
         **_buyer(enrollment),
         **extra,
@@ -123,21 +123,22 @@ def create_proforma(enrollment):
     return _post_invoice(_document('proforma', enrollment, payment_to=payment_to.isoformat()))
 
 
-def create_vat(enrollment, method, proforma_id=''):
-    """Faktura VAT (opłacona). Z proformą → dokument powiązany z nią w Fakturowni."""
+def create_vat(enrollment, method, proforma_id='', amount=None):
+    """Faktura VAT (opłacona) na kwotę faktycznej wpłaty. Z proformą → dokument powiązany z nią w Fakturowni."""
+    amount = enrollment.course.price if amount is None else amount
     if _fake():
         return _fake_document('vat')
     today = datetime.date.today().isoformat()
     extra = {
         'status':       'paid',
-        'paid':         str(enrollment.course.price),
+        'paid':         str(amount),
         'paid_date':    today,
         'payment_to':   today,
         'payment_type': {'online': 'Przelewy24', 'cash': 'cash'}.get(method, 'transfer'),
     }
     if proforma_id and not str(proforma_id).startswith('fake-'):  # proforma z trybu testowego nie istnieje w Fakturowni
         extra['from_invoice_id'] = proforma_id
-    return _post_invoice(_document('vat', enrollment, **extra))
+    return _post_invoice(_document('vat', enrollment, amount=amount, **extra))
 
 
 def send_by_email(fakturownia_id, email):

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   adminFetchCourses, adminFetchCoursePayments, adminMarkPaid, adminIssueProforma,
-  adminRetryInvoice, adminDownloadInvoicePdf,
+  adminRetryInvoice, adminDownloadInvoicePdf, adminMarkPaymentRefunded,
 } from '../../api/admin'
 
 function formatDate(iso) {
@@ -61,6 +61,7 @@ export default function Payments() {
 
   const rows = data?.enrollments || []
   const paidCount = rows.filter(r => r.invoice?.issued).length
+  const overpaidCount = rows.filter(r => r.overpayments?.length).length
 
   return (
     <div className="p-8">
@@ -70,6 +71,7 @@ export default function Payments() {
           {data && (
             <p className="text-sm text-gray-500 mt-1">
               Cena kursu: {data.course.price} zł · opłaconych z fakturą: <span className="font-semibold text-gray-800">{paidCount} / {rows.length}</span>
+              {overpaidCount > 0 && <> · <span className="font-semibold text-red-600">nadpłaty do zwrotu: {overpaidCount}</span></>}
             </p>
           )}
         </div>
@@ -136,7 +138,11 @@ export default function Payments() {
                       </button>
                     )}
                   </td>
-                  <td className="px-4 py-3"><PaymentBadge row={r} /></td>
+                  <td className="px-4 py-3">
+                    <PaymentBadge row={r} />
+                    <Overpayments row={r} busy={busy}
+                      onRefunded={id => run(`refund-${id}`, () => adminMarkPaymentRefunded(id))} />
+                  </td>
                   <td className="px-4 py-3">
                     {r.invoice ? (
                       <DocCell doc={r.invoice} busy={busy === `retry-${r.invoice.id}`} showSms
@@ -203,6 +209,46 @@ function PaymentBadge({ row }) {
   if (row.online_pending)
     return <span className="inline-block text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">Rozpoczęta online</span>
   return <span className="inline-block text-xs font-semibold px-2 py-0.5 rounded-full bg-orange-50 text-orange-600">Brak wpłaty</span>
+}
+
+const METHOD_LABELS = { online: 'online', cash: 'gotówka', transfer: 'przelew' }
+
+function Overpayments({ row, busy, onRefunded }) {
+  const [confirm, setConfirm] = useState(null)
+  if (!row.overpayments?.length && !row.refunded?.length) return null
+  return (
+    <div className="mt-2 space-y-1.5 max-w-xs">
+      {row.overpayments?.map(p => (
+        <div key={p.id} className="bg-red-50 border border-red-200 rounded-lg px-2 py-1.5 text-xs text-red-700">
+          <div className="font-semibold">Nadpłata – do zwrotu {p.amount} zł</div>
+          <div className="text-red-600">
+            Kolejna wpłata ({METHOD_LABELS[p.method] || p.method}{p.paid_at && `, ${formatDate(p.paid_at)}`}).
+            Zwróć ją w Przelewy24 lub przelewem.
+          </div>
+          {confirm === p.id ? (
+            <span className="inline-flex items-center gap-2 mt-1">
+              <span className="text-gray-600">Zwrot wykonany?</span>
+              <button onClick={() => { setConfirm(null); onRefunded(p.id) }} disabled={busy === `refund-${p.id}`}
+                className="font-semibold px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50">
+                Tak
+              </button>
+              <button onClick={() => setConfirm(null)} className="text-gray-500 hover:text-gray-700">Anuluj</button>
+            </span>
+          ) : (
+            <button onClick={() => setConfirm(p.id)} disabled={busy === `refund-${p.id}`}
+              className="mt-1 font-medium underline underline-offset-2 hover:text-red-800 disabled:opacity-50">
+              {busy === `refund-${p.id}` ? 'Zapisywanie…' : 'Oznacz jako zwróconą'}
+            </button>
+          )}
+        </div>
+      ))}
+      {row.refunded?.map(p => (
+        <div key={p.id} className="text-xs text-gray-400">
+          Zwrócono nadpłatę {p.amount} zł ({METHOD_LABELS[p.method] || p.method})
+        </div>
+      ))}
+    </div>
+  )
 }
 
 function DocCell({ doc, busy, showSms, onPdf, onRetry }) {

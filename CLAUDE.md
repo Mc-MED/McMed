@@ -118,6 +118,7 @@ McMed/
 | GET | `/api/courses/admin/:id/payments/` | Uczestnicy kursu: proforma, wpłata, faktura, wysyłka mail/SMS |
 | POST | `/api/courses/enrollments/:id/mark-paid/` | Wpłata gotówką / przelewem (`{"method": "cash"\|"transfer"}`) → faktura VAT + mail z Fakturowni + SMS |
 | POST | `/api/courses/enrollments/:id/proforma/` | Proforma dla zapisu bez niej (np. dodanego przez admina) |
+| POST | `/api/courses/payments/:id/refunded/` | Nadpłata zwrócona — wpłata przestaje być „do zwrotu” |
 | POST | `/api/courses/invoices/:id/retry/` | Niewystawiony dokument → wystaw ponownie; wystawiony → wyślij ponownie |
 | GET | `/api/courses/invoices/:id/pdf/` | PDF z Fakturowni |
 | POST | `/api/courses/enrollments/:id/documents/` | Dokument do recertyfikacji (multipart `kind` = `certificate`\|`statement`, `file`) |
@@ -182,6 +183,9 @@ Po zapisie ocen praktycznych członka komisji serializer wywołuje `Enrollment.r
 - Zapis przez formularz publiczny lub `enroll_me` → proforma w Fakturowni (`courses/fakturownia.py`) na pełną cenę kursu, mail z PDF i linkiem „Zapłać online” (`/platnosc/<payment_token>`). Zapis dodany przez admina proformy nie dostaje (przycisk w Płatnościach).
 - Wpłata online (Przelewy24, `courses/przelewy24.py`) albo „Oznacz jako opłacony i wystaw fakturę” w Płatnościach (gotówka / przelew) → `mark_paid_and_invoice`: `payment_status='paid'`, faktura VAT (z proformy), mail z fakturą wysyła Fakturownia (`send_by_email`) + SMS z SMSAPI. Idempotentne — druga faktura nie powstaje.
 - Proformę wysyłamy własnym mailem (PDF + przycisk „Zapłać online”), bo Fakturownia nie wstawi linku do płatności.
+- Kwota do zapłaty (`billing.amount_due`) pochodzi z wystawionej proformy, a bez niej z ceny kursu, więc zmiana ceny kursu nie zmienia kwoty już wysłanej proformy. Faktura VAT jest wystawiana na kwotę faktycznej (pierwszej opłaconej) wpłaty.
+- Każde „Zapłać” tworzy nowy `Payment`, a poprzednie niedokończone dostają status `abandoned`. Jeśli porzucona płatność jednak zostanie opłacona, powiadomienie P24 i tak ją zaksięguje. Jako „w toku” liczy się tylko płatność online z ostatnich 30 minut (`PENDING_WINDOW`).
+- Nadpłata (kolejna opłacona wpłata za ten sam zapis) nie tworzy drugiej faktury, tylko pokazuje się w Płatnościach jako „do zwrotu”. Zwrot admin robi ręcznie (P24 / przelew), potem „Oznacz jako zwróconą” (`POST /api/courses/payments/:id/refunded/` → status `refunded`). Wpłaty pod fakturą (pierwszej) nie da się tak oznaczyć.
 - Modele: `Invoice` (proforma / vat, numer, wysyłka, `send_error`), `Payment` (online / transfer / cash, kwota w groszach). `Enrollment`: dane do faktury na firmę `invoice_company`, `company_*` (NIP sprawdzany sumą kontrolną).
 - Błąd Fakturowni, maila czy SMS-a nie przerywa zapisu ani płatności — widać go w Płatnościach („Wystaw ponownie” / „Wyślij ponownie”).
 - Tryby w `.env`: `P24_MODE` (fake / sandbox / production), `FAKTUROWNIA_MODE` (fake / live), `SMS_MODE` (log / live). Lokalnie: fake / fake / log. Sandbox P24 wymaga publicznego `BACKEND_URL` (ngrok).

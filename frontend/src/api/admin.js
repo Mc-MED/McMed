@@ -171,6 +171,9 @@ export const adminFetchCoursePayments = (courseId) =>
 export const adminMarkPaid = (enrollmentId, method) =>
   adminAxios.post(`/api/courses/enrollments/${enrollmentId}/mark-paid/`, { method }).then(r => r.data)
 
+export const adminMarkPaymentRefunded = (paymentId) =>
+  adminAxios.post(`/api/courses/payments/${paymentId}/refunded/`).then(r => r.data)
+
 export const adminIssueProforma = (enrollmentId) =>
   adminAxios.post(`/api/courses/enrollments/${enrollmentId}/proforma/`).then(r => r.data)
 

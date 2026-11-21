@@ -377,6 +377,8 @@ class Payment(models.Model):
     STATUS_PAID    = 'paid'
     STATUS_FAILED  = 'failed'
     STATUS_TEST    = 'test'  # wpłata w sandboxie P24 — bez pieniędzy, bez faktury
+    STATUS_ABANDONED = 'abandoned'  # klient rozpoczął kolejną płatność online — ta została porzucona
+    STATUS_REFUNDED  = 'refunded'   # nadpłata zwrócona (oznacza admin)
     METHOD_ONLINE   = 'online'
     METHOD_TRANSFER = 'transfer'
     METHOD_CASH     = 'cash'
@@ -386,7 +388,8 @@ class Payment(models.Model):
     amount       = models.PositiveIntegerField()  # w groszach
     status       = models.CharField(max_length=10, default=STATUS_PENDING, choices=[
                        (STATUS_PENDING, 'Oczekuje'), (STATUS_PAID, 'Opłacona'), (STATUS_FAILED, 'Odrzucona'),
-                       (STATUS_TEST, 'Testowa (sandbox P24)')])
+                       (STATUS_TEST, 'Testowa (sandbox P24)'), (STATUS_ABANDONED, 'Porzucona'),
+                       (STATUS_REFUNDED, 'Zwrócona')])
     method       = models.CharField(max_length=10, default=METHOD_ONLINE, choices=[
                        (METHOD_ONLINE, 'Online (Przelewy24)'), (METHOD_TRANSFER, 'Przelew tradycyjny'),
                        (METHOD_CASH, 'Gotówka')])
